@@ -54,6 +54,9 @@ func requestLogger(log *slog.Logger, next http.Handler) http.Handler {
 		sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
 		next.ServeHTTP(sw, r)
 		log.Info("request", "method", r.Method, "path", r.URL.Path,
+			"query", clip(r.URL.RawQuery, 200),
+			"fwd", clip(r.Header.Get("X-Forwarded-For"), 60),
+			"ua", clip(r.Header.Get("User-Agent"), 120),
 			"status", sw.status, "ms", time.Since(start).Milliseconds())
 	})
 }

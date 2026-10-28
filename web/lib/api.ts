@@ -11,11 +11,13 @@ export async function apiGet<T>(path: string): Promise<{ status: number; data: T
   const session = jar.get("mp_session");
   const h = await headers();
   const fwd = h.get("x-forwarded-for");
+  const ua = h.get("user-agent");
   try {
     const res = await fetch(API_URL + path, {
       headers: {
         ...(session ? { cookie: `mp_session=${session.value}` } : {}),
         ...(fwd ? { "x-forwarded-for": fwd } : {}),
+        ...(ua ? { "user-agent": ua.slice(0, 200) } : {}),
       },
       cache: "no-store",
     });
