@@ -202,8 +202,9 @@ func pageParams(r *http.Request) (limit, offset int) {
 	return limit, offset
 }
 
-// GET /v1/listings?q=charizard&category=tcg&game=Pokemon&grader=PSA&min_price=5&max_price=50&sort=price_asc
-func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
+// parseSearch reads search filters from the query string. It writes a 400
+// and returns false when a filter is malformed.
+func parseSearch(w http.ResponseWriter, r *http.Request) (listings.SearchParams, bool) {
 	q := r.URL.Query()
 	limit, offset := pageParams(r)
 	p := listings.SearchParams{
@@ -221,7 +222,7 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(p.Query) > 200 {
 		writeError(w, http.StatusBadRequest, "bad_query", "search text is too long", nil)
-		return
+		return p, false
 	}
 	bad := map[string]string{}
 	if v := q.Get("year"); v != "" {
@@ -254,6 +255,15 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(bad) > 0 {
 		writeError(w, http.StatusBadRequest, "bad_query", "check the search filters", bad)
+		return p, false
+	}
+	return p, true
+}
+
+// GET /v1/listings?q=charizard&category=tcg&game=Pokemon&grader=PSA&min_price=5&max_price=50&sort=price_asc
+func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
+	p, ok := parseSearch(w, r)
+	if !ok {
 		return
 	}
 	res, err := s.listings.Search(r.Context(), p)
@@ -262,6 +272,20 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, res)
+}
+
+// GET /v1/listings/facets — same filters as search; counts per sidebar value.
+func (s *Server) handleFacets(w http.ResponseWriter, r *http.Request) {
+	p, ok := parseSearch(w, r)
+	if !ok {
+		return
+	}
+	f, err := s.listings.Facets(r.Context(), p)
+	if err != nil {
+		s.internalError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, f)
 }
 
 func dollarsToCents(v string) (int, error) {

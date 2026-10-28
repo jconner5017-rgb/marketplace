@@ -41,61 +41,8 @@ func (s *Service) Search(ctx context.Context, p SearchParams) (SearchResult, err
 		p.Offset = 0
 	}
 
-	var where []string
-	var args []any
-	arg := func(v any) string {
-		args = append(args, v)
-		return fmt.Sprintf("$%d", len(args))
-	}
-
-	q := strings.TrimSpace(p.Query)
-	tsq := ""
-	if q != "" {
-		tsq = "websearch_to_tsquery('simple', " + arg(q) + ")"
-		where = append(where, "l.search @@ "+tsq)
-	}
-	if p.Category != "" {
-		where = append(where, "l.category = "+arg(strings.ToLower(p.Category)))
-	}
-	if p.GameOrSport != "" {
-		where = append(where, "lower(l.game_or_sport) = lower("+arg(p.GameOrSport)+")")
-	}
-	if p.SetName != "" {
-		where = append(where, "lower(l.set_name) = lower("+arg(p.SetName)+")")
-	}
-	if p.Year != 0 {
-		where = append(where, "l.year = "+arg(p.Year))
-	}
-	switch g := strings.ToUpper(p.Grader); g {
-	case "":
-	case "RAW":
-		where = append(where, "l.grader IS NULL")
-	default:
-		where = append(where, "l.grader = "+arg(g))
-	}
-	if p.MinGrade > 0 {
-		where = append(where, "l.grade >= "+arg(p.MinGrade))
-	}
-	if p.Condition != "" {
-		where = append(where, "l.condition = "+arg(strings.ToUpper(p.Condition)))
-	}
-	if p.Attribute != "" {
-		where = append(where, arg(strings.ToLower(p.Attribute))+" = ANY(l.attributes)")
-	}
-	if p.Seller != "" {
-		where = append(where, "lower(u.username) = lower("+arg(p.Seller)+")")
-	}
-	if p.MinCents > 0 {
-		where = append(where, "l.price_cents >= "+arg(p.MinCents))
-	}
-	if p.MaxCents > 0 {
-		where = append(where, "l.price_cents <= "+arg(p.MaxCents))
-	}
-
-	filter := ""
-	if len(where) > 0 {
-		filter = " AND " + strings.Join(where, " AND ")
-	}
+	f := buildFilter(p)
+	args, arg, filter, tsq := f.args, f.arg, f.sql, f.tsq
 
 	order := "l.created_at DESC, l.id"
 	switch p.Sort {
@@ -111,7 +58,7 @@ func (s *Service) Search(ctx context.Context, p SearchParams) (SearchResult, err
 
 	var total int
 	if err := s.DB.QueryRowContext(ctx,
-		"SELECT count(*) FROM listings l "+publicJoin+filter, args...).Scan(&total); err != nil {
+		"SELECT count(*) FROM listings l "+publicJoin+filter, *args...).Scan(&total); err != nil {
 		return SearchResult{}, err
 	}
 
@@ -119,7 +66,7 @@ func (s *Service) Search(ctx context.Context, p SearchParams) (SearchResult, err
 	offsetArg := arg(p.Offset)
 	rows, err := s.DB.QueryContext(ctx,
 		"SELECT "+listingCols+" FROM listings l "+publicJoin+filter+
-			" ORDER BY "+order+" LIMIT "+limitArg+" OFFSET "+offsetArg, args...)
+			" ORDER BY "+order+" LIMIT "+limitArg+" OFFSET "+offsetArg, *args...)
 	if err != nil {
 		return SearchResult{}, err
 	}
@@ -134,4 +81,139 @@ func (s *Service) Search(ctx context.Context, p SearchParams) (SearchResult, err
 		res.Listings = append(res.Listings, l)
 	}
 	return res, rows.Err()
+}
+
+// filter is a WHERE fragment plus its arguments.
+type filter struct {
+	args *[]any
+	arg  func(any) string
+	sql  string // " AND ..." or ""
+	tsq  string // the tsquery expression, if any
+}
+
+// buildFilter turns search params into SQL. skip names one dimension to
+// leave out (used for facet counts, so picking "PSA" still shows how
+// many BGS cards there are).
+func buildFilter(p SearchParams, skip ...string) filter {
+	var where []string
+	args := &[]any{}
+	arg := func(v any) string {
+		*args = append(*args, v)
+		return fmt.Sprintf("$%d", len(*args))
+	}
+	skipping := func(dim string) bool {
+		for _, s := range skip {
+			if s == dim {
+				return true
+			}
+		}
+		return false
+	}
+
+	q := strings.TrimSpace(p.Query)
+	tsq := ""
+	if q != "" {
+		tsq = "websearch_to_tsquery('simple', " + arg(q) + ")"
+		where = append(where, "l.search @@ "+tsq)
+	}
+	if p.Category != "" && !skipping("category") {
+		where = append(where, "l.category = "+arg(strings.ToLower(p.Category)))
+	}
+	if p.GameOrSport != "" && !skipping("game") {
+		where = append(where, "lower(l.game_or_sport) = lower("+arg(p.GameOrSport)+")")
+	}
+	if p.SetName != "" {
+		where = append(where, "lower(l.set_name) = lower("+arg(p.SetName)+")")
+	}
+	if p.Year != 0 {
+		where = append(where, "l.year = "+arg(p.Year))
+	}
+	if !skipping("grader") {
+		switch g := strings.ToUpper(p.Grader); g {
+		case "":
+		case "RAW":
+			where = append(where, "l.grader IS NULL")
+		default:
+			where = append(where, "l.grader = "+arg(g))
+		}
+	}
+	if p.MinGrade > 0 {
+		where = append(where, "l.grade >= "+arg(p.MinGrade))
+	}
+	if p.Condition != "" && !skipping("condition") {
+		where = append(where, "l.condition = "+arg(strings.ToUpper(p.Condition)))
+	}
+	if p.Attribute != "" && !skipping("attribute") {
+		where = append(where, arg(strings.ToLower(p.Attribute))+" = ANY(l.attributes)")
+	}
+	if p.Seller != "" {
+		where = append(where, "lower(u.username) = lower("+arg(p.Seller)+")")
+	}
+	if p.MinCents > 0 {
+		where = append(where, "l.price_cents >= "+arg(p.MinCents))
+	}
+	if p.MaxCents > 0 {
+		where = append(where, "l.price_cents <= "+arg(p.MaxCents))
+	}
+	sql := ""
+	if len(where) > 0 {
+		sql = " AND " + strings.Join(where, " AND ")
+	}
+	return filter{args: args, arg: arg, sql: sql, tsq: tsq}
+}
+
+// Facet is one value in a sidebar filter with its result count.
+type Facet struct {
+	Value string `json:"value"`
+	Count int    `json:"count"`
+}
+
+type Facets struct {
+	Category  []Facet `json:"category"`
+	Game      []Facet `json:"game"`
+	Grader    []Facet `json:"grader"` // includes "RAW"
+	Condition []Facet `json:"condition"`
+	Attribute []Facet `json:"attribute"`
+}
+
+// Facets counts matching listings per filter value, eBay-sidebar style.
+// Each dimension ignores its own current selection.
+func (s *Service) Facets(ctx context.Context, p SearchParams) (Facets, error) {
+	var out Facets
+	dims := []struct {
+		name string
+		expr string
+		dst  *[]Facet
+	}{
+		{"category", "l.category", &out.Category},
+		{"game", "l.game_or_sport", &out.Game},
+		{"grader", "coalesce(l.grader, 'RAW')", &out.Grader},
+		{"condition", "l.condition", &out.Condition},
+		{"attribute", "unnest(l.attributes)", &out.Attribute},
+	}
+	for _, d := range dims {
+		f := buildFilter(p, d.name)
+		inner := "SELECT " + d.expr + " AS v FROM listings l " + publicJoin + f.sql
+		rows, err := s.DB.QueryContext(ctx,
+			"SELECT v, count(*) FROM ("+inner+") x WHERE v IS NOT NULL GROUP BY v ORDER BY count(*) DESC, v LIMIT 30",
+			*f.args...)
+		if err != nil {
+			return Facets{}, err
+		}
+		list := []Facet{}
+		for rows.Next() {
+			var fc Facet
+			if err := rows.Scan(&fc.Value, &fc.Count); err != nil {
+				rows.Close()
+				return Facets{}, err
+			}
+			list = append(list, fc)
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return Facets{}, err
+		}
+		*d.dst = list
+	}
+	return out, nil
 }

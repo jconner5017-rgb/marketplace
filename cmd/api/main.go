@@ -15,6 +15,7 @@ import (
 	"github.com/jconner5017-rgb/marketplace/internal/auth"
 	"github.com/jconner5017-rgb/marketplace/internal/config"
 	"github.com/jconner5017-rgb/marketplace/internal/db"
+	"github.com/jconner5017-rgb/marketplace/internal/demo"
 	"github.com/jconner5017-rgb/marketplace/internal/httpapi"
 	"github.com/jconner5017-rgb/marketplace/internal/listings"
 	"github.com/jconner5017-rgb/marketplace/internal/sellers"
@@ -63,6 +64,22 @@ func run(log *slog.Logger) error {
 		log.Warn("STRIPE_SECRET_KEY not set; seller onboarding disabled")
 	}
 	listingSvc := &listings.Service{DB: database, Sellers: sellerSvc}
+
+	switch cfg.SeedDemo {
+	case "true", "1", "yes":
+		n, err := demo.Seed(ctx, database, listingSvc, cfg.ImageBaseURL)
+		if err != nil {
+			log.Error("demo seed failed", "err", err)
+		} else {
+			log.Info("demo listings loaded", "count", n)
+		}
+	case "remove":
+		if err := demo.Remove(ctx, database); err != nil {
+			log.Error("demo remove failed", "err", err)
+		} else {
+			log.Info("demo listings removed")
+		}
+	}
 	api := httpapi.New(httpapi.Options{
 		DB:           database,
 		Auth:         authSvc,

@@ -20,6 +20,11 @@ type Config struct {
 	PublicURL           string // e.g. https://marketplace-api-xqq7.onrender.com (Stripe return links)
 	StripeSecretKey     string // sk_test_... or sk_live_...; selling is disabled without it
 	StripeWebhookSecret string // whsec_...; the webhook endpoint is disabled without it
+
+	// SeedDemo loads sample listings on start; "remove" deletes them.
+	SeedDemo string // "", "true" or "remove"
+	// ImageBaseURL is where demo card images are served (the API's own URL).
+	ImageBaseURL string
 }
 
 func Load() (Config, error) {
@@ -52,6 +57,8 @@ func Load() (Config, error) {
 	c.PublicURL = strings.TrimRight(os.Getenv("PUBLIC_URL"), "/")
 	c.StripeSecretKey = strings.TrimSpace(os.Getenv("STRIPE_SECRET_KEY"))
 	c.StripeWebhookSecret = strings.TrimSpace(os.Getenv("STRIPE_WEBHOOK_SECRET"))
+	c.SeedDemo = strings.ToLower(strings.TrimSpace(os.Getenv("SEED_DEMO")))
+	c.ImageBaseURL = strings.TrimRight(getenv("IMAGE_BASE_URL", c.PublicURL), "/")
 	if k := c.StripeSecretKey; k != "" && !strings.HasPrefix(k, "sk_") && !strings.HasPrefix(k, "rk_") {
 		return c, errors.New("STRIPE_SECRET_KEY should start with sk_ or rk_")
 	}
