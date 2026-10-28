@@ -11,6 +11,7 @@ import (
 
 	"github.com/jconner5017-rgb/marketplace/internal/admin"
 	"github.com/jconner5017-rgb/marketplace/internal/auth"
+	"github.com/jconner5017-rgb/marketplace/internal/checkout"
 	"github.com/jconner5017-rgb/marketplace/internal/fees"
 	"github.com/jconner5017-rgb/marketplace/internal/inbox"
 	"github.com/jconner5017-rgb/marketplace/internal/listings"
@@ -51,6 +52,7 @@ type Server struct {
 	metrics    *admin.Metrics
 	catalog    *listings.Catalog
 	fees       *fees.Service
+	checkout   *checkout.Service
 }
 
 type Options struct {
@@ -73,6 +75,7 @@ type Options struct {
 	Audit    *admin.Audit
 	Catalog  *listings.Catalog
 	Fees     *fees.Service
+	Checkout *checkout.Service
 }
 
 func New(o Options) *Server {
@@ -99,6 +102,7 @@ func New(o Options) *Server {
 		metrics:       &admin.Metrics{DB: o.DB},
 		catalog:       o.Catalog,
 		fees:          o.Fees,
+		checkout:      o.Checkout,
 		// 30 bids or offers per user per minute.
 		bidLimiter: newRateLimiter(30, time.Minute),
 		// 20 messages per user per 10 minutes.
@@ -197,6 +201,16 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/listings/{id}/offers", requireUser(s.handleMakeOffer))
 	mux.HandleFunc("POST /v1/offers/{id}/respond", requireUser(s.handleRespondOffer))
 	mux.HandleFunc("GET /v1/offers", requireUser(s.handleOffers))
+	mux.HandleFunc("GET /v1/checkout/status", s.handleCheckoutStatus)
+	mux.HandleFunc("POST /v1/checkout", requireUser(s.handleStartCheckout))
+	mux.HandleFunc("POST /v1/orders/{id}/confirm", requireUser(s.handleConfirmOrder))
+	mux.HandleFunc("POST /v1/orders/{id}/cancel", requireUser(s.handleAbandonOrder))
+	mux.HandleFunc("GET /v1/orders", requireUser(s.handleOrders))
+	mux.HandleFunc("GET /v1/orders/{id}", requireUser(s.handleOrder))
+	mux.HandleFunc("POST /v1/orders/{id}/ship", requireUser(s.handleShipOrder))
+	mux.HandleFunc("POST /v1/orders/{id}/delivered", requireUser(s.handleOrderDelivered))
+	mux.HandleFunc("POST /v1/orders/{id}/feedback", requireUser(s.handleOrderFeedback))
+	mux.HandleFunc("POST /v1/orders/{id}/problem", requireUser(s.handleOrderProblem))
 	mux.HandleFunc("GET /v1/holds", requireUser(s.handleHolds))
 	mux.HandleFunc("POST /v1/notifications/read-all", requireUser(s.handleReadAll))
 

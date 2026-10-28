@@ -73,8 +73,10 @@ Set these in the service's **Environment** tab (never commit them):
 | `PUBLIC_URL` | The service URL, e.g. `https://marketplace-api-xqq7.onrender.com` |
 | `STRIPE_SECRET_KEY` | `sk_test_…` from Stripe → Developers → API keys |
 | `STRIPE_WEBHOOK_SECRET` | `whsec_…` from the Stripe webhook endpoint (below) |
+| `CHECKOUT_ENABLED` | `true` lets buyers pay (needs `STRIPE_SECRET_KEY`); off by default |
+| `WEB_URL` | the public website Stripe sends buyers back to (default `https://slabsnsingles.com`) |
 
-**Stripe webhook:** in Stripe → Developers → Webhooks, add an endpoint at `<PUBLIC_URL>/v1/webhooks/stripe`, choose **Events on Connected accounts**, and select `account.updated` and `account.application.deauthorized`. Copy its signing secret into `STRIPE_WEBHOOK_SECRET`.
+**Stripe webhook:** in Stripe → Developers → Webhooks, add an endpoint at `<PUBLIC_URL>/v1/webhooks/stripe`, choose **Events on Connected accounts**, and select `account.updated`, `account.application.deauthorized`, `checkout.session.completed`, `checkout.session.async_payment_succeeded` and `checkout.session.expired`. Copy its signing secret into `STRIPE_WEBHOOK_SECRET`.
 
 To make yourself an admin on Render, sign up through the API, then open the database in Render → **Connect** → copy the **PSQL Command**, run it on your computer, and enter:
 
@@ -122,7 +124,12 @@ All write requests must send `Content-Type: application/json` (the CSV import us
 | PUT | `/v1/seller/listings/external/{sku}` | Create or replace by the seller's own SKU (used by FireCardManager) |
 | POST | `/v1/seller/listings/import` | Bulk CSV import (`Content-Type: text/csv`, up to 5,000 rows) |
 | GET | `/v1/seller/listings/import/template` | Download a sample CSV |
-| POST | `/v1/webhooks/stripe` | Stripe Connect events (`account.updated`, `account.application.deauthorized`) |
+| POST | `/v1/webhooks/stripe` | Stripe Connect events (accounts and Checkout sessions) |
+| GET | `/v1/checkout/status` | whether buyers can pay yet |
+| POST | `/v1/checkout` | start Stripe Checkout for one seller's cart cards (`seller`) or held cards (`hold_ids`) |
+| POST | `/v1/orders/{id}/confirm` · `/cancel` | buyer returned from Stripe: record payment, or release the cards |
+| GET | `/v1/orders?side=buying\|selling&status=` · `/v1/orders/{id}` | orders for either side |
+| POST | `/v1/orders/{id}/ship` · `/delivered` · `/feedback` · `/problem` | seller ships; buyer confirms, rates, or opens a case |
 
 Sellers start at tier 1 (cards up to $20), then $250 and $1,000. Listings need at least one `https://` photo; raw cards need a `condition` (NM, LP, MP, HP, DMG); graded cards need `grader` and `grade`.
 

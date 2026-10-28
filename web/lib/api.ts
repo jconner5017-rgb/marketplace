@@ -28,6 +28,35 @@ export async function apiGet<T>(path: string): Promise<{ status: number; data: T
   }
 }
 
+/** Server-side POST to the API with the visitor's session. */
+export async function apiPost<T>(path: string, body: unknown = {}): Promise<{ status: number; data: T | null }> {
+  const jar = await cookies();
+  const session = jar.get("mp_session");
+  try {
+    const res = await fetch(API_URL + path, {
+      method: "POST",
+      headers: { "content-type": "application/json", ...(session ? { cookie: `mp_session=${session.value}` } : {}) },
+      body: JSON.stringify(body),
+      cache: "no-store",
+    });
+    const data = res.ok ? ((await res.json()) as T) : null;
+    return { status: res.status, data };
+  } catch {
+    return { status: 503, data: null };
+  }
+}
+
+/** Whether buyers can pay yet (CHECKOUT_ENABLED on the API). */
+export async function checkoutEnabled(): Promise<boolean> {
+  try {
+    const res = await fetch(API_URL + "/v1/checkout/status", { next: { revalidate: 30 } });
+    if (!res.ok) return false;
+    return ((await res.json()) as { enabled: boolean }).enabled === true;
+  } catch {
+    return false;
+  }
+}
+
 export async function getMe(): Promise<User | null> {
   const r = await apiGet<{ user: User }>("/v1/me");
   return r.data?.user ?? null;

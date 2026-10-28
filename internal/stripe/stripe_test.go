@@ -99,3 +99,39 @@ func TestClientRequests(t *testing.T) {
 		t.Fatalf("want stripe error, got %v", err)
 	}
 }
+
+func TestCheckoutSessionRequest(t *testing.T) {
+	var got url.Values
+	var acct, path string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		acct, path = r.Header.Get("Stripe-Account"), r.URL.Path
+		r.ParseForm()
+		got = r.PostForm
+		w.Write([]byte(`{"id":"cs_1","url":"https://checkout.stripe.com/c/pay/cs_1","status":"open","payment_status":"unpaid"}`))
+	}))
+	defer srv.Close()
+	c := NewClient("sk_test_x")
+	c.BaseURL = srv.URL
+	s, err := c.CreateCheckoutSession(context.Background(), "acct_9", CheckoutParams{
+		OrderID: "ord1", FeeCents: 150, SuccessURL: "https://x.test/done?s={CHECKOUT_SESSION_ID}", CancelURL: "https://x.test/c",
+		Lines: []LineItem{{Name: "Charizard", UnitCents: 1200, Quantity: 2, ImageURL: "https://img.test/a.jpg"}},
+	})
+	if err != nil || s.ID != "cs_1" {
+		t.Fatal(s, err)
+	}
+	if acct != "acct_9" || path != "/v1/checkout/sessions" {
+		t.Fatalf("header/path: %q %q", acct, path)
+	}
+	want := map[string]string{
+		"mode": "payment", "payment_intent_data[application_fee_amount]": "150",
+		"line_items[0][price_data][unit_amount]": "1200", "line_items[0][quantity]": "2",
+		"line_items[0][price_data][currency]":               "usd",
+		"shipping_address_collection[allowed_countries][0]": "US",
+		"success_url": "https://x.test/done?s={CHECKOUT_SESSION_ID}", "metadata[order_id]": "ord1",
+	}
+	for k, v := range want {
+		if got.Get(k) != v {
+			t.Errorf("%s = %q, want %q", k, got.Get(k), v)
+		}
+	}
+}

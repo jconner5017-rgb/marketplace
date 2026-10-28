@@ -196,7 +196,12 @@ func (s *Server) handleStripeWebhook(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	default:
-		// Other events are acknowledged and ignored for now.
+		if s.checkout != nil {
+			if _, err := s.checkout.HandleEvent(r.Context(), ev); err != nil {
+				s.internalError(w, r, err)
+				return
+			}
+		}
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }

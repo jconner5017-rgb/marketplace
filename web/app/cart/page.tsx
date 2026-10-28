@@ -1,17 +1,18 @@
 import Link from "next/link";
-import { apiGet } from "@/lib/api";
+import { apiGet, checkoutEnabled } from "@/lib/api";
 import { requireUser } from "@/lib/auth";
 import type { Cart } from "@/lib/types";
 import { GradeBadge, Photo } from "@/components/CardBits";
 import { money } from "@/lib/format";
 import CartLineActions from "@/components/CartLineActions";
+import PayButton from "@/components/orders/PayButton";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Cart" };
 
 export default async function CartPage() {
   await requireUser("/cart");
-  const r = await apiGet<Cart>("/v1/cart");
+  const [r, canPay] = await Promise.all([apiGet<Cart>("/v1/cart"), checkoutEnabled()]);
   const cart = r.data ?? { groups: [], card_count: 0, total_cents: 0, problems: 0 };
   const sellers = cart.groups.filter((g) => g.card_count > 0).length;
 
@@ -57,6 +58,12 @@ export default async function CartPage() {
                   <span>Multi-card discount · {g.discount_label}</span><span>−{money(g.discount_cents)}</span>
                 </p>
               )}
+              {canPay && sellers > 1 && g.card_count > 0 && (
+                <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line px-4 py-3">
+                  <span className="num text-[15px] font-semibold">{money(g.total_cents)} from {g.seller_username}</span>
+                  <PayButton seller={g.seller_username} label={`Pay ${g.seller_username}`} className="w-full sm:w-auto" />
+                </div>
+              )}
             </section>
           ))}
         </div>
@@ -70,12 +77,25 @@ export default async function CartPage() {
             <div className="flex justify-between"><dt>Shipping</dt><dd className="text-ship">Free</dd></div>
             <div className="flex justify-between border-t border-line pt-3 text-[18px] font-bold"><dt>Total</dt><dd>{money(cart.total_cents)}</dd></div>
           </dl>
-          <button type="button" disabled className="mt-5 w-full rounded-full bg-link py-3 font-semibold text-white opacity-50" aria-describedby="checkout-note">
-            Go to checkout
-          </button>
-          <p id="checkout-note" className="mt-2 text-center text-[13px] text-muted">
-            Checkout opens soon.{sellers > 1 ? ` You'll see ${sellers} charges, one per seller.` : ""}
-          </p>
+          {canPay && sellers === 1 && cart.problems === 0 ? (
+            <>
+              <PayButton seller={cart.groups.find((g) => g.card_count > 0)!.seller_username} label="Go to checkout" className="mt-5" />
+              <p className="mt-2 text-center text-[13px] text-muted">Secure payment by Stripe. US addresses only.</p>
+            </>
+          ) : canPay && sellers > 1 ? (
+            <p className="mt-4 text-center text-[13px] text-muted">
+              Each seller is paid separately, so pay each one using the buttons beside their cards.
+            </p>
+          ) : !canPay ? (
+            <>
+              <button type="button" disabled className="mt-5 w-full rounded-full bg-link py-3 font-semibold text-white opacity-50" aria-describedby="checkout-note">
+                Go to checkout
+              </button>
+              <p id="checkout-note" className="mt-2 text-center text-[13px] text-muted">
+                Checkout opens soon.{sellers > 1 ? ` You'll see ${sellers} charges, one per seller.` : ""}
+              </p>
+            </>
+          ) : null}
           {cart.problems > 0 && <p className="mt-3 text-[13px] text-slab">Remove the unavailable {cart.problems === 1 ? "card" : "cards"} before checking out.</p>}
         </aside>
       </div>

@@ -27,6 +27,10 @@ type Config struct {
 	ImageBaseURL string
 	// AdminEmails are promoted to admin on start and when they register.
 	AdminEmails []string
+	// CheckoutEnabled lets buyers pay (CHECKOUT_ENABLED=true); needs Stripe.
+	CheckoutEnabled bool
+	// WebURL is the public website, where Stripe sends buyers back.
+	WebURL string
 	// MFAKey encrypts staff authenticator secrets (MFA_ENCRYPTION_KEY, 32 bytes).
 	MFAKey string
 }
@@ -63,6 +67,14 @@ func Load() (Config, error) {
 	c.StripeWebhookSecret = strings.TrimSpace(os.Getenv("STRIPE_WEBHOOK_SECRET"))
 	c.SeedDemo = strings.ToLower(strings.TrimSpace(os.Getenv("SEED_DEMO")))
 	c.MFAKey = strings.TrimSpace(os.Getenv("MFA_ENCRYPTION_KEY"))
+	if v := os.Getenv("CHECKOUT_ENABLED"); v != "" {
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			return c, errors.New("CHECKOUT_ENABLED must be true or false")
+		}
+		c.CheckoutEnabled = b
+	}
+	c.WebURL = strings.TrimRight(getenv("WEB_URL", "https://slabsnsingles.com"), "/")
 	for _, e := range strings.Split(os.Getenv("ADMIN_EMAILS"), ",") {
 		if e = strings.TrimSpace(e); e != "" {
 			c.AdminEmails = append(c.AdminEmails, e)

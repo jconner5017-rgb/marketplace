@@ -193,3 +193,54 @@ export type Notice = {
   created_at: string;
 };
 export type Bell = { unread: number; notices: Notice[] };
+
+export interface OrderLine {
+  listing_id: string | null;
+  title: string;
+  photo: string;
+  source: "cart" | "auction" | "offer";
+  unit_cents: number;
+  quantity: number;
+}
+
+export interface ShipTo {
+  name?: string;
+  line1?: string;
+  line2?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  country?: string;
+}
+
+export interface OrderFeedback {
+  rating: -1 | 0 | 1;
+  comment: string;
+  created_at: string;
+}
+
+export interface Order {
+  id: string;
+  number: number;
+  status: "paid" | "shipped" | "delivered" | "cancelled" | "refunded" | "partially_refunded";
+  buyer: string;
+  seller: string;
+  subtotal_cents: number;
+  discount_cents: number;
+  total_cents: number;
+  fee_cents?: number;
+  refunded_cents: number;
+  ship_method: "envelope" | "label";
+  ship_to: ShipTo;
+  ship_by: string | null;
+  created_at: string;
+  paid_at: string | null;
+  shipped_at: string | null;
+  delivered_at: string | null;
+  lines: OrderLine[];
+  shipment: { method: string; carrier: string | null; tracking_number: string | null; created_at: string } | null;
+  my_feedback: OrderFeedback | null;
+  their_feedback: OrderFeedback | null;
+  cases: { number: number; kind: string; status: string }[];
+  side: "buying" | "selling";
+}

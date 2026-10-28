@@ -64,6 +64,11 @@ func NewClient(secretKey string) *Client {
 }
 
 func (c *Client) do(ctx context.Context, method, path string, form url.Values, out any) error {
+	return c.doAs(ctx, "", method, path, form, out)
+}
+
+// doAs makes a request on behalf of a connected account (Stripe-Account header).
+func (c *Client) doAs(ctx context.Context, account, method, path string, form url.Values, out any) error {
 	var body io.Reader
 	if form != nil {
 		body = strings.NewReader(form.Encode())
@@ -74,6 +79,9 @@ func (c *Client) do(ctx context.Context, method, path string, form url.Values, o
 	}
 	req.SetBasicAuth(c.SecretKey, "")
 	req.Header.Set("Stripe-Version", "2024-06-20")
+	if account != "" {
+		req.Header.Set("Stripe-Account", account)
+	}
 	if form != nil {
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	}
@@ -193,4 +201,97 @@ func SignForTest(payload []byte, secret string, t time.Time) string {
 	fmt.Fprintf(mac, "%d.", t.Unix())
 	mac.Write(payload)
 	return fmt.Sprintf("t=%d,v1=%s", t.Unix(), hex.EncodeToString(mac.Sum(nil)))
+}
+
+// Payments creates and reads Checkout Sessions on a seller's own account
+// (direct charges), with our application fee.
+type Payments interface {
+	CreateCheckoutSession(ctx context.Context, account string, p CheckoutParams) (CheckoutSession, error)
+	GetCheckoutSession(ctx context.Context, account, id string) (CheckoutSession, error)
+	// ExpireCheckoutSession closes an open session so it can no longer be paid.
+	ExpireCheckoutSession(ctx context.Context, account, id string) (CheckoutSession, error)
+}
+
+type LineItem struct {
+	Name      string
+	UnitCents int
+	Quantity  int
+	ImageURL  string
+}
+
+type CheckoutParams struct {
+	OrderID       string
+	Lines         []LineItem
+	FeeCents      int
+	CustomerEmail string
+	SuccessURL    string // may contain {CHECKOUT_SESSION_ID}
+	CancelURL     string
+	ExpiresAt     time.Time // 30 minutes to 24 hours from now
+}
+
+type Address struct {
+	Line1      string `json:"line1"`
+	Line2      string `json:"line2"`
+	City       string `json:"city"`
+	State      string `json:"state"`
+	PostalCode string `json:"postal_code"`
+	Country    string `json:"country"`
+}
+
+type CheckoutSession struct {
+	ID              string `json:"id"`
+	URL             string `json:"url"`
+	Status          string `json:"status"`         // open, complete, expired
+	PaymentStatus   string `json:"payment_status"` // paid, unpaid, no_payment_required
+	PaymentIntent   string `json:"payment_intent"`
+	AmountTotal     int    `json:"amount_total"`
+	ClientReference string `json:"client_reference_id"`
+	ShippingDetails *struct {
+		Name    string  `json:"name"`
+		Address Address `json:"address"`
+	} `json:"shipping_details"`
+}
+
+func (c *Client) CreateCheckoutSession(ctx context.Context, account string, p CheckoutParams) (CheckoutSession, error) {
+	f := url.Values{
+		"mode":                {"payment"},
+		"client_reference_id": {p.OrderID},
+		"metadata[order_id]":  {p.OrderID},
+		"success_url":         {p.SuccessURL},
+		"cancel_url":          {p.CancelURL},
+		"payment_intent_data[application_fee_amount]":       {strconv.Itoa(p.FeeCents)},
+		"payment_intent_data[metadata][order_id]":           {p.OrderID},
+		"shipping_address_collection[allowed_countries][0]": {"US"},
+	}
+	if !p.ExpiresAt.IsZero() {
+		f.Set("expires_at", strconv.FormatInt(p.ExpiresAt.Unix(), 10))
+	}
+	if p.CustomerEmail != "" {
+		f.Set("customer_email", p.CustomerEmail)
+	}
+	for i, l := range p.Lines {
+		k := fmt.Sprintf("line_items[%d]", i)
+		f.Set(k+"[quantity]", strconv.Itoa(l.Quantity))
+		f.Set(k+"[price_data][currency]", "usd")
+		f.Set(k+"[price_data][unit_amount]", strconv.Itoa(l.UnitCents))
+		f.Set(k+"[price_data][product_data][name]", l.Name)
+		if strings.HasPrefix(l.ImageURL, "https://") && len(l.ImageURL) < 2000 {
+			f.Set(k+"[price_data][product_data][images][0]", l.ImageURL)
+		}
+	}
+	var s CheckoutSession
+	err := c.doAs(ctx, account, http.MethodPost, "/v1/checkout/sessions", f, &s)
+	return s, err
+}
+
+func (c *Client) GetCheckoutSession(ctx context.Context, account, id string) (CheckoutSession, error) {
+	var s CheckoutSession
+	err := c.doAs(ctx, account, http.MethodGet, "/v1/checkout/sessions/"+url.PathEscape(id), nil, &s)
+	return s, err
+}
+
+func (c *Client) ExpireCheckoutSession(ctx context.Context, account, id string) (CheckoutSession, error) {
+	var s CheckoutSession
+	err := c.doAs(ctx, account, http.MethodPost, "/v1/checkout/sessions/"+url.PathEscape(id)+"/expire", url.Values{}, &s)
+	return s, err
 }

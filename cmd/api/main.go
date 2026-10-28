@@ -15,6 +15,7 @@ import (
 
 	"github.com/jconner5017-rgb/marketplace/internal/admin"
 	"github.com/jconner5017-rgb/marketplace/internal/auth"
+	"github.com/jconner5017-rgb/marketplace/internal/checkout"
 	"github.com/jconner5017-rgb/marketplace/internal/config"
 	"github.com/jconner5017-rgb/marketplace/internal/db"
 	"github.com/jconner5017-rgb/marketplace/internal/demo"
@@ -101,6 +102,13 @@ func run(log *slog.Logger) error {
 	if mfaKey == nil {
 		log.Warn("MFA_ENCRYPTION_KEY not set: the staff back office can't be used")
 	}
+	feeSvc := &fees.Service{DB: database}
+	checkoutSvc := &checkout.Service{DB: database, Sellers: sellerSvc, Fees: feeSvc,
+		Enabled: cfg.CheckoutEnabled, WebURL: cfg.WebURL}
+	if cfg.StripeSecretKey != "" {
+		checkoutSvc.Pay = stripe.NewClient(cfg.StripeSecretKey)
+	}
+	log.Info("checkout", "enabled", checkoutSvc.Ready(), "return_to", cfg.WebURL)
 	api := httpapi.New(httpapi.Options{
 		DB:           database,
 		Auth:         authSvc,
@@ -120,7 +128,8 @@ func run(log *slog.Logger) error {
 		MFA:      &admin.MFA{DB: database, Key: mfaKey},
 		Audit:    &admin.Audit{DB: database},
 		Catalog:  catalog,
-		Fees:     &fees.Service{DB: database},
+		Fees:     feeSvc,
+		Checkout: checkoutSvc,
 	})
 
 	// Fraud checks every 10 minutes.
@@ -153,6 +162,9 @@ func run(log *slog.Logger) error {
 			case <-t.C:
 				if err := salesSvc.RunJobs(ctx); err != nil {
 					log.Error("sales jobs", "err", err)
+				}
+				if err := checkoutSvc.RunJobs(ctx); err != nil {
+					log.Error("checkout jobs", "err", err)
 				}
 				if err := catalog.Load(ctx); err != nil {
 					log.Error("reload catalog", "err", err)

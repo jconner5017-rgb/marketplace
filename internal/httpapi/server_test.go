@@ -27,6 +27,7 @@ import (
 
 	"github.com/jconner5017-rgb/marketplace/internal/admin"
 	"github.com/jconner5017-rgb/marketplace/internal/auth"
+	"github.com/jconner5017-rgb/marketplace/internal/checkout"
 	"github.com/jconner5017-rgb/marketplace/internal/db"
 	"github.com/jconner5017-rgb/marketplace/internal/fees"
 	"github.com/jconner5017-rgb/marketplace/internal/inbox"
@@ -83,6 +84,8 @@ type env struct {
 	stripe *fakeStripe
 	db     *sql.DB
 	sales  *sales.Service
+	pay    *stripe.FakePayments
+	co     *checkout.Service
 }
 
 const testWebhookSecret = "whsec_test_secret"
@@ -120,6 +123,9 @@ func setupEnv(t *testing.T) *env {
 	if err := catalog.Load(ctx); err != nil {
 		t.Fatal(err)
 	}
+	pay := stripe.NewFakePayments()
+	co := &checkout.Service{DB: d, Sellers: sellerSvc, Fees: &fees.Service{DB: d}, Pay: pay, Enabled: true,
+		WebURL: "https://shop.test"}
 	s := New(Options{
 		DB: d, Auth: authSvc,
 		Log:           slog.New(slog.NewTextHandler(io.Discard, nil)),
@@ -135,10 +141,11 @@ func setupEnv(t *testing.T) *env {
 		Audit:         &admin.Audit{DB: d},
 		Catalog:       catalog,
 		Fees:          &fees.Service{DB: d},
+		Checkout:      co,
 	})
 	ts := httptest.NewServer(s.Handler())
 	t.Cleanup(ts.Close)
-	return &env{ts: ts, auth: authSvc, stripe: fs, db: d, sales: salesSvc}
+	return &env{ts: ts, auth: authSvc, stripe: fs, db: d, sales: salesSvc, pay: pay, co: co}
 }
 
 func setup(t *testing.T) (*httptest.Server, *auth.Service) {

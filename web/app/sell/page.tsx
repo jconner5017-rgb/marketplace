@@ -2,7 +2,7 @@ import Link from "next/link";
 import { apiGet, getSeller } from "@/lib/api";
 import { requireUser } from "@/lib/auth";
 import { money, timeLeft } from "@/lib/format";
-import type { Hold, Listing, Offer } from "@/lib/types";
+import type { Hold, Listing, Offer, Order } from "@/lib/types";
 import OnboardButton from "@/components/OnboardButton";
 import { GradeBadge, Photo } from "@/components/CardBits";
 import ListingActions from "@/components/ListingActions";
@@ -55,10 +55,12 @@ export default async function SellPage() {
 
   const mine = await apiGet<{ listings: Listing[]; total: number }>("/v1/seller/listings?limit=100");
   const listings = mine.data?.listings ?? [];
-  const [offersR, holdsR] = await Promise.all([
+  const [offersR, holdsR, ordersR] = await Promise.all([
     apiGet<{ offers: Offer[] }>("/v1/offers?side=selling"),
     apiGet<{ holds: Hold[] }>("/v1/holds?side=selling"),
+    apiGet<{ orders: Order[] }>("/v1/orders?side=selling&status=to_ship"),
   ]);
+  const toShip = ordersR.data?.orders ?? [];
   const offersWaiting = (offersR.data?.offers ?? []).filter((o) => o.can_respond).length;
   const awaitingPay = (holdsR.data?.holds ?? []).filter((h) => h.status === "awaiting_payment");
   const total = mine.data?.total ?? 0;
@@ -72,7 +74,8 @@ export default async function SellPage() {
           <h1 className="text-[26px] font-bold">Seller hub</h1>
           <p className="text-muted">{me.username} · {total} {total === 1 ? "listing" : "listings"}</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <Link href="/sell/orders" className="rounded-full border border-link px-5 py-2 font-semibold text-link hover:bg-wash">Orders</Link>
           <Link href="/sell/import" className="rounded-full border border-link px-5 py-2 font-semibold text-link hover:bg-wash">Upload a CSV</Link>
           <Link href="/sell/new" className="rounded-full bg-link px-5 py-2 font-semibold text-white hover:bg-link-dark">List a card</Link>
         </div>
@@ -107,8 +110,13 @@ export default async function SellPage() {
           See <a href="/help/contact" className="underline">Contact us</a> if you think this is a mistake.
         </p>
       )}
-      {(offersWaiting > 0 || awaitingPay.length > 0) && (
+      {(offersWaiting > 0 || awaitingPay.length > 0 || toShip.length > 0) && (
         <div className="mt-6 flex flex-wrap gap-3 text-[14px]">
+          {toShip.length > 0 && (
+            <Link href="/sell/orders" className="rounded-lg bg-ink px-4 py-2 font-semibold text-white hover:opacity-90">
+              {toShip.length} {toShip.length === 1 ? "order" : "orders"} to ship
+            </Link>
+          )}
           {offersWaiting > 0 && (
             <Link href="/offers?side=selling" className="rounded-lg border border-ink px-4 py-2 font-semibold hover:bg-wash">
               {offersWaiting} {offersWaiting === 1 ? "offer needs" : "offers need"} a reply
