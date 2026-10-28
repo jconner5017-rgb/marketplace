@@ -20,6 +20,7 @@ type Server struct {
 	log          *slog.Logger
 	cookieSecure bool
 	sessionTTL   time.Duration
+	trustProxy   bool
 	authLimiter  *rateLimiter
 }
 
@@ -29,6 +30,7 @@ type Options struct {
 	Log          *slog.Logger
 	CookieSecure bool
 	SessionTTL   time.Duration
+	TrustProxy   bool
 }
 
 func New(o Options) *Server {
@@ -38,6 +40,7 @@ func New(o Options) *Server {
 		log:          o.Log,
 		cookieSecure: o.CookieSecure,
 		sessionTTL:   o.SessionTTL,
+		trustProxy:   o.TrustProxy,
 		// 10 login/signup attempts per IP per 5 minutes.
 		authLimiter: newRateLimiter(10, 5*time.Minute),
 	}
@@ -105,7 +108,7 @@ type signupRequest struct {
 }
 
 func (s *Server) handleSignup(w http.ResponseWriter, r *http.Request) {
-	if !s.authLimiter.allow("signup:" + clientIP(r)) {
+	if !s.authLimiter.allow("signup:" + clientIP(r, s.trustProxy)) {
 		writeError(w, http.StatusTooManyRequests, "rate_limited", "too many attempts, try again in a few minutes", nil)
 		return
 	}
@@ -130,7 +133,7 @@ func (s *Server) handleSignup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := s.auth.StartSession(r.Context(), u.ID, clientIP(r), r.UserAgent())
+	token, err := s.auth.StartSession(r.Context(), u.ID, clientIP(r, s.trustProxy), r.UserAgent())
 	if err != nil {
 		s.internalError(w, r, err)
 		return
@@ -145,7 +148,7 @@ type loginRequest struct {
 }
 
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
-	if !s.authLimiter.allow("login:" + clientIP(r)) {
+	if !s.authLimiter.allow("login:" + clientIP(r, s.trustProxy)) {
 		writeError(w, http.StatusTooManyRequests, "rate_limited", "too many attempts, try again in a few minutes", nil)
 		return
 	}
@@ -153,7 +156,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	u, token, err := s.auth.Login(r.Context(), req.Email, req.Password, clientIP(r), r.UserAgent())
+	u, token, err := s.auth.Login(r.Context(), req.Email, req.Password, clientIP(r, s.trustProxy), r.UserAgent())
 	switch {
 	case errors.Is(err, auth.ErrInvalidCredentials):
 		writeError(w, http.StatusUnauthorized, "invalid_credentials", "email or password is incorrect", nil)

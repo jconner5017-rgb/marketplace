@@ -36,6 +36,17 @@ go run ./cmd/api
 
 Migrations run automatically on startup.
 
+### Deploy to Render
+
+`render.yaml` sets up the API ($7/mo) and a Postgres database ($6/mo + storage) in the Virginia region.
+
+1. Render dashboard → **New → Blueprint**.
+2. Connect the `jconner5017-rgb/marketplace` repo and approve.
+3. Render builds the Dockerfile, creates the database, and wires `DATABASE_URL` automatically.
+4. When it shows **Deployed**, open `https://<your-service>.onrender.com/healthz`.
+
+Every push to `main` redeploys. Make yourself an admin from the service's **Shell** tab: `/app/admin promote you@example.com`.
+
 ### Make yourself an admin
 
 Sign up through the API first, then:

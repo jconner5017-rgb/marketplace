@@ -52,6 +52,7 @@ func run(log *slog.Logger) error {
 		Log:          log,
 		CookieSecure: cfg.CookieSecure,
 		SessionTTL:   cfg.SessionTTL,
+		TrustProxy:   cfg.TrustProxy,
 	})
 
 	// Clear out expired sessions once an hour.

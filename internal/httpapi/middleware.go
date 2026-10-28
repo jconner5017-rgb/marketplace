@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"runtime/debug"
+	"strings"
 	"sync"
 	"time"
 
@@ -109,9 +110,20 @@ func requireAdmin(next http.HandlerFunc) http.HandlerFunc {
 	})
 }
 
-// clientIP returns the caller's IP. Behind a load balancer, set
-// TRUST_PROXY_HEADERS and read X-Forwarded-For instead (phase 8).
-func clientIP(r *http.Request) string {
+// clientIP returns the caller's IP. Behind a load balancer (Render, etc.)
+// every request arrives from the proxy, so with trustProxy set the first
+// address in X-Forwarded-For is used instead. That header can be forged by
+// a client, so it is used only for rate limiting and logging, never for
+// access decisions.
+func clientIP(r *http.Request, trustProxy bool) string {
+	if trustProxy {
+		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+			first, _, _ := strings.Cut(xff, ",")
+			if ip := net.ParseIP(strings.TrimSpace(first)); ip != nil {
+				return ip.String()
+			}
+		}
+	}
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
 		return r.RemoteAddr
