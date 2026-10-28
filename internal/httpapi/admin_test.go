@@ -503,3 +503,133 @@ func TestCatalogAndFees(t *testing.T) {
 		t.Fatalf("catalog audit: %v", body)
 	}
 }
+
+// seedOrder inserts a paid order directly (checkout isn't built yet).
+func seedOrder(t *testing.T, e *env, buyerName, sellerName, listingID string, cents int, late bool) (string, int64) {
+	t.Helper()
+	var id string
+	var number int64
+	shipBy := "now() + interval '3 days'"
+	if late {
+		shipBy = "now() - interval '1 day'"
+	}
+	err := e.db.QueryRow(`INSERT INTO orders (buyer_id, seller_id, status, subtotal_cents, total_cents, fee_cents, paid_at, ship_by, ship_to)
+		VALUES ((SELECT id FROM users WHERE username = $1), (SELECT id FROM users WHERE username = $2), 'paid', $3, $3, 150, now(), `+shipBy+`,
+		'{"name":"Pat Buyer","city":"Austin","state":"TX"}') RETURNING id, number`, buyerName, sellerName, cents).Scan(&id, &number)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.db.Exec(`INSERT INTO order_items (order_id, listing_id, source, title, unit_cents, quantity) VALUES ($1, $2, 'cart', 'Card', $3, 1)`,
+		id, listingID, cents); err != nil {
+		t.Fatal(err)
+	}
+	return id, number
+}
+
+func TestOrdersCasesFeedbackAndMessages(t *testing.T) {
+	e := setupEnv(t)
+	sup := staff(t, e, "sup_cases", admin.Support)
+	enrollMFA(t, e.ts.URL, sup.c)
+	aud := staff(t, e, "aud_cases", admin.Auditor)
+	enrollMFA(t, e.ts.URL, aud.c)
+	mod := staff(t, e, "mod_cases", admin.Moderator)
+	enrollMFA(t, e.ts.URL, mod.c)
+	sc, _ := newSeller(t, e, "order_seller", true)
+	lid := createListing(t, e, &httpClientT{sc}, rawCard("OR1", 1800))["id"].(string)
+	b := buyer(t, e, "order_buyer")
+	oid, num := seedOrder(t, e, "order_buyer", "order_seller", lid, 4000, true)
+	seedOrder(t, e, "order_buyer", "order_seller", lid, 1200, false)
+
+	// Ledger, search by number, late shipments.
+	_, body := do(t, aud.c, "GET", e.ts.URL+"/v1/admin/orders?party=order_seller", nil)
+	if body["total"].(float64) != 2 {
+		t.Fatalf("orders: %v", body)
+	}
+	_, body = do(t, aud.c, "GET", e.ts.URL+"/v1/admin/orders?shipping=late", nil)
+	if body["total"].(float64) != 1 || body["orders"].([]any)[0].(map[string]any)["late"] != true {
+		t.Fatalf("late: %v", body)
+	}
+	code, body := do(t, aud.c, "GET", e.ts.URL+"/v1/admin/orders/"+strconv.FormatInt(num, 10), nil)
+	if code != 200 || len(body["order"].(map[string]any)["lines"].([]any)) != 1 {
+		t.Fatalf("order detail: %d %v", code, body)
+	}
+	if code, _ := do(t, aud.c, "GET", e.ts.URL+"/v1/admin/cases", nil); code != 403 {
+		t.Fatalf("auditor on cases: %d", code)
+	}
+
+	// A case: open, shared note reaches both sides, can't close without an outcome.
+	code, body = do(t, sup.c, "POST", e.ts.URL+"/v1/admin/cases", map[string]any{"order": strconv.FormatInt(num, 10), "kind": "inr", "summary": "Buyer says the card never arrived"})
+	if code != 201 {
+		t.Fatalf("open case: %d %v", code, body)
+	}
+	cid := body["id"].(string)
+	do(t, sup.c, "POST", e.ts.URL+"/v1/admin/cases/"+cid+"/notes", map[string]any{"body": "Seller, please share tracking.", "shared": true})
+	do(t, sup.c, "POST", e.ts.URL+"/v1/admin/cases/"+cid+"/notes", map[string]any{"body": "Seller has 2 late shipments this month.", "shared": false})
+	_, n := do(t, b.c, "GET", e.ts.URL+"/v1/notifications", nil)
+	if !hasTitle(n, "Update on case 5001") && !hasTitle(n, "Update on case "+caseNumber(t, e, cid)) {
+		t.Fatalf("buyer case update: %v", n)
+	}
+	if code, _ := do(t, sup.c, "PATCH", e.ts.URL+"/v1/admin/cases/"+cid, map[string]any{"status": "resolved_buyer"}); code != 422 {
+		t.Fatalf("close without outcome: %d", code)
+	}
+	if code, body := do(t, sup.c, "PATCH", e.ts.URL+"/v1/admin/cases/"+cid, map[string]any{"status": "resolved_buyer", "outcome": "Seller refunded in full", "assigned_to": "me"}); code != 204 {
+		t.Fatalf("close: %d %v", code, body)
+	}
+	_, cd := do(t, sup.c, "GET", e.ts.URL+"/v1/admin/cases/"+cid, nil)
+	c := cd["case"].(map[string]any)
+	if c["status"] != "resolved_buyer" || len(c["notes"].([]any)) != 2 || c["assigned_to"] != "sup_cases@example.com" {
+		t.Fatalf("case detail: %v", c)
+	}
+
+	// Refund recorded by staff updates the order.
+	if code, body := do(t, sup.c, "POST", e.ts.URL+"/v1/admin/refunds", map[string]any{"order": oid, "kind": "refund", "amount_cents": 4000, "stripe_ref": "re_123", "note": "seller refunded in Stripe"}); code != 204 {
+		t.Fatalf("record refund: %d %v", code, body)
+	}
+	_, body = do(t, aud.c, "GET", e.ts.URL+"/v1/admin/orders/"+oid, nil)
+	if o := body["order"].(map[string]any); o["status"] != "refunded" || len(o["refunds"].([]any)) != 1 {
+		t.Fatalf("after refund: %v", o)
+	}
+
+	// Feedback moderation.
+	var fid string
+	e.db.QueryRow(`INSERT INTO feedback (order_id, from_user, to_user, role, rating, comment)
+		VALUES ($1, (SELECT id FROM users WHERE username = 'order_buyer'), (SELECT id FROM users WHERE username = 'order_seller'),
+		'buyer_to_seller', -1, 'Seller is a crook!!!') RETURNING id`, oid).Scan(&fid)
+	_, body = do(t, mod.c, "GET", e.ts.URL+"/v1/admin/feedback?filter=negative", nil)
+	if len(body["feedback"].([]any)) != 1 {
+		t.Fatalf("negative feedback: %v", body)
+	}
+	if code, _ := do(t, mod.c, "POST", e.ts.URL+"/v1/admin/feedback/"+fid+"/moderate", map[string]any{"action": "remove", "reason": "abusive, and the order was refunded"}); code != 204 {
+		t.Fatalf("remove feedback: %d", code)
+	}
+	_, body = do(t, mod.c, "GET", e.ts.URL+"/v1/admin/feedback?filter=removed", nil)
+	if len(body["feedback"].([]any)) != 1 {
+		t.Fatalf("removed feedback: %v", body)
+	}
+
+	// Message logs: list without text; reading needs a reason and is logged; blocked messages show.
+	do(t, b.c, "POST", e.ts.URL+"/v1/listings/"+lid+"/messages", map[string]string{"body": "Is it centered?"})
+	do(t, b.c, "POST", e.ts.URL+"/v1/listings/"+lid+"/messages", map[string]string{"body": "Venmo me and I'll pay now"})
+	_, body = do(t, sup.c, "GET", e.ts.URL+"/v1/admin/messages?blocked=1&user=order_buyer", nil)
+	ths := body["threads"].([]any)
+	if len(ths) != 1 || ths[0].(map[string]any)["blocked"].(float64) != 1 {
+		t.Fatalf("threads: %v", body)
+	}
+	tid := ths[0].(map[string]any)["id"].(string)
+	if code, _ := do(t, sup.c, "POST", e.ts.URL+"/v1/admin/messages/"+tid+"/read", map[string]any{}); code != 422 {
+		t.Fatalf("read without reason: %d", code)
+	}
+	code, body = do(t, sup.c, "POST", e.ts.URL+"/v1/admin/messages/"+tid+"/read", map[string]any{"reason": "case 5001 review"})
+	if code != 200 || len(body["messages"].([]any)) != 2 {
+		t.Fatalf("thread log: %d %v", code, body)
+	}
+	if _, au := do(t, aud.c, "GET", e.ts.URL+"/v1/admin/audit?action=messages.viewed&target_id="+tid, nil); len(au["entries"].([]any)) != 1 {
+		t.Fatalf("view not audited: %v", au)
+	}
+}
+
+func caseNumber(t *testing.T, e *env, id string) string {
+	var n int64
+	e.db.QueryRow(`SELECT number FROM cases WHERE id = $1`, id).Scan(&n)
+	return strconv.FormatInt(n, 10)
+}

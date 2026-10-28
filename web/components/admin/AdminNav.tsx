@@ -17,8 +17,20 @@ export const ADMIN_NAV: { group: string; items: { href: string; label: string; p
     { href: "/admin/reports", label: "Reports", perm: "reports.manage" },
     { href: "/admin/catalog", label: "Categories and features", perm: "users.view" },
   ] },
-  { group: "Money", items: [{ href: "/admin/fees", label: "Fees", perm: "orders.view" }] },
-  { group: "Trust & records", items: [{ href: "/admin/audit", label: "Audit log", perm: "audit.view" }] },
+  { group: "Orders", items: [
+    { href: "/admin/orders", label: "Orders", perm: "orders.view" },
+    { href: "/admin/shipping", label: "Shipping", perm: "orders.view" },
+    { href: "/admin/refunds", label: "Refunds and chargebacks", perm: "orders.view" },
+    { href: "/admin/fees", label: "Fees", perm: "orders.view" },
+  ] },
+  { group: "Disputes", items: [
+    { href: "/admin/cases", label: "Cases", perm: "cases.manage" },
+    { href: "/admin/messages", label: "Message logs", perm: "messages.view" },
+  ] },
+  { group: "Trust & records", items: [
+    { href: "/admin/feedback", label: "Feedback", perm: "feedback.moderate" },
+    { href: "/admin/audit", label: "Audit log", perm: "audit.view" },
+  ] },
   { group: "Site", items: [{ href: "/admin/announce", label: "Announcements", perm: "announce" }] },
 ];
 

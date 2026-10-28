@@ -46,6 +46,7 @@ type Server struct {
 	auditLog   *admin.Audit
 	users      *admin.Users
 	moderation *admin.Moderation
+	records    *admin.Records
 	catalog    *listings.Catalog
 	fees       *fees.Service
 }
@@ -91,6 +92,7 @@ func New(o Options) *Server {
 		auditLog:      o.Audit,
 		users:         &admin.Users{DB: o.DB, Audit: o.Audit, OwnerEmails: o.Auth.AdminEmails},
 		moderation:    &admin.Moderation{DB: o.DB, Audit: o.Audit},
+		records:       &admin.Records{DB: o.DB, Audit: o.Audit},
 		catalog:       o.Catalog,
 		fees:          o.Fees,
 		// 30 bids or offers per user per minute.
@@ -147,6 +149,19 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/admin/fees", s.requireStaff(admin.FeesEdit, s.handleAdminAddFees))
 	mux.HandleFunc("DELETE /v1/admin/fees/{id}", s.requireStaff(admin.FeesEdit, s.handleAdminCancelFees))
 	mux.HandleFunc("PATCH /v1/admin/fees/upgrades/{key}", s.requireStaff(admin.FeesEdit, s.handleAdminUpgrade))
+	mux.HandleFunc("GET /v1/admin/orders", s.requireStaff(admin.OrdersView, s.handleAdminOrders))
+	mux.HandleFunc("GET /v1/admin/orders/{id}", s.requireStaff(admin.OrdersView, s.handleAdminOrder))
+	mux.HandleFunc("GET /v1/admin/cases", s.requireStaff(admin.CasesManage, s.handleAdminCases))
+	mux.HandleFunc("GET /v1/admin/cases/{id}", s.requireStaff(admin.CasesManage, s.handleAdminCase))
+	mux.HandleFunc("POST /v1/admin/cases", s.requireStaff(admin.CasesManage, s.handleAdminOpenCase))
+	mux.HandleFunc("PATCH /v1/admin/cases/{id}", s.requireStaff(admin.CasesManage, s.handleAdminUpdateCase))
+	mux.HandleFunc("POST /v1/admin/cases/{id}/notes", s.requireStaff(admin.CasesManage, s.handleAdminCaseNote))
+	mux.HandleFunc("GET /v1/admin/refunds", s.requireStaff(admin.OrdersView, s.handleAdminRefunds))
+	mux.HandleFunc("POST /v1/admin/refunds", s.requireStaff(admin.CasesManage, s.handleAdminRecordRefund))
+	mux.HandleFunc("GET /v1/admin/feedback", s.requireStaff(admin.FeedbackModerate, s.handleAdminFeedback))
+	mux.HandleFunc("POST /v1/admin/feedback/{id}/moderate", s.requireStaff(admin.FeedbackModerate, s.handleAdminModerateFeedback))
+	mux.HandleFunc("GET /v1/admin/messages", s.requireStaff(admin.MessagesView, s.handleAdminThreads))
+	mux.HandleFunc("POST /v1/admin/messages/{id}/read", s.requireStaff(admin.MessagesView, s.handleAdminThreadLog))
 	mux.HandleFunc("POST /v1/reports", requireUser(s.handleReport))
 	mux.HandleFunc("GET /v1/fees", s.handlePublicFees)
 	mux.HandleFunc("POST /v1/admin/announcements", s.requireStaff(admin.Announce, s.handleAnnounce))
