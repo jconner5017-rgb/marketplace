@@ -13,7 +13,7 @@ type Entry = {
 
 const GROUPS = [
   ["", "All actions"], ["staff.", "Staff sign-ins"], ["user.", "Members"], ["listing.", "Listings"],
-  ["seller.", "Seller review"], ["report.", "Reports"], ["catalog.", "Catalog"], ["fees.", "Fees"], ["case.", "Cases"], ["refund.", "Refunds"], ["feedback.", "Feedback"], ["messages.", "Message views"],
+  ["seller.", "Seller review"], ["report.", "Reports"], ["catalog.", "Catalog"], ["fees.", "Fees"], ["case.", "Cases"], ["refund.", "Refunds"], ["feedback.", "Feedback"], ["messages.", "Message views"], ["fraud.", "Fraud alerts"],
   ["announcement.", "Announcements"], ["audit.", "Audit checks"],
 ];
 

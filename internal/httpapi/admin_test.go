@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"encoding/base32"
+	"fmt"
 	"strconv"
 	"testing"
 	"time"
@@ -632,4 +633,75 @@ func caseNumber(t *testing.T, e *env, id string) string {
 	var n int64
 	e.db.QueryRow(`SELECT number FROM cases WHERE id = $1`, id).Scan(&n)
 	return strconv.FormatInt(n, 10)
+}
+
+func TestFraudAlertsAndKPIs(t *testing.T) {
+	e := setupEnv(t)
+	ctx := context.Background()
+	mod := staff(t, e, "mod_fraud", admin.Moderator)
+	enrollMFA(t, e.ts.URL, mod.c)
+	aud := staff(t, e, "aud_fraud", admin.Auditor)
+	enrollMFA(t, e.ts.URL, aud.c)
+	sc, _ := newSeller(t, e, "shill_seller", true)
+	seller := &httpClientT{sc}
+	scam := buyer(t, e, "scammer")
+	lid := createListing(t, e, seller, rawCard("FR1", 1500))["id"].(string)
+
+	// Off-site payment attempts.
+	for i := 0; i < 3; i++ {
+		do(t, scam.c, "POST", e.ts.URL+"/v1/listings/"+lid+"/messages", map[string]string{"body": fmt.Sprintf("pay me on venmo %d", i)})
+	}
+	// Sign-ins from three networks.
+	sid := memberID(t, e, "scammer")
+	for _, ip := range []string{"203.0.113.1", "198.51.100.7", "192.0.2.44"} {
+		e.db.Exec(`INSERT INTO login_events (user_id, email, ip, success) VALUES ($1, 'scammer@example.com', $2, true)`, sid, ip)
+	}
+	// A bidder on the same network as the seller (everyone is 127.0.0.1 in tests).
+	auc := createListing(t, e, seller, auctionCard("FR2", 100, nil))["id"].(string)
+	wantBid(t, e, scam, auc, 300, true, 100)
+
+	if code, _ := do(t, aud.c, "POST", e.ts.URL+"/v1/admin/fraud/run", map[string]any{}); code != 403 {
+		t.Fatalf("auditor running checks: %d", code)
+	}
+	code, body := do(t, mod.c, "POST", e.ts.URL+"/v1/admin/fraud/run", map[string]any{})
+	if code != 200 {
+		t.Fatalf("run: %d %v", code, body)
+	}
+	if body["new_alerts"].(float64) < 3 {
+		t.Fatalf("alerts raised: %v", body)
+	}
+	_, body = do(t, mod.c, "POST", e.ts.URL+"/v1/admin/fraud/run", map[string]any{})
+	if body["new_alerts"].(float64) != 0 {
+		t.Fatalf("re-run should not duplicate: %v", body)
+	}
+	_, body = do(t, mod.c, "GET", e.ts.URL+"/v1/admin/fraud", nil)
+	kinds := map[string]string{}
+	for _, a := range body["alerts"].([]any) {
+		m := a.(map[string]any)
+		kinds[m["kind"].(string)] = m["id"].(string)
+	}
+	for _, k := range []string{"off_platform", "takeover_ips", "shill_shared_ip"} {
+		if kinds[k] == "" {
+			t.Fatalf("missing %s alert: %v", k, kinds)
+		}
+	}
+	if code, _ := do(t, mod.c, "POST", e.ts.URL+"/v1/admin/fraud/"+kinds["off_platform"]+"/review", map[string]any{"status": "reviewed", "note": "froze the account"}); code != 204 {
+		t.Fatalf("review alert: %d", code)
+	}
+	if code, _ := do(t, mod.c, "POST", e.ts.URL+"/v1/admin/fraud/"+kinds["off_platform"]+"/review", map[string]any{"status": "dismissed", "note": "again"}); code != 409 {
+		t.Fatalf("review twice: %d", code)
+	}
+
+	// KPIs: one paid order and some views.
+	b := buyer(t, e, "kpi_buyer")
+	_ = b
+	seedOrder(t, e, "kpi_buyer", "shill_seller", lid, 1500, false)
+	m := &admin.Metrics{DB: e.db}
+	for i := 0; i < 4; i++ {
+		m.CountView(ctx, lid)
+	}
+	_, k := do(t, aud.c, "GET", e.ts.URL+"/v1/admin/kpis?days=7", nil)
+	if k["gmv_cents"].(float64) != 1500 || k["orders"].(float64) != 1 || k["views"].(float64) != 4 || k["conversion"].(float64) != 0.25 || len(k["series"].([]any)) != 8 {
+		t.Fatalf("kpis: %v", k)
+	}
 }

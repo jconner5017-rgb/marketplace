@@ -52,8 +52,8 @@ export async function facets(qs: string): Promise<Facets | null> {
   return (await apiGet<Facets>("/v1/listings/facets?" + qs)).data;
 }
 
-export async function getListing(id: string): Promise<Listing | null> {
-  const r = await apiGet<{ listing: Listing }>("/v1/listings/" + encodeURIComponent(id));
+export async function getListing(id: string, countView = false): Promise<Listing | null> {
+  const r = await apiGet<{ listing: Listing }>("/v1/listings/" + encodeURIComponent(id) + (countView ? "?view=1" : ""));
   return r.data?.listing ?? null;
 }
 

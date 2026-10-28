@@ -1,7 +1,9 @@
 package httpapi
 
 import (
+	"errors"
 	"net/http"
+	"strconv"
 
 	"github.com/jconner5017-rgb/marketplace/internal/admin"
 )
@@ -212,4 +214,71 @@ func (s *Server) handleAdminThreadLog(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"thread": t, "messages": msgs})
+}
+
+// GET /v1/admin/fraud?status=open&kind=
+func (s *Server) handleAdminFraud(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	status := q.Get("status")
+	if status == "" {
+		status = "open"
+	}
+	if status == "all" {
+		status = ""
+	}
+	as, err := s.fraud.Alerts(r.Context(), status, q.Get("kind"), 0)
+	if err != nil {
+		s.internalError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"alerts": as})
+}
+
+// POST /v1/admin/fraud/{id}/review {"status":"reviewed"|"dismissed","note"}
+func (s *Server) handleAdminReviewFraud(w http.ResponseWriter, r *http.Request) {
+	id, ok := uuidParam(w, r)
+	if !ok {
+		return
+	}
+	var req struct {
+		Status string `json:"status"`
+		Note   string `json:"note"`
+	}
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	if err := s.fraud.Review(r.Context(), s.actor(r), id, req.Status, req.Note); err != nil {
+		if errors.Is(err, admin.ErrAlreadyHandled) {
+			writeError(w, http.StatusConflict, "handled", err.Error(), nil)
+			return
+		}
+		if errors.Is(err, admin.ErrReason) {
+			writeError(w, http.StatusUnprocessableEntity, "invalid_input", err.Error(), map[string]string{"note": err.Error()})
+			return
+		}
+		s.adminError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// POST /v1/admin/fraud/run — run the checks now.
+func (s *Server) handleAdminRunFraud(w http.ResponseWriter, r *http.Request) {
+	n, err := s.fraud.Run(r.Context())
+	if err != nil {
+		s.internalError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]int{"new_alerts": n})
+}
+
+// GET /v1/admin/kpis?days=30
+func (s *Server) handleAdminKPIs(w http.ResponseWriter, r *http.Request) {
+	days, _ := strconv.Atoi(r.URL.Query().Get("days"))
+	k, err := s.metrics.KPIs(r.Context(), days)
+	if err != nil {
+		s.internalError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, k)
 }

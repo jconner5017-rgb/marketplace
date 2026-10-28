@@ -224,6 +224,7 @@ func (s *Server) handleAdminDashboard(w http.ResponseWriter, r *http.Request) {
 		{"reports_open", "Open reports", `SELECT count(*) FROM reports WHERE status = 'open'`, false},
 		{"sellers_pending", "Sellers waiting for review", `SELECT count(*) FROM seller_profiles WHERE review_status = 'pending' AND charges_enabled`, false},
 		{"listings_blocked", "Listings taken down", `SELECT count(*) FROM listings WHERE status = 'blocked'`, false},
+		{"fraud_open", "Open fraud alerts", `SELECT count(*) FROM fraud_alerts WHERE status = 'open'`, false},
 		{"cases_open", "Open cases", `SELECT count(*) FROM cases WHERE status IN ('open', 'waiting_seller', 'waiting_buyer')`, false},
 		{"late_shipments", "Late shipments", `SELECT count(*) FROM orders WHERE status = 'paid' AND ship_by < now()`, false},
 	}

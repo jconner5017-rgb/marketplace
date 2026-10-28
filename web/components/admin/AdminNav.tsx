@@ -28,6 +28,7 @@ export const ADMIN_NAV: { group: string; items: { href: string; label: string; p
     { href: "/admin/messages", label: "Message logs", perm: "messages.view" },
   ] },
   { group: "Trust & records", items: [
+    { href: "/admin/fraud", label: "Fraud alerts", perm: "reports.manage" },
     { href: "/admin/feedback", label: "Feedback", perm: "feedback.moderate" },
     { href: "/admin/audit", label: "Audit log", perm: "audit.view" },
   ] },

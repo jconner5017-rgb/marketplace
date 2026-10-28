@@ -229,7 +229,13 @@ func (s *Service) Login(ctx context.Context, email, password, ip, userAgent stri
 
 // StartSession logs a user in directly (used right after signup).
 func (s *Service) StartSession(ctx context.Context, userID, ip, userAgent string) (string, error) {
-	return s.createSession(ctx, userID, ip, userAgent)
+	tok, err := s.createSession(ctx, userID, ip, userAgent)
+	if err == nil {
+		var email string
+		s.DB.QueryRowContext(ctx, `SELECT email FROM users WHERE id = $1`, userID).Scan(&email)
+		s.loginEvent(ctx, &userID, email, ip, userAgent, true, "signup")
+	}
+	return tok, err
 }
 
 func (s *Service) createSession(ctx context.Context, userID, ip, userAgent string) (string, error) {

@@ -47,6 +47,8 @@ type Server struct {
 	users      *admin.Users
 	moderation *admin.Moderation
 	records    *admin.Records
+	fraud      *admin.Fraud
+	metrics    *admin.Metrics
 	catalog    *listings.Catalog
 	fees       *fees.Service
 }
@@ -93,6 +95,8 @@ func New(o Options) *Server {
 		users:         &admin.Users{DB: o.DB, Audit: o.Audit, OwnerEmails: o.Auth.AdminEmails},
 		moderation:    &admin.Moderation{DB: o.DB, Audit: o.Audit},
 		records:       &admin.Records{DB: o.DB, Audit: o.Audit},
+		fraud:         &admin.Fraud{DB: o.DB, Audit: o.Audit},
+		metrics:       &admin.Metrics{DB: o.DB},
 		catalog:       o.Catalog,
 		fees:          o.Fees,
 		// 30 bids or offers per user per minute.
@@ -162,6 +166,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/admin/feedback/{id}/moderate", s.requireStaff(admin.FeedbackModerate, s.handleAdminModerateFeedback))
 	mux.HandleFunc("GET /v1/admin/messages", s.requireStaff(admin.MessagesView, s.handleAdminThreads))
 	mux.HandleFunc("POST /v1/admin/messages/{id}/read", s.requireStaff(admin.MessagesView, s.handleAdminThreadLog))
+	mux.HandleFunc("GET /v1/admin/fraud", s.requireStaff(admin.ReportsManage, s.handleAdminFraud))
+	mux.HandleFunc("POST /v1/admin/fraud/{id}/review", s.requireStaff(admin.UsersRestrict, s.handleAdminReviewFraud))
+	mux.HandleFunc("POST /v1/admin/fraud/run", s.requireStaff(admin.UsersRestrict, s.handleAdminRunFraud))
+	mux.HandleFunc("GET /v1/admin/kpis", s.requireStaff(admin.OrdersView, s.handleAdminKPIs))
 	mux.HandleFunc("POST /v1/reports", requireUser(s.handleReport))
 	mux.HandleFunc("GET /v1/fees", s.handlePublicFees)
 	mux.HandleFunc("POST /v1/admin/announcements", s.requireStaff(admin.Announce, s.handleAnnounce))

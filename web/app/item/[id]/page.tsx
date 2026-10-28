@@ -22,7 +22,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 export default async function ItemPage({ params }: Props) {
-  const l = await getListing((await params).id);
+  const l = await getListing((await params).id, true);
   if (!l) notFound();
 
   const isAuction = l.format === "auction" && !!l.auction;

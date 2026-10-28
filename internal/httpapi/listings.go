@@ -358,6 +358,11 @@ func (s *Server) handleGetListing(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	l.ExternalID = nil
+	if r.URL.Query().Get("view") == "1" && !isCrawler(r.UserAgent()) && s.metrics != nil {
+		if err := s.metrics.CountView(r.Context(), l.ID); err != nil {
+			s.log.Warn("count view", "err", err)
+		}
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"listing": l})
 }
 
@@ -375,4 +380,14 @@ func handleCatalog(w http.ResponseWriter, r *http.Request) {
 		"attributes":        listings.ActiveAttributes(),
 		"auction_durations": listings.AuctionDurations,
 	})
+}
+
+func isCrawler(ua string) bool {
+	ua = strings.ToLower(ua)
+	for _, w := range []string{"bot", "crawl", "spider", "slurp", "preview", "fetch", "curl", "python", "go-http"} {
+		if strings.Contains(ua, w) {
+			return true
+		}
+	}
+	return ua == ""
 }

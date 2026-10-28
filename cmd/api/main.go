@@ -123,6 +123,25 @@ func run(log *slog.Logger) error {
 		Fees:     &fees.Service{DB: database},
 	})
 
+	// Fraud checks every 10 minutes.
+	fraud := &admin.Fraud{DB: database}
+	go func() {
+		t := time.NewTicker(10 * time.Minute)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+				if n, err := fraud.Run(ctx); err != nil {
+					log.Error("fraud checks", "err", err)
+				} else if n > 0 {
+					log.Info("fraud alerts raised", "count", n)
+				}
+			}
+		}
+	}()
+
 	// Close finished auctions, warn watchers and expire offers every 30 seconds.
 	go func() {
 		t := time.NewTicker(30 * time.Second)
