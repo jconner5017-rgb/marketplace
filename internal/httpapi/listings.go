@@ -26,6 +26,12 @@ func (s *Server) listingError(w http.ResponseWriter, r *http.Request, err error)
 	case errors.Is(err, listings.ErrDuplicateExtern):
 		writeError(w, http.StatusConflict, "external_id_taken", "you already have a listing with that external_id",
 			map[string]string{"external_id": "already in use"})
+	case errors.Is(err, listings.ErrHasBids):
+		writeError(w, http.StatusConflict, "has_bids", "this auction has bids; you can only add to the description and photos, and it can't be ended early", nil)
+	case errors.Is(err, listings.ErrAuctionOver):
+		writeError(w, http.StatusConflict, "auction_over", "this auction has ended", nil)
+	case errors.Is(err, listings.ErrFormatChange):
+		writeError(w, http.StatusConflict, "format_change", err.Error(), nil)
 	case errors.Is(err, sellers.ErrNotSeller):
 		writeError(w, http.StatusForbidden, "not_a_seller", "start seller onboarding first", nil)
 	default:
@@ -72,7 +78,7 @@ func (s *Server) handleCreateListing(w http.ResponseWriter, r *http.Request) {
 		s.listingError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, map[string]any{"listing": l})
+	writeJSON(w, http.StatusCreated, map[string]any{"listing": l.ForSeller()})
 }
 
 func (s *Server) handleMyListings(w http.ResponseWriter, r *http.Request) {
@@ -82,6 +88,9 @@ func (s *Server) handleMyListings(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.listingError(w, r, err)
 		return
+	}
+	for i := range ls {
+		ls[i] = ls[i].ForSeller()
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"listings": ls, "total": total, "limit": limit, "offset": offset})
 }
@@ -97,7 +106,7 @@ func (s *Server) handleMyListing(w http.ResponseWriter, r *http.Request) {
 		s.listingError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"listing": l})
+	writeJSON(w, http.StatusOK, map[string]any{"listing": l.ForSeller()})
 }
 
 func (s *Server) handleUpdateListing(w http.ResponseWriter, r *http.Request) {
@@ -115,7 +124,7 @@ func (s *Server) handleUpdateListing(w http.ResponseWriter, r *http.Request) {
 		s.listingError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"listing": l})
+	writeJSON(w, http.StatusOK, map[string]any{"listing": l.ForSeller()})
 }
 
 func (s *Server) handleRemoveListing(w http.ResponseWriter, r *http.Request) {
@@ -235,6 +244,7 @@ func parseSearch(w http.ResponseWriter, r *http.Request) (listings.SearchParams,
 		Seller:     q.Get("seller"),
 		Discount:   q.Get("discount") == "1" || q.Get("discount") == "true",
 		Sort:       q.Get("sort"),
+		Format:     q.Get("format"),
 		Limit:      limit,
 		Offset:     offset,
 	}
@@ -281,9 +291,14 @@ func parseSearch(w http.ResponseWriter, r *http.Request) (listings.SearchParams,
 		}
 	}
 	switch p.Sort {
-	case "", "newest", "price_asc", "price_desc", "relevance":
+	case "", "newest", "price_asc", "price_desc", "relevance", "ending":
 	default:
-		bad["sort"] = "newest, price_asc, price_desc or relevance"
+		bad["sort"] = "newest, price_asc, price_desc, relevance or ending"
+	}
+	switch p.Format {
+	case "", "auction", "fixed", "offers":
+	default:
+		bad["format"] = "auction, fixed or offers"
 	}
 	if len(bad) > 0 {
 		writeError(w, http.StatusBadRequest, "bad_query", "check the search filters", bad)
@@ -346,10 +361,11 @@ func (s *Server) handleGetListing(w http.ResponseWriter, r *http.Request) {
 func handleCatalog(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "public, max-age=3600")
 	writeJSON(w, http.StatusOK, map[string]any{
-		"sports":     listings.Sports,
-		"games":      listings.Games,
-		"conditions": listings.Conditions,
-		"graders":    listings.Graders,
-		"attributes": listings.Attributes,
+		"sports":            listings.Sports,
+		"games":             listings.Games,
+		"conditions":        listings.Conditions,
+		"graders":           listings.Graders,
+		"attributes":        listings.Attributes,
+		"auction_durations": listings.AuctionDurations,
 	})
 }

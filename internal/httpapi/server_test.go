@@ -28,6 +28,7 @@ import (
 	"github.com/jconner5017-rgb/marketplace/internal/db"
 	"github.com/jconner5017-rgb/marketplace/internal/inbox"
 	"github.com/jconner5017-rgb/marketplace/internal/listings"
+	"github.com/jconner5017-rgb/marketplace/internal/sales"
 	"github.com/jconner5017-rgb/marketplace/internal/sellers"
 	"github.com/jconner5017-rgb/marketplace/internal/shopping"
 	"github.com/jconner5017-rgb/marketplace/internal/stripe"
@@ -78,6 +79,7 @@ type env struct {
 	auth   *auth.Service
 	stripe *fakeStripe
 	db     *sql.DB
+	sales  *sales.Service
 }
 
 const testWebhookSecret = "whsec_test_secret"
@@ -106,6 +108,7 @@ func setupEnv(t *testing.T) *env {
 	fs := newFakeStripe()
 	authSvc := &auth.Service{DB: d, SessionTTL: time.Hour}
 	sellerSvc := &sellers.Service{DB: d, Stripe: fs}
+	salesSvc := &sales.Service{DB: d}
 	s := New(Options{
 		DB: d, Auth: authSvc,
 		Log:           slog.New(slog.NewTextHandler(io.Discard, nil)),
@@ -116,10 +119,11 @@ func setupEnv(t *testing.T) *env {
 		WebhookSecret: testWebhookSecret,
 		Shopping:      &shopping.Service{DB: d, Listings: &listings.Service{DB: d, Sellers: sellerSvc}, Sellers: sellerSvc},
 		Inbox:         &inbox.Service{DB: d, Listings: &listings.Service{DB: d, Sellers: sellerSvc}},
+		Sales:         salesSvc,
 	})
 	ts := httptest.NewServer(s.Handler())
 	t.Cleanup(ts.Close)
-	return &env{ts: ts, auth: authSvc, stripe: fs, db: d}
+	return &env{ts: ts, auth: authSvc, stripe: fs, db: d, sales: salesSvc}
 }
 
 func setup(t *testing.T) (*httptest.Server, *auth.Service) {

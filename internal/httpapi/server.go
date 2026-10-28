@@ -12,6 +12,7 @@ import (
 	"github.com/jconner5017-rgb/marketplace/internal/auth"
 	"github.com/jconner5017-rgb/marketplace/internal/inbox"
 	"github.com/jconner5017-rgb/marketplace/internal/listings"
+	"github.com/jconner5017-rgb/marketplace/internal/sales"
 	"github.com/jconner5017-rgb/marketplace/internal/sellers"
 	"github.com/jconner5017-rgb/marketplace/internal/shopping"
 )
@@ -35,6 +36,9 @@ type Server struct {
 	shopping   *shopping.Service
 	inbox      *inbox.Service
 	msgLimiter *rateLimiter
+
+	sales      *sales.Service
+	bidLimiter *rateLimiter
 }
 
 type Options struct {
@@ -52,6 +56,7 @@ type Options struct {
 
 	Shopping *shopping.Service
 	Inbox    *inbox.Service
+	Sales    *sales.Service
 }
 
 func New(o Options) *Server {
@@ -68,6 +73,9 @@ func New(o Options) *Server {
 		webhookSecret: o.WebhookSecret,
 		shopping:      o.Shopping,
 		inbox:         o.Inbox,
+		sales:         o.Sales,
+		// 30 bids or offers per user per minute.
+		bidLimiter: newRateLimiter(30, time.Minute),
 		// 20 messages per user per 10 minutes.
 		msgLimiter: newRateLimiter(20, 10*time.Minute),
 		// 10 login/signup attempts per IP per 5 minutes.
@@ -104,6 +112,15 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/messages/{id}", requireUser(s.handleConversation))
 	mux.HandleFunc("POST /v1/messages/{id}", requireUser(s.handleReply))
 	mux.HandleFunc("GET /v1/notifications", requireUser(s.handleNotifications))
+
+	// Auctions and Best Offer.
+	mux.HandleFunc("POST /v1/listings/{id}/bids", requireUser(s.handleBid))
+	mux.HandleFunc("GET /v1/listings/{id}/bids", s.handleBids)
+	mux.HandleFunc("POST /v1/listings/{id}/buy-now", requireUser(s.handleAuctionBuyNow))
+	mux.HandleFunc("POST /v1/listings/{id}/offers", requireUser(s.handleMakeOffer))
+	mux.HandleFunc("POST /v1/offers/{id}/respond", requireUser(s.handleRespondOffer))
+	mux.HandleFunc("GET /v1/offers", requireUser(s.handleOffers))
+	mux.HandleFunc("GET /v1/holds", requireUser(s.handleHolds))
 	mux.HandleFunc("POST /v1/notifications/read-all", requireUser(s.handleReadAll))
 
 	// Selling: Stripe Connect onboarding and settings.

@@ -19,6 +19,7 @@ import (
 	"github.com/jconner5017-rgb/marketplace/internal/httpapi"
 	"github.com/jconner5017-rgb/marketplace/internal/inbox"
 	"github.com/jconner5017-rgb/marketplace/internal/listings"
+	"github.com/jconner5017-rgb/marketplace/internal/sales"
 	"github.com/jconner5017-rgb/marketplace/internal/sellers"
 	"github.com/jconner5017-rgb/marketplace/internal/shopping"
 	"github.com/jconner5017-rgb/marketplace/internal/stripe"
@@ -85,6 +86,7 @@ func run(log *slog.Logger) error {
 			log.Info("demo listings removed")
 		}
 	}
+	salesSvc := &sales.Service{DB: database}
 	api := httpapi.New(httpapi.Options{
 		DB:           database,
 		Auth:         authSvc,
@@ -100,7 +102,24 @@ func run(log *slog.Logger) error {
 
 		Shopping: &shopping.Service{DB: database, Listings: listingSvc, Sellers: sellerSvc},
 		Inbox:    &inbox.Service{DB: database, Listings: listingSvc},
+		Sales:    salesSvc,
 	})
+
+	// Close finished auctions, warn watchers and expire offers every 30 seconds.
+	go func() {
+		t := time.NewTicker(30 * time.Second)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+				if err := salesSvc.RunJobs(ctx); err != nil {
+					log.Error("sales jobs", "err", err)
+				}
+			}
+		}
+	}()
 
 	// Clear out expired sessions once an hour.
 	go func() {

@@ -23,6 +23,7 @@ var (
 	ErrNotFound        = errors.New("listing not found")
 	ErrCannotSell      = errors.New("seller must finish Stripe onboarding before listing")
 	ErrDuplicateExtern = errors.New("external_id already used by another listing")
+	ErrAuctionOver     = errors.New("this auction has ended")
 )
 
 // ValidationError lists problems with submitted fields, keyed by field name.
@@ -68,6 +69,10 @@ type Input struct {
 	PackagePreset string   `json:"package_preset"`
 	WeightOz      float64  `json:"weight_oz"`
 	Status        string   `json:"status"`
+
+	Format  string         `json:"format"` // fixed (default) or auction
+	Auction *AuctionInput  `json:"auction"`
+	Offers  *OfferSettings `json:"offers"`
 }
 
 // Patch changes only the fields that are present.
@@ -92,6 +97,10 @@ type Patch struct {
 	Status        *string   `json:"status"`
 	// Set true to make a graded card raw (clears grader/grade/cert).
 	ClearGrading bool `json:"clear_grading"`
+
+	Format  *string        `json:"format"`
+	Auction *AuctionInput  `json:"auction"`
+	Offers  *OfferSettings `json:"offers"`
 }
 
 type Listing struct {
@@ -120,6 +129,13 @@ type Listing struct {
 	Version        int       `json:"version"`
 	CreatedAt      time.Time `json:"created_at"`
 	UpdatedAt      time.Time `json:"updated_at"`
+
+	Format        string         `json:"format"`
+	Auction       *AuctionView   `json:"auction,omitempty"`
+	OffersEnabled bool           `json:"offers_enabled"`
+	OfferSettings *OfferSettings `json:"offer_settings,omitempty"` // seller only
+
+	sale saleFields
 }
 
 func (in *Input) normalize() {
@@ -174,6 +190,21 @@ func (in *Input) normalize() {
 	}
 	if in.Status == "" {
 		in.Status = "active"
+	}
+	in.Format = strings.ToLower(strings.TrimSpace(in.Format))
+	if in.Format == "" {
+		in.Format = FormatFixed
+	}
+	if in.Format == FormatAuction {
+		// One card per auction; the listing price tracks the auction.
+		in.Quantity = 1
+		if in.Auction != nil {
+			in.PriceCents = in.Auction.StartCents
+		}
+		in.Offers = nil
+	}
+	if in.Offers != nil && !in.Offers.Enabled {
+		in.Offers = &OfferSettings{}
 	}
 }
 
@@ -274,6 +305,7 @@ func (in *Input) validate(capCents int) error {
 	if !slices.Contains(Statuses, in.Status) {
 		f["status"] = "active or hidden"
 	}
+	in.validateSale(f, capCents)
 	if len(f) > 0 {
 		return &ValidationError{Fields: f}
 	}
@@ -288,20 +320,22 @@ type Service struct {
 const listingCols = `l.id, l.seller_id, u.username, l.external_id, l.category, l.game_or_sport, l.set_name,
 	l.year, l.card_number, l.title, l.description, l.condition, l.grader, l.grade, l.cert_number,
 	l.attributes, l.photo_urls, l.price_cents, l.quantity, l.package_preset, l.weight_oz,
-	l.status, l.version, l.created_at, l.updated_at`
+	l.status, l.version, l.created_at, l.updated_at` + saleCols
 
 func scanListing(row interface{ Scan(...any) error }) (Listing, error) {
 	var l Listing
 	var ext, cardNo, cond, grader, cert sql.NullString
 	var year sql.NullInt64
 	var grade sql.NullFloat64
-	err := row.Scan(&l.ID, &l.SellerID, &l.SellerUsername, &ext, &l.Category, &l.GameOrSport, &l.SetName,
+	var sc saleScan
+	dest := []any{&l.ID, &l.SellerID, &l.SellerUsername, &ext, &l.Category, &l.GameOrSport, &l.SetName,
 		&year, &cardNo, &l.Title, &l.Description, &cond, &grader, &grade, &cert,
 		pq.Array(&l.Attributes), pq.Array(&l.PhotoURLs), &l.PriceCents, &l.Quantity, &l.PackagePreset,
-		&l.WeightOz, &l.Status, &l.Version, &l.CreatedAt, &l.UpdatedAt)
-	if err != nil {
+		&l.WeightOz, &l.Status, &l.Version, &l.CreatedAt, &l.UpdatedAt}
+	if err := row.Scan(append(dest, sc.dest()...)...); err != nil {
 		return l, err
 	}
+	sc.apply(&l)
 	str := func(n sql.NullString) *string {
 		if !n.Valid {
 			return nil
@@ -388,7 +422,39 @@ func insertListing(ctx context.Context, tx *sql.Tx, sellerID string, in Input) (
 		}
 		return Listing{}, err
 	}
+	if err := writeSale(ctx, tx, id, in, true); err != nil {
+		return Listing{}, err
+	}
 	return getTx(ctx, tx, id)
+}
+
+// writeSale stores format, auction and offer settings. start begins the
+// auction clock now; otherwise the end moves with the length from the
+// original start.
+func writeSale(ctx context.Context, tx *sql.Tx, id string, in Input, start bool) error {
+	var startC, reserve, bin, days *int
+	relist := false
+	if in.Format == FormatAuction && in.Auction != nil {
+		a := in.Auction
+		startC, reserve, bin, days, relist = &a.StartCents, a.ReserveCents, a.BuyNowCents, &a.DurationDays, a.AutoRelist
+	}
+	o := OfferSettings{}
+	if in.Offers != nil && in.Offers.Enabled && in.Format == FormatFixed {
+		o = *in.Offers
+	}
+	_, err := tx.ExecContext(ctx, `
+		UPDATE listings SET format = $2, start_cents = $3::int, reserve_cents = $4::int, bin_cents = $5::int,
+			duration_days = $6::int, auto_relist = $7,
+			offers_enabled = $8, offer_accept_kind = $9, offer_accept_val = $10::int,
+			offer_decline_kind = $11, offer_decline_val = $12::int,
+			starts_at = CASE WHEN $2 = 'auction' THEN CASE WHEN $13 THEN now() ELSE starts_at END END,
+			ends_at = CASE WHEN $2 = 'auction'
+				THEN (CASE WHEN $13 THEN now() ELSE starts_at END) + make_interval(days => $6::int) END,
+			auction_state = CASE WHEN $2 = 'auction' THEN coalesce(auction_state, 'live') END
+		WHERE id = $1`,
+		id, in.Format, startC, reserve, bin, days, relist,
+		o.Enabled, o.AcceptKind, o.AcceptValue, o.DeclineKind, o.DeclineValue, start)
+	return err
 }
 
 func getTx(ctx context.Context, q interface {
@@ -427,7 +493,7 @@ func (s *Service) GetForSeller(ctx context.Context, sellerID, id string) (Listin
 // GetPublic returns a listing buyers may see.
 func (s *Service) GetPublic(ctx context.Context, id string) (Listing, error) {
 	l, err := scanListing(s.DB.QueryRowContext(ctx, `
-		SELECT `+listingCols+` FROM listings l `+publicJoin+` AND l.id = $1`, id))
+		SELECT `+listingCols+` FROM listings l `+viewJoin+` AND l.id = $1`, id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return l, ErrNotFound
 	}
@@ -441,7 +507,16 @@ const publicJoin = `
 	JOIN users u ON u.id = l.seller_id AND u.status = 'active'
 	JOIN seller_profiles sp ON sp.user_id = l.seller_id AND sp.charges_enabled
 	WHERE l.status = 'active' AND l.quantity > 0
+	  AND (l.format = 'fixed' OR (l.auction_state = 'live' AND l.ends_at > now()))
 	  AND l.price_cents <= CASE sp.tier WHEN 1 THEN 2000 WHEN 2 THEN 25000 ELSE 100000 END`
+
+// viewJoin is publicJoin plus finished auctions, so bidders and winners can
+// still open an auction's page after it ends.
+const viewJoin = `
+	JOIN users u ON u.id = l.seller_id AND u.status = 'active'
+	JOIN seller_profiles sp ON sp.user_id = l.seller_id AND sp.charges_enabled
+	WHERE ((l.status = 'active' AND l.quantity > 0 AND (l.format = 'fixed' OR l.auction_state = 'live'))
+	       OR (l.format = 'auction' AND l.status = 'ended'))`
 
 // Update applies a patch to the seller's listing.
 func (s *Service) Update(ctx context.Context, sellerID, id string, p Patch) (Listing, error) {
@@ -469,11 +544,25 @@ func (s *Service) Update(ctx context.Context, sellerID, id string, p Patch) (Lis
 	in := inputFrom(cur)
 	applyPatch(&in, p)
 	in.normalize()
+	if in.Format != cur.Format {
+		return Listing{}, ErrFormatChange
+	}
+	if cur.Format == FormatAuction {
+		if err := checkAuctionEdit(cur, &in); err != nil {
+			return Listing{}, err
+		}
+	}
 	if err := in.validate(prof.TierCapCents); err != nil {
 		return Listing{}, err
 	}
 	l, err := updateListing(ctx, tx, id, in)
 	if err != nil {
+		return Listing{}, err
+	}
+	if err := writeSale(ctx, tx, id, in, false); err != nil {
+		return Listing{}, err
+	}
+	if l, err = getTx(ctx, tx, id); err != nil {
 		return Listing{}, err
 	}
 	if err := snapshot(ctx, tx, l); err != nil {
@@ -502,7 +591,9 @@ func inputFrom(l Listing) Input {
 	if st == "sold_out" {
 		st = "active"
 	}
+	o := l.sale.offers
 	return Input{
+		Format: l.Format, Auction: auctionFromListing(l), Offers: &o,
 		ExternalID: l.ExternalID, Category: l.Category, GameOrSport: l.GameOrSport, SetName: l.SetName,
 		Year: l.Year, CardNumber: l.CardNumber, Title: l.Title, Description: l.Description,
 		Condition: l.Condition, Grader: l.Grader, Grade: l.Grade, CertNumber: l.CertNumber,
@@ -560,17 +651,64 @@ func applyPatch(in *Input, p Patch) {
 	if p.WeightOz != nil {
 		in.WeightOz = *p.WeightOz
 	}
+	if p.Format != nil {
+		in.Format = *p.Format
+	}
+	if p.Auction != nil {
+		in.Auction = p.Auction
+	}
+	if p.Offers != nil {
+		in.Offers = p.Offers
+	}
+}
+
+// checkAuctionEdit limits changes to an auction: settings can change until
+// the first bid; after that only the description and photos.
+func checkAuctionEdit(cur Listing, in *Input) error {
+	if cur.Auction == nil || cur.Auction.State != "live" {
+		return ErrAuctionOver
+	}
+	if cur.Auction.BidCount == 0 {
+		if in.Auction != nil && cur.Auction.StartsAt.AddDate(0, 0, in.Auction.DurationDays).Before(time.Now().Add(time.Hour)) {
+			return &ValidationError{Fields: map[string]string{"auction.duration_days": "that length would end the auction within the hour"}}
+		}
+		return nil
+	}
+	in.PriceCents = cur.PriceCents // the current bid, not the starting bid
+	base := inputFrom(cur)
+	base.normalize()
+	base.PriceCents = cur.PriceCents
+	base.Description, base.PhotoURLs = in.Description, in.PhotoURLs
+	a, _ := json.Marshal(in)
+	b, _ := json.Marshal(base)
+	if string(a) != string(b) {
+		return ErrHasBids
+	}
+	return nil
 }
 
 // Remove takes a listing down. The row is kept for order history.
 func (s *Service) Remove(ctx context.Context, sellerID, id string) error {
+	// Auctions with bids, or already won, can't be taken down by the seller.
 	res, err := s.DB.ExecContext(ctx, `
-		UPDATE listings SET status = 'removed', version = version + 1, updated_at = now()
-		WHERE id = $1 AND seller_id = $2 AND status <> 'removed'`, id, sellerID)
+		UPDATE listings SET status = 'removed', version = version + 1, updated_at = now(),
+			auction_state = CASE WHEN format = 'auction' AND auction_state = 'live' THEN 'ended_early' ELSE auction_state END,
+			ended_at = CASE WHEN format = 'auction' THEN coalesce(ended_at, now()) END
+		WHERE id = $1 AND seller_id = $2 AND status <> 'removed'
+		  AND NOT (format = 'auction' AND (auction_state = 'won' OR (auction_state = 'live' AND bid_count > 0)))`,
+		id, sellerID)
 	if err != nil {
 		return err
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
+		var exists bool
+		if err := s.DB.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM listings
+			WHERE id = $1 AND seller_id = $2 AND status <> 'removed')`, id, sellerID).Scan(&exists); err != nil {
+			return err
+		}
+		if exists {
+			return ErrHasBids
+		}
 		return ErrNotFound
 	}
 	return nil
@@ -612,7 +750,24 @@ func (s *Service) upsert(ctx context.Context, sellerID string, in Input) (Listin
 		l, err = insertListing(ctx, tx, sellerID, in)
 		created = true
 	case err == nil:
-		l, err = updateListing(ctx, tx, id, in)
+		var cur Listing
+		if cur, err = getTx(ctx, tx, id); err != nil {
+			return Listing{}, false, err
+		}
+		if cur.Format != in.Format {
+			return Listing{}, false, &ValidationError{Fields: map[string]string{
+				"external_id": "this SKU is listed as an auction; change it on the site"}}
+		}
+		if in.Offers == nil { // keep the seller's offer settings
+			o := cur.sale.offers
+			in.Offers = &o
+		}
+		if l, err = updateListing(ctx, tx, id, in); err == nil {
+			err = writeSale(ctx, tx, id, in, false)
+		}
+		if err == nil {
+			l, err = getTx(ctx, tx, id)
+		}
 	}
 	if err != nil {
 		return Listing{}, false, err

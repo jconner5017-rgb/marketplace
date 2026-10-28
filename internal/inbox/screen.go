@@ -25,3 +25,7 @@ func screen(body string) string {
 	}
 	return ""
 }
+
+// Screen reports whether text tries to move a sale off the site. Other
+// packages (offers) use it on buyer notes.
+func Screen(body string) bool { return screen(body) != "" }

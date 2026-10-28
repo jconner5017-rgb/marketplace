@@ -16,6 +16,7 @@ var (
 	ErrOwnListing   = errors.New("you can't buy or watch your own listing")
 	ErrTooMany      = errors.New("not that many available")
 	ErrCartFull     = errors.New("your cart is full")
+	ErrAuctionCart  = errors.New("auctions can't go in the cart; place a bid instead")
 )
 
 const MaxCartLines = 50
@@ -37,6 +38,9 @@ func (s *Service) available(ctx context.Context, userID, listingID string) (list
 	}
 	if l.SellerID == userID {
 		return l, ErrOwnListing
+	}
+	if !l.Open() {
+		return l, ErrNotAvailable
 	}
 	return l, nil
 }
@@ -108,6 +112,9 @@ func (s *Service) SetCartQuantity(ctx context.Context, userID, listingID string,
 	l, err := s.available(ctx, userID, listingID)
 	if err != nil {
 		return err
+	}
+	if l.Format == listings.FormatAuction {
+		return ErrAuctionCart
 	}
 	if qty < 1 {
 		qty = 1

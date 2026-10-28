@@ -32,6 +32,7 @@ type SearchParams struct {
 	MinCents   int
 	MaxCents   int
 	Discount   bool   // seller offers a multi-card discount
+	Format     string // auction, fixed (Buy It Now) or offers (accepts offers)
 	Sort       string // newest (default), price_asc, price_desc, relevance
 	Limit      int
 	Offset     int
@@ -83,6 +84,8 @@ func (s *Service) Search(ctx context.Context, p SearchParams) (SearchResult, err
 		order = "l.price_cents ASC, l.created_at DESC, l.id"
 	case "price_desc":
 		order = "l.price_cents DESC, l.created_at DESC, l.id"
+	case "ending":
+		order = "(l.format = 'auction') DESC, l.ends_at ASC NULLS LAST, l.created_at DESC, l.id"
 	case "relevance":
 		if tsq != "" {
 			order = "ts_rank(l.search, " + tsq + ") DESC, l.created_at DESC, l.id"
@@ -220,6 +223,14 @@ func buildFilter(p SearchParams, skip ...string) filter {
 			where = append(where, "l.attributes @> "+arg(pq.Array(attrs))+"::text[]")
 		}
 	}
+	if !skipping("format") {
+		switch p.Format {
+		case FormatAuction, FormatFixed:
+			where = append(where, "l.format = "+arg(p.Format))
+		case "offers":
+			where = append(where, "l.offers_enabled")
+		}
+	}
 	if p.Discount {
 		where = append(where, "sp.bundle_discount_type IS NOT NULL")
 	}
@@ -251,6 +262,7 @@ type Facets struct {
 	Grader    []Facet `json:"grader"` // includes "RAW"
 	Condition []Facet `json:"condition"`
 	Attribute []Facet `json:"attribute"`
+	Format    []Facet `json:"format"`
 }
 
 // Facets counts matching listings per filter value, eBay-sidebar style.
@@ -267,6 +279,7 @@ func (s *Service) Facets(ctx context.Context, p SearchParams) (Facets, error) {
 		{"grader", "coalesce(l.grader, 'RAW')", &out.Grader},
 		{"condition", "l.condition", &out.Condition},
 		{"attribute", "unnest(l.attributes)", &out.Attribute},
+		{"format", "l.format", &out.Format},
 	}
 	for _, d := range dims {
 		f := buildFilter(p, d.name)

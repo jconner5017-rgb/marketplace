@@ -17,6 +17,8 @@ func (s *Server) accountError(w http.ResponseWriter, r *http.Request, err error)
 		writeError(w, http.StatusUnprocessableEntity, "own_listing", "that's your own listing", nil)
 	case errors.Is(err, shopping.ErrTooMany):
 		writeError(w, http.StatusUnprocessableEntity, "not_enough", "the seller doesn't have that many", map[string]string{"quantity": "more than available"})
+	case errors.Is(err, shopping.ErrAuctionCart):
+		writeError(w, http.StatusUnprocessableEntity, "auction", err.Error(), nil)
 	case errors.Is(err, shopping.ErrCartFull):
 		writeError(w, http.StatusUnprocessableEntity, "cart_full", "your cart holds up to 50 different cards", nil)
 	case errors.Is(err, inbox.ErrNotFound):
@@ -120,8 +122,20 @@ func (s *Server) handleListingForMe(w http.ResponseWriter, r *http.Request) {
 	var own bool
 	s.db.QueryRowContext(r.Context(),
 		`SELECT EXISTS (SELECT 1 FROM listings WHERE id = $1 AND seller_id = $2)`, id, u.ID).Scan(&own)
+	// Best Offer: how many offers this buyer has left and any open one.
+	var made int
+	s.db.QueryRowContext(r.Context(), `SELECT count(*) FROM offers
+		WHERE listing_id = $1 AND buyer_id = $2 AND from_role = 'buyer'`, id, u.ID).Scan(&made)
+	var pending *string
+	var pid string
+	if err := s.db.QueryRowContext(r.Context(), `SELECT id FROM offers
+		WHERE listing_id = $1 AND buyer_id = $2 AND status = 'pending' ORDER BY created_at DESC LIMIT 1`,
+		id, u.ID).Scan(&pid); err == nil {
+		pending = &pid
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"watching": watching, "in_cart": inCart, "own": own, "thread_id": thread,
+		"offers_left": max(0, 3-made), "pending_offer_id": pending,
 	})
 }
 
