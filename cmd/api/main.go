@@ -52,7 +52,10 @@ func run(log *slog.Logger) error {
 	}
 	log.Info("migrations applied")
 
-	authSvc := &auth.Service{DB: database, SessionTTL: cfg.SessionTTL}
+	authSvc := &auth.Service{DB: database, SessionTTL: cfg.SessionTTL, AdminEmails: cfg.AdminEmails}
+	if err := authSvc.PromoteAdmins(ctx); err != nil {
+		log.Error("promote admins", "err", err)
+	}
 
 	sellerSvc := &sellers.Service{DB: database}
 	if cfg.StripeSecretKey != "" {

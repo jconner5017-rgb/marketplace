@@ -46,6 +46,30 @@ func (u User) IsAdmin() bool { return u.Role == "admin" }
 type Service struct {
 	DB         *sql.DB
 	SessionTTL time.Duration
+	// AdminEmails become admins as soon as they register (ADMIN_EMAILS).
+	AdminEmails []string
+}
+
+func (s *Service) isAdminEmail(email string) bool {
+	for _, a := range s.AdminEmails {
+		if strings.EqualFold(strings.TrimSpace(a), email) {
+			return true
+		}
+	}
+	return false
+}
+
+// PromoteAdmins makes every registered ADMIN_EMAILS account an admin.
+func (s *Service) PromoteAdmins(ctx context.Context) error {
+	for _, a := range s.AdminEmails {
+		if a = strings.TrimSpace(a); a == "" {
+			continue
+		}
+		if err := s.SetRole(ctx, a, "admin"); err != nil && !errors.Is(err, ErrNotFound) {
+			return err
+		}
+	}
+	return nil
 }
 
 var usernameRE = regexp.MustCompile(`^[a-zA-Z0-9_]{3,30}$`)
@@ -106,6 +130,12 @@ func (s *Service) Signup(ctx context.Context, email, username, password string) 
 			}
 		}
 		return User{}, err
+	}
+	if s.isAdminEmail(u.Email) {
+		if err := s.SetRole(ctx, u.Email, "admin"); err != nil {
+			return User{}, err
+		}
+		u.Role = "admin"
 	}
 	return u, nil
 }

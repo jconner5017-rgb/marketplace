@@ -361,3 +361,18 @@ func TestLoginRateLimit(t *testing.T) {
 		t.Fatalf("11th attempt: want 429, got %d", last)
 	}
 }
+
+func TestAdminEmailsPromotedOnSignup(t *testing.T) {
+	ts, svc := setup(t)
+	svc.AdminEmails = []string{"Owner@Example.com"}
+	_, body := do(t, client(t), "POST", ts.URL+"/v1/auth/signup", map[string]string{
+		"email": "owner@example.com", "username": "the_owner", "password": "longenough1"})
+	if body["user"].(map[string]any)["role"] != "admin" {
+		t.Fatalf("listed email not admin: %v", body)
+	}
+	_, body = do(t, client(t), "POST", ts.URL+"/v1/auth/signup", map[string]string{
+		"email": "someone@example.com", "username": "someone", "password": "longenough1"})
+	if body["user"].(map[string]any)["role"] != "user" {
+		t.Fatalf("unlisted email became admin: %v", body)
+	}
+}

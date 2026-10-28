@@ -25,6 +25,8 @@ type Config struct {
 	SeedDemo string // "", "true" or "remove"
 	// ImageBaseURL is where demo card images are served (the API's own URL).
 	ImageBaseURL string
+	// AdminEmails are promoted to admin on start and when they register.
+	AdminEmails []string
 }
 
 func Load() (Config, error) {
@@ -58,6 +60,11 @@ func Load() (Config, error) {
 	c.StripeSecretKey = strings.TrimSpace(os.Getenv("STRIPE_SECRET_KEY"))
 	c.StripeWebhookSecret = strings.TrimSpace(os.Getenv("STRIPE_WEBHOOK_SECRET"))
 	c.SeedDemo = strings.ToLower(strings.TrimSpace(os.Getenv("SEED_DEMO")))
+	for _, e := range strings.Split(os.Getenv("ADMIN_EMAILS"), ",") {
+		if e = strings.TrimSpace(e); e != "" {
+			c.AdminEmails = append(c.AdminEmails, e)
+		}
+	}
 	c.ImageBaseURL = strings.TrimRight(getenv("IMAGE_BASE_URL", c.PublicURL), "/")
 	if k := c.StripeSecretKey; k != "" && !strings.HasPrefix(k, "sk_") && !strings.HasPrefix(k, "rk_") {
 		return c, errors.New("STRIPE_SECRET_KEY should start with sk_ or rk_")
