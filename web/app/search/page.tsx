@@ -53,7 +53,11 @@ function hrefWith(base: URLSearchParams, changes: Record<string, string | null>)
 export async function generateMetadata({ searchParams }: { searchParams: Promise<SP> }): Promise<Metadata> {
   const p = pick(await searchParams);
   const what = p.get("q") || p.get("game") || (p.get("category") === "tcg" ? "TCG singles" : p.get("category") === "sports" ? "Sports cards" : "All cards");
-  return { title: what };
+  // Only plain category and keyword pages are indexed. Filter combinations
+  // are endless, so crawlers are kept off them (see also app/robots.ts).
+  const keys = new Set(p.keys());
+  const plain = keys.size <= 2 && [...keys].every((k) => ["q", "category", "game", "sport"].includes(k));
+  return { title: what, ...(plain ? {} : { robots: { index: false, follow: false } }) };
 }
 
 export default async function SearchPage({ searchParams }: { searchParams: Promise<SP> }) {
