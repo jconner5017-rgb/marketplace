@@ -126,6 +126,7 @@ export type User = {
   status: string;
   email_verified: boolean;
   created_at: string;
+  staff_role?: string;
 };
 
 export type Seller = {

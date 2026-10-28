@@ -3,6 +3,7 @@ package httpapi
 import (
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/jconner5017-rgb/marketplace/internal/inbox"
@@ -312,6 +313,7 @@ func (s *Server) handleAnnounce(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, r, err)
 		return
 	}
+	s.audit(r, "announcement.posted", "announcement", strconv.FormatInt(id, 10), "", map[string]any{"title": req.Title})
 	writeJSON(w, http.StatusCreated, map[string]int64{"id": id})
 }
 

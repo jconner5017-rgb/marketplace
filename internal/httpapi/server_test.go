@@ -11,6 +11,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"encoding/base32"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -24,6 +25,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jconner5017-rgb/marketplace/internal/admin"
 	"github.com/jconner5017-rgb/marketplace/internal/auth"
 	"github.com/jconner5017-rgb/marketplace/internal/db"
 	"github.com/jconner5017-rgb/marketplace/internal/inbox"
@@ -120,6 +122,8 @@ func setupEnv(t *testing.T) *env {
 		Shopping:      &shopping.Service{DB: d, Listings: &listings.Service{DB: d, Sellers: sellerSvc}, Sellers: sellerSvc},
 		Inbox:         &inbox.Service{DB: d, Listings: &listings.Service{DB: d, Sellers: sellerSvc}},
 		Sales:         salesSvc,
+		MFA:           &admin.MFA{DB: d, Key: []byte("0123456789abcdef0123456789abcdef")},
+		Audit:         &admin.Audit{DB: d},
 	})
 	ts := httptest.NewServer(s.Handler())
 	t.Cleanup(ts.Close)
@@ -302,6 +306,10 @@ func TestAdminOnly(t *testing.T) {
 	if err := svc.SetRole(context.Background(), "boss@example.com", "admin"); err != nil {
 		t.Fatal(err)
 	}
+	if code, body := do(t, c, "GET", ts.URL+"/v1/admin/users", nil); code != 403 || errCode(body) != "mfa_required" {
+		t.Fatalf("admin without authenticator check: %d %v", code, body)
+	}
+	enrollMFA(t, ts.URL, c)
 	code, body := do(t, c, "GET", ts.URL+"/v1/admin/users", nil)
 	if code != 200 {
 		t.Fatalf("admin route: %d %v", code, body)
@@ -379,4 +387,23 @@ func TestAdminEmailsPromotedOnSignup(t *testing.T) {
 	if body["user"].(map[string]any)["role"] != "user" {
 		t.Fatalf("unlisted email became admin: %v", body)
 	}
+}
+
+// enrollMFA sets up the staff authenticator for c's account and passes the check.
+func enrollMFA(t *testing.T, base string, c *http.Client) string {
+	t.Helper()
+	code, body := do(t, c, "POST", base+"/v1/admin/mfa/setup", map[string]any{})
+	if code != 200 {
+		t.Fatalf("mfa setup: %d %v", code, body)
+	}
+	secret := body["secret"].(string)
+	raw, err := base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(secret)
+	if err != nil {
+		t.Fatal(err)
+	}
+	code, body = do(t, c, "POST", base+"/v1/admin/mfa/confirm", map[string]string{"code": admin.TOTP(raw, time.Now().Unix()/30)})
+	if code != 200 || len(body["backup_codes"].([]any)) != 10 {
+		t.Fatalf("mfa confirm: %d %v", code, body)
+	}
+	return secret
 }

@@ -186,6 +186,7 @@ func TestMessagesBellAndAnnouncements(t *testing.T) {
 	}
 	admin := buyer(t, e, "site_admin")
 	e.auth.SetRole(t.Context(), "site_admin@example.com", "admin")
+	enrollMFA(t, e.ts.URL, admin.c)
 	code, body = do(t, admin.c, "POST", e.ts.URL+"/v1/admin/announcements", map[string]string{
 		"title": "Holiday shipping cutoff Dec 18", "body": "Ship by the 18th for Christmas delivery.", "link": "/help/shipping"})
 	if code != 201 {

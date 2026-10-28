@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/jconner5017-rgb/marketplace/internal/admin"
 	"github.com/jconner5017-rgb/marketplace/internal/auth"
 	"github.com/jconner5017-rgb/marketplace/internal/inbox"
 	"github.com/jconner5017-rgb/marketplace/internal/listings"
@@ -39,6 +40,9 @@ type Server struct {
 
 	sales      *sales.Service
 	bidLimiter *rateLimiter
+
+	mfa      *admin.MFA
+	auditLog *admin.Audit
 }
 
 type Options struct {
@@ -57,6 +61,8 @@ type Options struct {
 	Shopping *shopping.Service
 	Inbox    *inbox.Service
 	Sales    *sales.Service
+	MFA      *admin.MFA
+	Audit    *admin.Audit
 }
 
 func New(o Options) *Server {
@@ -74,6 +80,8 @@ func New(o Options) *Server {
 		shopping:      o.Shopping,
 		inbox:         o.Inbox,
 		sales:         o.Sales,
+		mfa:           o.MFA,
+		auditLog:      o.Audit,
 		// 30 bids or offers per user per minute.
 		bidLimiter: newRateLimiter(30, time.Minute),
 		// 20 messages per user per 10 minutes.
@@ -94,8 +102,17 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/auth/logout", s.handleLogout)
 	mux.HandleFunc("GET /v1/me", requireUser(s.handleMe))
 
-	mux.HandleFunc("GET /v1/admin/users", requireAdmin(s.handleAdminUsers))
-	mux.HandleFunc("POST /v1/admin/announcements", requireAdmin(s.handleAnnounce))
+	// Staff back office. Everything but the sign-in check needs a recent
+	// authenticator code and the right permission.
+	mux.HandleFunc("GET /v1/admin/session", s.staffOnly(s.handleAdminSession))
+	mux.HandleFunc("POST /v1/admin/mfa/setup", s.staffOnly(s.handleMFASetup))
+	mux.HandleFunc("POST /v1/admin/mfa/confirm", s.staffOnly(s.handleMFAConfirm))
+	mux.HandleFunc("POST /v1/admin/mfa/verify", s.staffOnly(s.handleMFAVerify))
+	mux.HandleFunc("GET /v1/admin/dashboard", s.requireStaff("", s.handleAdminDashboard))
+	mux.HandleFunc("GET /v1/admin/audit", s.requireStaff(admin.AuditView, s.handleAuditList))
+	mux.HandleFunc("GET /v1/admin/audit/verify", s.requireStaff(admin.AuditView, s.handleAuditVerify))
+	mux.HandleFunc("GET /v1/admin/users", s.requireStaff(admin.UsersView, s.handleAdminUsers))
+	mux.HandleFunc("POST /v1/admin/announcements", s.requireStaff(admin.Announce, s.handleAnnounce))
 	mux.HandleFunc("GET /v1/announcements", s.handleAnnouncements)
 
 	// Signed-in buyer features: header summary, watchlist, cart, messages, bell.
@@ -149,6 +166,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/listings/{id}", s.handleGetListing)
 
 	var h http.Handler = mux
+	h = frozenGuard(h)
 	h = s.loadUser(h)
 	h = requireJSONForWrites(h)
 	h = requestLogger(s.log, h)

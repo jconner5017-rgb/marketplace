@@ -39,9 +39,31 @@ type User struct {
 	Status        string    `json:"status"`
 	EmailVerified bool      `json:"email_verified"`
 	CreatedAt     time.Time `json:"created_at"`
+	// StaffRole is set for marketplace staff: super_admin, moderator, support, auditor.
+	StaffRole *string `json:"staff_role,omitempty"`
 }
 
-func (u User) IsAdmin() bool { return u.Role == "admin" }
+// IsAdmin reports a super admin (the owner and anyone they promote).
+func (u User) IsAdmin() bool {
+	return u.Role == "admin" || (u.StaffRole != nil && *u.StaffRole == "super_admin")
+}
+
+// IsStaff reports any staff role.
+func (u User) IsStaff() bool { return u.StaffRole != nil || u.Role == "admin" }
+
+// Staff returns the staff role ("" if none).
+func (u User) Staff() string {
+	if u.StaffRole != nil {
+		return *u.StaffRole
+	}
+	if u.Role == "admin" {
+		return "super_admin"
+	}
+	return ""
+}
+
+// Frozen accounts can sign in and browse but not buy, sell, bid or message.
+func (u User) Frozen() bool { return u.Status == "frozen" }
 
 type Service struct {
 	DB         *sql.DB
@@ -96,12 +118,28 @@ func validateSignup(email, username, password string) error {
 	return nil
 }
 
-const userCols = `id, email, username, role, status, email_verified_at IS NOT NULL, created_at`
+const userCols = `id, email, username, role, status, email_verified_at IS NOT NULL, created_at, staff_role`
 
 func scanUser(row interface{ Scan(...any) error }) (User, error) {
 	var u User
-	err := row.Scan(&u.ID, &u.Email, &u.Username, &u.Role, &u.Status, &u.EmailVerified, &u.CreatedAt)
+	var staff sql.NullString
+	err := row.Scan(&u.ID, &u.Email, &u.Username, &u.Role, &u.Status, &u.EmailVerified, &u.CreatedAt, &staff)
+	if staff.Valid {
+		u.StaffRole = &staff.String
+	}
 	return u, err
+}
+
+// signInStatus: who may hold a session. A suspension past its end date
+// counts as active (and is cleared on the next sign-in).
+const signInStatus = `(u.status IN ('active', 'frozen') OR (u.status = 'suspended' AND u.suspended_until <= now()))`
+
+func (s *Service) loginEvent(ctx context.Context, userID *string, email, ip, ua string, ok bool, reason string) {
+	if len(ua) > 300 {
+		ua = ua[:300]
+	}
+	s.DB.ExecContext(ctx, `INSERT INTO login_events (user_id, email, ip, user_agent, success, reason)
+		VALUES ($1, $2, $3, $4, $5, NULLIF($6, ''))`, userID, email, ip, ua, ok, reason)
 }
 
 // Signup creates a buyer account.
@@ -148,23 +186,40 @@ var dummyHash, _ = HashPassword("not-a-real-password")
 func (s *Service) Login(ctx context.Context, email, password, ip, userAgent string) (User, string, error) {
 	var hash string
 	var u User
+	var staff sql.NullString
+	var canSignIn bool
+	email = strings.TrimSpace(email)
 	err := s.DB.QueryRowContext(ctx, `
-		SELECT `+userCols+`, password_hash FROM users WHERE lower(email) = lower($1)`,
-		strings.TrimSpace(email),
-	).Scan(&u.ID, &u.Email, &u.Username, &u.Role, &u.Status, &u.EmailVerified, &u.CreatedAt, &hash)
+		SELECT `+prefixed("u.", userCols)+`, u.password_hash, `+signInStatus+` FROM users u WHERE lower(u.email) = lower($1)`,
+		email,
+	).Scan(&u.ID, &u.Email, &u.Username, &u.Role, &u.Status, &u.EmailVerified, &u.CreatedAt, &staff, &hash, &canSignIn)
 	if errors.Is(err, sql.ErrNoRows) {
 		VerifyPassword(password, dummyHash)
+		s.loginEvent(ctx, nil, email, ip, userAgent, false, "unknown_email")
 		return User{}, "", ErrInvalidCredentials
 	}
 	if err != nil {
 		return User{}, "", err
 	}
+	if staff.Valid {
+		u.StaffRole = &staff.String
+	}
 	if !VerifyPassword(password, hash) {
+		s.loginEvent(ctx, &u.ID, email, ip, userAgent, false, "bad_password")
 		return User{}, "", ErrInvalidCredentials
 	}
-	if u.Status != "active" {
+	if !canSignIn {
+		s.loginEvent(ctx, &u.ID, email, ip, userAgent, false, "disabled")
 		return User{}, "", ErrAccountDisabled
 	}
+	if u.Status == "suspended" { // the suspension has ended
+		if _, err := s.DB.ExecContext(ctx, `UPDATE users SET status = 'active', suspended_until = NULL,
+			status_changed_at = now(), updated_at = now() WHERE id = $1`, u.ID); err != nil {
+			return User{}, "", err
+		}
+		u.Status = "active"
+	}
+	s.loginEvent(ctx, &u.ID, email, ip, userAgent, true, "")
 	token, err := s.createSession(ctx, u.ID, ip, userAgent)
 	if err != nil {
 		return User{}, "", err
@@ -204,7 +259,7 @@ func (s *Service) UserForSession(ctx context.Context, token string) (User, error
 	u, err := scanUser(s.DB.QueryRowContext(ctx, `
 		SELECT `+prefixed("u.", userCols)+`
 		FROM sessions s JOIN users u ON u.id = s.user_id
-		WHERE s.token_hash = $1 AND s.expires_at > now() AND u.status = 'active'`,
+		WHERE s.token_hash = $1 AND s.expires_at > now() AND `+signInStatus,
 		hashToken(token)))
 	if errors.Is(err, sql.ErrNoRows) {
 		return User{}, ErrNoSession
@@ -233,10 +288,13 @@ func (s *Service) PurgeExpiredSessions(ctx context.Context) (int64, error) {
 	return res.RowsAffected()
 }
 
-// SetRole changes a user's role ("user" or "admin").
+// SetRole changes a user's role ("user" or "admin"). Admins are super admins.
 func (s *Service) SetRole(ctx context.Context, email, role string) error {
-	res, err := s.DB.ExecContext(ctx,
-		`UPDATE users SET role = $2, updated_at = now() WHERE lower(email) = lower($1)`, email, role)
+	res, err := s.DB.ExecContext(ctx, `
+		UPDATE users SET role = $2,
+			staff_role = CASE WHEN $2 = 'admin' THEN 'super_admin' WHEN staff_role = 'super_admin' THEN NULL ELSE staff_role END,
+			updated_at = now()
+		WHERE lower(email) = lower($1)`, email, role)
 	if err != nil {
 		return err
 	}
@@ -277,4 +335,20 @@ func prefixed(alias, cols string) string {
 		parts[i] = alias + p
 	}
 	return strings.Join(parts, ", ")
+}
+
+// SessionMFA returns when this session last passed the staff authenticator check.
+func (s *Service) SessionMFA(ctx context.Context, token string) (time.Time, bool) {
+	var t sql.NullTime
+	if err := s.DB.QueryRowContext(ctx, `SELECT mfa_verified_at FROM sessions WHERE token_hash = $1`,
+		hashToken(token)).Scan(&t); err != nil || !t.Valid {
+		return time.Time{}, false
+	}
+	return t.Time, true
+}
+
+// MarkSessionMFA records that this session just passed the authenticator check.
+func (s *Service) MarkSessionMFA(ctx context.Context, token string) error {
+	_, err := s.DB.ExecContext(ctx, `UPDATE sessions SET mfa_verified_at = now() WHERE token_hash = $1`, hashToken(token))
+	return err
 }

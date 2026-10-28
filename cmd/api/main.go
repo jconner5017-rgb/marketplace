@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/jconner5017-rgb/marketplace/internal/admin"
 	"github.com/jconner5017-rgb/marketplace/internal/auth"
 	"github.com/jconner5017-rgb/marketplace/internal/config"
 	"github.com/jconner5017-rgb/marketplace/internal/db"
@@ -87,6 +88,13 @@ func run(log *slog.Logger) error {
 		}
 	}
 	salesSvc := &sales.Service{DB: database}
+	mfaKey, err := admin.ParseKey(cfg.MFAKey)
+	if err != nil {
+		return err
+	}
+	if mfaKey == nil {
+		log.Warn("MFA_ENCRYPTION_KEY not set: the staff back office can't be used")
+	}
 	api := httpapi.New(httpapi.Options{
 		DB:           database,
 		Auth:         authSvc,
@@ -103,6 +111,8 @@ func run(log *slog.Logger) error {
 		Shopping: &shopping.Service{DB: database, Listings: listingSvc, Sellers: sellerSvc},
 		Inbox:    &inbox.Service{DB: database, Listings: listingSvc},
 		Sales:    salesSvc,
+		MFA:      &admin.MFA{DB: database, Key: mfaKey},
+		Audit:    &admin.Audit{DB: database},
 	})
 
 	// Close finished auctions, warn watchers and expire offers every 30 seconds.

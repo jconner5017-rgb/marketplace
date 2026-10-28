@@ -28,7 +28,7 @@ export default async function Header() {
                 <MenuLink href="/watchlist">Watchlist</MenuLink>
                 <MenuLink href="/messages">Messages{me.unread_messages > 0 ? ` (${me.unread_messages})` : ""}</MenuLink>
                 <MenuLink href="/cart">Cart</MenuLink>
-                {me.user.role === "admin" && <MenuLink href="/admin/announce">Post an announcement</MenuLink>}
+                {(me.user.role === "admin" || me.user.staff_role) && <MenuLink href="/admin">Back office</MenuLink>}
                 <div className="mt-1 border-t border-line px-3 pt-2"><SignOutButton /></div>
               </div>
             </details>

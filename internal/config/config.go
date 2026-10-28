@@ -27,6 +27,8 @@ type Config struct {
 	ImageBaseURL string
 	// AdminEmails are promoted to admin on start and when they register.
 	AdminEmails []string
+	// MFAKey encrypts staff authenticator secrets (MFA_ENCRYPTION_KEY, 32 bytes).
+	MFAKey string
 }
 
 func Load() (Config, error) {
@@ -60,6 +62,7 @@ func Load() (Config, error) {
 	c.StripeSecretKey = strings.TrimSpace(os.Getenv("STRIPE_SECRET_KEY"))
 	c.StripeWebhookSecret = strings.TrimSpace(os.Getenv("STRIPE_WEBHOOK_SECRET"))
 	c.SeedDemo = strings.ToLower(strings.TrimSpace(os.Getenv("SEED_DEMO")))
+	c.MFAKey = strings.TrimSpace(os.Getenv("MFA_ENCRYPTION_KEY"))
 	for _, e := range strings.Split(os.Getenv("ADMIN_EMAILS"), ",") {
 		if e = strings.TrimSpace(e); e != "" {
 			c.AdminEmails = append(c.AdminEmails, e)
