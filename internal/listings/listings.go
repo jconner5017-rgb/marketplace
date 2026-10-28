@@ -24,6 +24,7 @@ var (
 	ErrCannotSell      = errors.New("seller must finish Stripe onboarding before listing")
 	ErrDuplicateExtern = errors.New("external_id already used by another listing")
 	ErrAuctionOver     = errors.New("this auction has ended")
+	ErrSellerRejected  = errors.New("your seller account wasn't approved, so you can't list cards; contact us if you think this is a mistake")
 )
 
 // ValidationError lists problems with submitted fields, keyed by field name.
@@ -368,6 +369,9 @@ func (s *Service) sellerFor(ctx context.Context, sellerID string) (sellers.Profi
 	if !p.CanSell() {
 		return p, ErrCannotSell
 	}
+	if p.ReviewStatus == "rejected" {
+		return p, ErrSellerRejected
+	}
 	return p, nil
 }
 
@@ -505,7 +509,7 @@ func (s *Service) GetPublic(ctx context.Context, id string) (Listing, error) {
 // current tier (a demoted seller's pricier cards are hidden, not deleted).
 const publicJoin = `
 	JOIN users u ON u.id = l.seller_id AND u.status = 'active'
-	JOIN seller_profiles sp ON sp.user_id = l.seller_id AND sp.charges_enabled
+	JOIN seller_profiles sp ON sp.user_id = l.seller_id AND sp.charges_enabled AND sp.review_status <> 'rejected'
 	WHERE l.status = 'active' AND l.quantity > 0
 	  AND (l.format = 'fixed' OR (l.auction_state = 'live' AND l.ends_at > now()))
 	  AND l.price_cents <= CASE sp.tier WHEN 1 THEN 2000 WHEN 2 THEN 25000 ELSE 100000 END`
@@ -514,7 +518,7 @@ const publicJoin = `
 // still open an auction's page after it ends.
 const viewJoin = `
 	JOIN users u ON u.id = l.seller_id AND u.status = 'active'
-	JOIN seller_profiles sp ON sp.user_id = l.seller_id AND sp.charges_enabled
+	JOIN seller_profiles sp ON sp.user_id = l.seller_id AND sp.charges_enabled AND sp.review_status <> 'rejected'
 	WHERE ((l.status = 'active' AND l.quantity > 0 AND (l.format = 'fixed' OR l.auction_state = 'live'))
 	       OR (l.format = 'auction' AND l.status = 'ended'))`
 

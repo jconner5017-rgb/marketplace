@@ -186,3 +186,133 @@ func TestStaffRolesAndAccountStatus(t *testing.T) {
 		t.Fatalf("login events: %d", events)
 	}
 }
+
+func memberID(t *testing.T, e *env, username string) string {
+	t.Helper()
+	var id string
+	if err := e.db.QueryRow(`SELECT id FROM users WHERE username = $1`, username).Scan(&id); err != nil {
+		t.Fatal(err)
+	}
+	return id
+}
+
+func TestAdminMembersAndStaff(t *testing.T) {
+	e := setupEnv(t)
+	boss := staff(t, e, "boss_users", admin.SuperAdmin)
+	enrollMFA(t, e.ts.URL, boss.c)
+	mod := staff(t, e, "mod_mia", admin.Moderator)
+	enrollMFA(t, e.ts.URL, mod.c)
+	sup := staff(t, e, "support_sam", admin.Support)
+	enrollMFA(t, e.ts.URL, sup.c)
+	sc, _ := newSeller(t, e, "sketchy_seller", true)
+	createListing(t, e, &httpClientT{sc}, rawCard("SK1", 900))
+	target := buyer(t, e, "trouble")
+	tid, sid := memberID(t, e, "trouble"), memberID(t, e, "sketchy_seller")
+
+	// Search and detail.
+	_, body := do(t, sup.c, "GET", e.ts.URL+"/v1/admin/users?q=troub", nil)
+	if body["total"].(float64) != 1 {
+		t.Fatalf("search: %v", body)
+	}
+	_, body = do(t, sup.c, "GET", e.ts.URL+"/v1/admin/users/"+sid, nil)
+	m := body["member"].(map[string]any)
+	if m["seller"].(map[string]any)["review_status"] != "pending" || m["active_listings"].(float64) != 1 {
+		t.Fatalf("seller detail: %v", m)
+	}
+
+	// Support edits a profile (reason required); can't freeze.
+	if code, _ := do(t, sup.c, "PATCH", e.ts.URL+"/v1/admin/users/"+tid, map[string]any{"username": "trouble2"}); code != 422 {
+		t.Fatalf("edit without reason: %d", code)
+	}
+	if code, body := do(t, sup.c, "PATCH", e.ts.URL+"/v1/admin/users/"+tid, map[string]any{"username": "trouble2", "reason": "member asked"}); code != 204 {
+		t.Fatalf("edit: %d %v", code, body)
+	}
+	if code, _ := do(t, sup.c, "POST", e.ts.URL+"/v1/admin/users/"+tid+"/status", map[string]any{"status": "frozen", "reason": "x"}); code != 403 {
+		t.Fatalf("support freezing: %d", code)
+	}
+
+	// Moderator freezes and suspends; can't ban or touch staff.
+	if code, body := do(t, mod.c, "POST", e.ts.URL+"/v1/admin/users/"+tid+"/status", map[string]any{"status": "frozen", "reason": "reported for scam"}); code != 204 {
+		t.Fatalf("freeze: %d %v", code, body)
+	}
+	if code, body := do(t, target.c, "PUT", e.ts.URL+"/v1/watchlist/00000000-0000-0000-0000-000000000000", map[string]any{}); code != 403 || errCode(body) != "account_frozen" {
+		t.Fatalf("frozen member writes: %d %v", code, body)
+	}
+	if code, _ := do(t, mod.c, "POST", e.ts.URL+"/v1/admin/users/"+tid+"/status", map[string]any{"status": "suspended", "reason": "repeat"}); code != 422 {
+		t.Fatalf("suspend without date: %d", code)
+	}
+	until := time.Now().Add(72 * time.Hour).UTC().Format(time.RFC3339)
+	if code, _ := do(t, mod.c, "POST", e.ts.URL+"/v1/admin/users/"+tid+"/status", map[string]any{"status": "suspended", "until": until, "reason": "repeat offender"}); code != 204 {
+		t.Fatalf("suspend: %d", code)
+	}
+	if code, _ := do(t, target.c, "GET", e.ts.URL+"/v1/me", nil); code != 401 {
+		t.Fatalf("suspended member still signed in: %d", code)
+	}
+	if code, _ := do(t, mod.c, "POST", e.ts.URL+"/v1/admin/users/"+tid+"/status", map[string]any{"status": "banned", "reason": "fraud"}); code != 403 {
+		t.Fatalf("moderator ban: %d", code)
+	}
+	if code, _ := do(t, mod.c, "POST", e.ts.URL+"/v1/admin/users/"+memberID(t, e, "support_sam")+"/status", map[string]any{"status": "frozen", "reason": "test"}); code != 403 {
+		t.Fatalf("moderator restricting staff: %d", code)
+	}
+	if code, _ := do(t, boss.c, "POST", e.ts.URL+"/v1/admin/users/"+tid+"/status", map[string]any{"status": "banned", "reason": "confirmed fraud"}); code != 204 {
+		t.Fatalf("ban: %d", code)
+	}
+	if code, _ := do(t, boss.c, "POST", e.ts.URL+"/v1/admin/users/"+memberID(t, e, "boss_users")+"/status", map[string]any{"status": "frozen", "reason": "self"}); code != 403 {
+		t.Fatalf("self restrict: %d", code)
+	}
+
+	// Seller review: rejected sellers' listings are hidden.
+	_, body = do(t, mod.c, "GET", e.ts.URL+"/v1/admin/sellers?review=pending", nil)
+	if len(body["sellers"].([]any)) != 1 {
+		t.Fatalf("pending sellers: %v", body)
+	}
+	if code, _ := do(t, mod.c, "POST", e.ts.URL+"/v1/admin/sellers/"+sid+"/review", map[string]any{"decision": "reject"}); code != 422 {
+		t.Fatalf("reject without note: %d", code)
+	}
+	do(t, mod.c, "POST", e.ts.URL+"/v1/admin/sellers/"+sid+"/review", map[string]any{"decision": "reject", "note": "counterfeit slabs"})
+	if _, s := do(t, client(t), "GET", e.ts.URL+"/v1/listings?seller=sketchy_seller", nil); s["total"].(float64) != 0 {
+		t.Fatalf("rejected seller still listed: %v", s)
+	}
+	do(t, mod.c, "POST", e.ts.URL+"/v1/admin/sellers/"+sid+"/review", map[string]any{"decision": "approve"})
+	if _, s := do(t, client(t), "GET", e.ts.URL+"/v1/listings?seller=sketchy_seller", nil); s["total"].(float64) != 1 {
+		t.Fatalf("approved seller hidden: %v", s)
+	}
+
+	// Notes.
+	if code, _ := do(t, sup.c, "POST", e.ts.URL+"/v1/admin/users/"+sid+"/notes", map[string]any{"body": "Called about slab photos"}); code != 201 {
+		t.Fatalf("note: %d", code)
+	}
+
+	// Staff management: Super Admin only; at least one Super Admin; no self-changes.
+	if code, _ := do(t, mod.c, "POST", e.ts.URL+"/v1/admin/staff", map[string]any{"email": "trouble@example.com", "role": "support", "reason": "x"}); code != 403 {
+		t.Fatalf("moderator managing staff: %d", code)
+	}
+	newbie := buyer(t, e, "new_helper")
+	if code, body := do(t, boss.c, "POST", e.ts.URL+"/v1/admin/staff", map[string]any{"email": "new_helper@example.com", "role": "support", "reason": "hired"}); code != 204 {
+		t.Fatalf("add staff: %d %v", code, body)
+	}
+	if code, body := do(t, newbie.c, "GET", e.ts.URL+"/v1/admin/session", nil); code != 200 || body["mfa"] != "setup_required" {
+		t.Fatalf("new staff session: %d %v", code, body)
+	}
+	if code, _ := do(t, boss.c, "POST", e.ts.URL+"/v1/admin/staff", map[string]any{"user_id": memberID(t, e, "boss_users"), "role": "", "reason": "leaving"}); code != 403 {
+		t.Fatalf("self removal: %d", code)
+	}
+	// Moving mod to Support takes effect at their next authenticator check.
+	do(t, boss.c, "POST", e.ts.URL+"/v1/admin/staff", map[string]any{"user_id": memberID(t, e, "mod_mia"), "role": "support", "reason": "role change"})
+	if code, body := do(t, mod.c, "GET", e.ts.URL+"/v1/admin/sellers", nil); code != 403 || errCode(body) != "mfa_required" {
+		t.Fatalf("after role change: %d %v", code, body)
+	}
+	if code, body := do(t, boss.c, "POST", e.ts.URL+"/v1/admin/users/"+memberID(t, e, "mod_mia")+"/mfa-reset", map[string]any{"reason": "lost phone"}); code != 204 {
+		t.Fatalf("mfa reset: %d %v", code, body)
+	}
+
+	// The member page shows the history from the audit log.
+	_, body = do(t, boss.c, "GET", e.ts.URL+"/v1/admin/users/"+tid, nil)
+	m = body["member"].(map[string]any)
+	if m["status"] != "banned" || len(m["history"].([]any)) < 4 {
+		t.Fatalf("member history: %v", m)
+	}
+	if _, body := do(t, boss.c, "GET", e.ts.URL+"/v1/admin/audit/verify", nil); body["ok"] != true {
+		t.Fatalf("chain: %v", body)
+	}
+}

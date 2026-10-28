@@ -139,6 +139,7 @@ export type Seller = {
   bundle_discount_val: number | null;
   fcm_connected: boolean;
   created_at: string;
+  review_status: "pending" | "approved" | "rejected";
 };
 
 export type ApiError = {

@@ -101,6 +101,12 @@ export default async function SellPage() {
         </div>
       </div>
 
+      {seller.review_status === "rejected" && (
+        <p role="alert" className="mt-6 rounded-lg border border-slab/40 bg-slab/5 p-4 text-[14px] text-slab">
+          Your seller account wasn&apos;t approved, so your listings are hidden and you can&apos;t list new cards.
+          See <a href="/help/contact" className="underline">Contact us</a> if you think this is a mistake.
+        </p>
+      )}
       {(offersWaiting > 0 || awaitingPay.length > 0) && (
         <div className="mt-6 flex flex-wrap gap-3 text-[14px]">
           {offersWaiting > 0 && (

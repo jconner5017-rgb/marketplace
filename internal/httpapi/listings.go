@@ -26,6 +26,8 @@ func (s *Server) listingError(w http.ResponseWriter, r *http.Request, err error)
 	case errors.Is(err, listings.ErrDuplicateExtern):
 		writeError(w, http.StatusConflict, "external_id_taken", "you already have a listing with that external_id",
 			map[string]string{"external_id": "already in use"})
+	case errors.Is(err, listings.ErrSellerRejected):
+		writeError(w, http.StatusForbidden, "seller_rejected", err.Error(), nil)
 	case errors.Is(err, listings.ErrHasBids):
 		writeError(w, http.StatusConflict, "has_bids", "this auction has bids; you can only add to the description and photos, and it can't be ended early", nil)
 	case errors.Is(err, listings.ErrAuctionOver):

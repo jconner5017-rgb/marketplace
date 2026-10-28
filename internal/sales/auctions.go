@@ -74,6 +74,7 @@ type auction struct {
 	capCents                           int
 	autoRelist                         bool
 	durationDays                       int
+	sellerOK                           bool // seller active, approved or pending, taking payments
 }
 
 func lockAuction(ctx context.Context, tx *sql.Tx, id string) (auction, error) {
@@ -85,12 +86,13 @@ func lockAuction(ctx context.Context, tx *sql.Tx, id string) (auction, error) {
 	err := tx.QueryRowContext(ctx, `
 		SELECT l.id, l.seller_id, l.title, l.format, l.status, l.auction_state, l.ends_at, now(),
 		       l.price_cents, l.start_cents, l.bid_count, l.auction_round, l.reserve_cents, l.bin_cents,
-		       l.leader_id, l.leader_max_cents, sp.tier, l.auto_relist, l.duration_days
-		FROM listings l JOIN seller_profiles sp ON sp.user_id = l.seller_id
+		       l.leader_id, l.leader_max_cents, sp.tier, l.auto_relist, l.duration_days,
+		       u.status = 'active' AND sp.charges_enabled AND sp.review_status <> 'rejected'
+		FROM listings l JOIN seller_profiles sp ON sp.user_id = l.seller_id JOIN users u ON u.id = l.seller_id
 		WHERE l.id = $1 FOR UPDATE OF l`, id).Scan(
 		&a.id, &a.sellerID, &a.title, &a.format, &a.status, &state, &endsAt, &a.now,
 		&a.price, &start, &a.bidCount, &a.round, &a.reserve, &a.bin,
-		&a.leaderID, &a.leaderMax, &tier, &a.autoRelist, &duration)
+		&a.leaderID, &a.leaderMax, &tier, &a.autoRelist, &duration, &a.sellerOK)
 	if errors.Is(err, sql.ErrNoRows) {
 		return a, ErrNotFound
 	}
@@ -107,7 +109,7 @@ func lockAuction(ctx context.Context, tx *sql.Tx, id string) (auction, error) {
 }
 
 func (a auction) live() bool {
-	return a.state == "live" && a.status == "active" && a.now.Before(a.endsAt)
+	return a.state == "live" && a.status == "active" && a.now.Before(a.endsAt) && a.sellerOK
 }
 
 // BidResult is what a bidder sees after bidding.

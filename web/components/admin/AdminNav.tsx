@@ -7,6 +7,11 @@ import { useState } from "react";
 // Each entry shows only to roles with its permission ("" = all staff).
 export const ADMIN_NAV: { group: string; items: { href: string; label: string; perm: string }[] }[] = [
   { group: "Overview", items: [{ href: "/admin", label: "Dashboard", perm: "" }] },
+  { group: "People", items: [
+    { href: "/admin/users", label: "Members", perm: "users.view" },
+    { href: "/admin/sellers", label: "Seller review", perm: "sellers.review" },
+    { href: "/admin/staff", label: "Staff and roles", perm: "staff.manage" },
+  ] },
   { group: "Trust & records", items: [{ href: "/admin/audit", label: "Audit log", perm: "audit.view" }] },
   { group: "Site", items: [{ href: "/admin/announce", label: "Announcements", perm: "announce" }] },
 ];

@@ -76,7 +76,7 @@ func lockOfferListing(ctx context.Context, tx *sql.Tx, id string) (offerListing,
 		       l.offer_accept_kind, l.offer_accept_val, l.offer_decline_kind, l.offer_decline_val
 		FROM listings l
 		JOIN users u ON u.id = l.seller_id AND u.status = 'active'
-		JOIN seller_profiles sp ON sp.user_id = l.seller_id AND sp.charges_enabled
+		JOIN seller_profiles sp ON sp.user_id = l.seller_id AND sp.charges_enabled AND sp.review_status <> 'rejected'
 		WHERE l.id = $1 FOR UPDATE OF l`, id).Scan(
 		&l.id, &l.sellerID, &l.title, &l.status, &l.format, &l.price, &l.quantity, &l.enabled, &ak, &av, &dk, &dv)
 	if errors.Is(err, sql.ErrNoRows) {

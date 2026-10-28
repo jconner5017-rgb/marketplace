@@ -119,7 +119,7 @@ func Seed(ctx context.Context, db *sql.DB, svc *listings.Service, imageBase stri
 		INSERT INTO seller_profiles (user_id, stripe_account_id, charges_enabled, details_submitted, tier,
 			bundle_discount_type, bundle_discount_val)
 		VALUES ($1, $2, true, true, 3, 'per_extra_item', 50)
-		ON CONFLICT (user_id) DO UPDATE SET charges_enabled = true, tier = 3`,
+		ON CONFLICT (user_id) DO UPDATE SET charges_enabled = true, tier = 3, review_status = 'approved'`,
 		sellerID, stripeAccount); err != nil {
 		return 0, fmt.Errorf("demo seller profile: %w", err)
 	}

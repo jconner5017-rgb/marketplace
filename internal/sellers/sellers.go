@@ -30,6 +30,7 @@ type Profile struct {
 	BundleDiscountVal  *int      `json:"bundle_discount_val"`
 	FCMConnected       bool      `json:"fcm_connected"`
 	CreatedAt          time.Time `json:"created_at"`
+	ReviewStatus       string    `json:"review_status"` // pending, approved, rejected (staff review)
 }
 
 // CanSell reports whether the seller may publish listings.
@@ -41,14 +42,14 @@ type Service struct {
 }
 
 const profileCols = `user_id, stripe_account_id, charges_enabled, details_submitted, tier,
-	bundle_discount_type, bundle_discount_val, fcm_connected, created_at`
+	bundle_discount_type, bundle_discount_val, fcm_connected, created_at, review_status`
 
 func scanProfile(row interface{ Scan(...any) error }) (Profile, error) {
 	var p Profile
 	var bt sql.NullString
 	var bv sql.NullInt64
 	err := row.Scan(&p.UserID, &p.StripeAccountID, &p.ChargesEnabled, &p.DetailsSubmitted, &p.Tier,
-		&bt, &bv, &p.FCMConnected, &p.CreatedAt)
+		&bt, &bv, &p.FCMConnected, &p.CreatedAt, &p.ReviewStatus)
 	if bt.Valid {
 		p.BundleDiscountType = &bt.String
 	}

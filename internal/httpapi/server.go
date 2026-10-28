@@ -43,6 +43,7 @@ type Server struct {
 
 	mfa      *admin.MFA
 	auditLog *admin.Audit
+	users    *admin.Users
 }
 
 type Options struct {
@@ -82,6 +83,7 @@ func New(o Options) *Server {
 		sales:         o.Sales,
 		mfa:           o.MFA,
 		auditLog:      o.Audit,
+		users:         &admin.Users{DB: o.DB, Audit: o.Audit, OwnerEmails: o.Auth.AdminEmails},
 		// 30 bids or offers per user per minute.
 		bidLimiter: newRateLimiter(30, time.Minute),
 		// 20 messages per user per 10 minutes.
@@ -112,6 +114,16 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/admin/audit", s.requireStaff(admin.AuditView, s.handleAuditList))
 	mux.HandleFunc("GET /v1/admin/audit/verify", s.requireStaff(admin.AuditView, s.handleAuditVerify))
 	mux.HandleFunc("GET /v1/admin/users", s.requireStaff(admin.UsersView, s.handleAdminUsers))
+	mux.HandleFunc("GET /v1/admin/users/{id}", s.requireStaff(admin.UsersView, s.handleAdminUser))
+	mux.HandleFunc("PATCH /v1/admin/users/{id}", s.requireStaff(admin.UsersEdit, s.handleAdminEditUser))
+	mux.HandleFunc("POST /v1/admin/users/{id}/status", s.requireStaff(admin.UsersRestrict, s.handleAdminUserStatus))
+	mux.HandleFunc("POST /v1/admin/users/{id}/sign-out", s.requireStaff(admin.UsersRestrict, s.handleAdminSignOut))
+	mux.HandleFunc("POST /v1/admin/users/{id}/notes", s.requireStaff(admin.UsersView, s.handleAdminNote))
+	mux.HandleFunc("POST /v1/admin/users/{id}/mfa-reset", s.requireStaff(admin.StaffManage, s.handleAdminMFAReset))
+	mux.HandleFunc("GET /v1/admin/staff", s.requireStaff(admin.StaffManage, s.handleAdminStaff))
+	mux.HandleFunc("POST /v1/admin/staff", s.requireStaff(admin.StaffManage, s.handleAdminSetStaff))
+	mux.HandleFunc("GET /v1/admin/sellers", s.requireStaff(admin.SellersReview, s.handleAdminSellers))
+	mux.HandleFunc("POST /v1/admin/sellers/{id}/review", s.requireStaff(admin.SellersReview, s.handleAdminReviewSeller))
 	mux.HandleFunc("POST /v1/admin/announcements", s.requireStaff(admin.Announce, s.handleAnnounce))
 	mux.HandleFunc("GET /v1/announcements", s.handleAnnouncements)
 
@@ -293,13 +305,4 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 	u, _ := currentUser(r)
 	writeJSON(w, http.StatusOK, map[string]any{"user": u})
-}
-
-func (s *Server) handleAdminUsers(w http.ResponseWriter, r *http.Request) {
-	users, err := s.auth.ListUsers(r.Context(), 50)
-	if err != nil {
-		s.internalError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"users": users})
 }
