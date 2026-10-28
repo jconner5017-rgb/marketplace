@@ -26,8 +26,10 @@ import (
 
 	"github.com/jconner5017-rgb/marketplace/internal/auth"
 	"github.com/jconner5017-rgb/marketplace/internal/db"
+	"github.com/jconner5017-rgb/marketplace/internal/inbox"
 	"github.com/jconner5017-rgb/marketplace/internal/listings"
 	"github.com/jconner5017-rgb/marketplace/internal/sellers"
+	"github.com/jconner5017-rgb/marketplace/internal/shopping"
 	"github.com/jconner5017-rgb/marketplace/internal/stripe"
 )
 
@@ -97,7 +99,7 @@ func setupEnv(t *testing.T) *env {
 	if err := db.Migrate(ctx, d); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := d.Exec(`TRUNCATE users, stripe_events CASCADE`); err != nil {
+	if _, err := d.Exec(`TRUNCATE users, stripe_events, announcements CASCADE`); err != nil {
 		t.Fatal(err)
 	}
 
@@ -112,6 +114,8 @@ func setupEnv(t *testing.T) *env {
 		Listings:      &listings.Service{DB: d, Sellers: sellerSvc},
 		PublicURL:     "https://market.test",
 		WebhookSecret: testWebhookSecret,
+		Shopping:      &shopping.Service{DB: d, Listings: &listings.Service{DB: d, Sellers: sellerSvc}, Sellers: sellerSvc},
+		Inbox:         &inbox.Service{DB: d, Listings: &listings.Service{DB: d, Sellers: sellerSvc}},
 	})
 	ts := httptest.NewServer(s.Handler())
 	t.Cleanup(ts.Close)

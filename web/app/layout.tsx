@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Archivo } from "next/font/google";
 import "./globals.css";
 import Header from "@/components/Header";
+import Footer from "@/components/Footer";
 import { SITE_NAME } from "@/lib/format";
 
 const archivo = Archivo({
@@ -27,14 +28,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <main id="main" className="mx-auto max-w-[1280px] px-4 pb-16">
           {children}
         </main>
-        <footer className="border-t border-line bg-wash">
-          <div className="mx-auto flex max-w-[1280px] flex-wrap gap-x-6 gap-y-2 px-4 py-6 text-sm text-muted">
-            <span>© {new Date().getFullYear()} {SITE_NAME}</span>
-            <span>US buyers and sellers only</span>
-            <span>Payments by Stripe</span>
-            <span>Free shipping on every card</span>
-          </div>
-        </footer>
+        <Footer />
       </body>
     </html>
   );

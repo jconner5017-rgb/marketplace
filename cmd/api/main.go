@@ -17,8 +17,10 @@ import (
 	"github.com/jconner5017-rgb/marketplace/internal/db"
 	"github.com/jconner5017-rgb/marketplace/internal/demo"
 	"github.com/jconner5017-rgb/marketplace/internal/httpapi"
+	"github.com/jconner5017-rgb/marketplace/internal/inbox"
 	"github.com/jconner5017-rgb/marketplace/internal/listings"
 	"github.com/jconner5017-rgb/marketplace/internal/sellers"
+	"github.com/jconner5017-rgb/marketplace/internal/shopping"
 	"github.com/jconner5017-rgb/marketplace/internal/stripe"
 )
 
@@ -92,6 +94,9 @@ func run(log *slog.Logger) error {
 		Listings:      listingSvc,
 		PublicURL:     cfg.PublicURL,
 		WebhookSecret: cfg.StripeWebhookSecret,
+
+		Shopping: &shopping.Service{DB: database, Listings: listingSvc, Sellers: sellerSvc},
+		Inbox:    &inbox.Service{DB: database, Listings: listingSvc},
 	})
 
 	// Clear out expired sessions once an hour.

@@ -1,6 +1,6 @@
 import "server-only";
 import { cookies, headers } from "next/headers";
-import type { Facets, Listing, SearchResult, Seller, User } from "./types";
+import type { Facets, Listing, SearchResult, Seller, Summary, User } from "./types";
 
 // The Go API, reached over Render's private network in production.
 export const API_URL = (process.env.API_URL || "http://localhost:8080").replace(/\/$/, "");
@@ -29,6 +29,11 @@ export async function apiGet<T>(path: string): Promise<{ status: number; data: T
 export async function getMe(): Promise<User | null> {
   const r = await apiGet<{ user: User }>("/v1/me");
   return r.data?.user ?? null;
+}
+
+/** The signed-in visitor plus header counts, or null when signed out. */
+export async function getSummary(): Promise<Summary | null> {
+  return (await apiGet<Summary>("/v1/me/summary")).data;
 }
 
 export async function getSeller(): Promise<{ status: number; seller: Seller | null }> {

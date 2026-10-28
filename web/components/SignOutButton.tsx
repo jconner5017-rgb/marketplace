@@ -10,8 +10,8 @@ export default function SignOutButton() {
     router.refresh();
   }
   return (
-    <button type="button" onClick={signOut} className="ml-1 text-link underline">
-      (Sign out)
+    <button type="button" onClick={signOut} className="text-[14px] text-link hover:underline">
+      Sign out
     </button>
   );
 }

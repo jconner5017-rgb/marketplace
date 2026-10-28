@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { getListing, search } from "@/lib/api";
+import { getListing, getSummary, search } from "@/lib/api";
+import ItemActions from "@/components/ItemActions";
+import ContactSeller from "@/components/ContactSeller";
 import { GradeBadge, ListingTile } from "@/components/CardBits";
 import Gallery from "@/components/Gallery";
 import { ATTRIBUTES, CONDITIONS, gradeLabel, money } from "@/lib/format";
@@ -19,7 +21,7 @@ export default async function ItemPage({ params }: Props) {
   const l = await getListing((await params).id);
   if (!l) notFound();
 
-  const more = await search(`seller=${encodeURIComponent(l.seller_username)}&limit=7`);
+  const [more, me] = await Promise.all([search(`seller=${encodeURIComponent(l.seller_username)}&limit=7`), getSummary()]);
   const others = more.listings.filter((x) => x.id !== l.id).slice(0, 6);
   const gameHref = `/search?category=${l.category}&game=${encodeURIComponent(l.game_or_sport)}`;
 
@@ -69,29 +71,8 @@ export default async function ItemPage({ params }: Props) {
 
           <p className="num mt-4 text-[32px] font-extrabold leading-none">{money(l.price_cents)}</p>
           <p className="mt-1 text-[14px] text-ship">Free shipping · USPS</p>
-          {l.quantity > 1 && <p className="mt-1 text-[14px]">{l.quantity} available</p>}
 
-          <div className="mt-5 grid gap-2">
-            <button
-              type="button"
-              disabled
-              className="rounded-full bg-link py-3 font-semibold text-white opacity-50"
-              aria-describedby="checkout-note"
-            >
-              Buy It Now
-            </button>
-            <button
-              type="button"
-              disabled
-              className="rounded-full border border-link py-3 font-semibold text-link opacity-50"
-              aria-describedby="checkout-note"
-            >
-              Add to cart
-            </button>
-            <p id="checkout-note" className="text-center text-[13px] text-muted">
-              Checkout opens soon. Payments go straight to the seller through Stripe.
-            </p>
-          </div>
+          <ItemActions id={l.id} signedIn={!!me} quantity={l.quantity} />
 
           <div className="mt-6 rounded-lg border border-line p-4 text-[14px]">
             <p>
@@ -103,6 +84,7 @@ export default async function ItemPage({ params }: Props) {
             ) : (
               <p className="mt-1 text-muted">Raw cards ship sleeved and protected.</p>
             )}
+            <ContactSeller id={l.id} seller={l.seller_username} signedIn={!!me} />
           </div>
         </div>
       </div>

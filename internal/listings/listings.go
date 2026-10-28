@@ -648,3 +648,49 @@ func (s *Service) ListForSeller(ctx context.Context, sellerID string, limit, off
 	}
 	return out, total, rows.Err()
 }
+
+// GetMany returns listings by ID in any status (for carts and watchlists,
+// which must show cards that have since sold or been removed).
+func (s *Service) GetMany(ctx context.Context, ids []string) (map[string]Listing, error) {
+	out := map[string]Listing{}
+	if len(ids) == 0 {
+		return out, nil
+	}
+	rows, err := s.DB.QueryContext(ctx, `
+		SELECT `+listingCols+` FROM listings l JOIN users u ON u.id = l.seller_id
+		WHERE l.id = ANY($1::uuid[])`, pq.Array(ids))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		l, err := scanListing(rows)
+		if err != nil {
+			return nil, err
+		}
+		out[l.ID] = l
+	}
+	return out, rows.Err()
+}
+
+// PublicIDs reports which of ids buyers can currently purchase.
+func (s *Service) PublicIDs(ctx context.Context, ids []string) (map[string]bool, error) {
+	out := map[string]bool{}
+	if len(ids) == 0 {
+		return out, nil
+	}
+	rows, err := s.DB.QueryContext(ctx,
+		`SELECT l.id FROM listings l `+publicJoin+` AND l.id = ANY($1::uuid[])`, pq.Array(ids))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		out[id] = true
+	}
+	return out, rows.Err()
+}

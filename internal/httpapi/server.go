@@ -10,8 +10,10 @@ import (
 	"time"
 
 	"github.com/jconner5017-rgb/marketplace/internal/auth"
+	"github.com/jconner5017-rgb/marketplace/internal/inbox"
 	"github.com/jconner5017-rgb/marketplace/internal/listings"
 	"github.com/jconner5017-rgb/marketplace/internal/sellers"
+	"github.com/jconner5017-rgb/marketplace/internal/shopping"
 )
 
 const sessionCookie = "mp_session"
@@ -29,6 +31,10 @@ type Server struct {
 	listings      *listings.Service
 	publicURL     string
 	webhookSecret string
+
+	shopping   *shopping.Service
+	inbox      *inbox.Service
+	msgLimiter *rateLimiter
 }
 
 type Options struct {
@@ -43,6 +49,9 @@ type Options struct {
 	Listings      *listings.Service
 	PublicURL     string // base URL for Stripe return links; derived from the request if empty
 	WebhookSecret string // Stripe webhook signing secret
+
+	Shopping *shopping.Service
+	Inbox    *inbox.Service
 }
 
 func New(o Options) *Server {
@@ -57,6 +66,10 @@ func New(o Options) *Server {
 		listings:      o.Listings,
 		publicURL:     o.PublicURL,
 		webhookSecret: o.WebhookSecret,
+		shopping:      o.Shopping,
+		inbox:         o.Inbox,
+		// 20 messages per user per 10 minutes.
+		msgLimiter: newRateLimiter(20, 10*time.Minute),
 		// 10 login/signup attempts per IP per 5 minutes.
 		authLimiter: newRateLimiter(10, 5*time.Minute),
 	}
@@ -74,6 +87,24 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/me", requireUser(s.handleMe))
 
 	mux.HandleFunc("GET /v1/admin/users", requireAdmin(s.handleAdminUsers))
+	mux.HandleFunc("POST /v1/admin/announcements", requireAdmin(s.handleAnnounce))
+	mux.HandleFunc("GET /v1/announcements", s.handleAnnouncements)
+
+	// Signed-in buyer features: header summary, watchlist, cart, messages, bell.
+	mux.HandleFunc("GET /v1/me/summary", requireUser(s.handleSummary))
+	mux.HandleFunc("GET /v1/watchlist", requireUser(s.handleWatchlist))
+	mux.HandleFunc("PUT /v1/watchlist/{id}", requireUser(s.handleWatch))
+	mux.HandleFunc("DELETE /v1/watchlist/{id}", requireUser(s.handleUnwatch))
+	mux.HandleFunc("GET /v1/cart", requireUser(s.handleCart))
+	mux.HandleFunc("PUT /v1/cart/{id}", requireUser(s.handleSetCart))
+	mux.HandleFunc("DELETE /v1/cart/{id}", requireUser(s.handleRemoveCart))
+	mux.HandleFunc("GET /v1/listings/{id}/me", requireUser(s.handleListingForMe))
+	mux.HandleFunc("POST /v1/listings/{id}/messages", requireUser(s.handleAskSeller))
+	mux.HandleFunc("GET /v1/messages", requireUser(s.handleThreads))
+	mux.HandleFunc("GET /v1/messages/{id}", requireUser(s.handleConversation))
+	mux.HandleFunc("POST /v1/messages/{id}", requireUser(s.handleReply))
+	mux.HandleFunc("GET /v1/notifications", requireUser(s.handleNotifications))
+	mux.HandleFunc("POST /v1/notifications/read-all", requireUser(s.handleReadAll))
 
 	// Selling: Stripe Connect onboarding and settings.
 	mux.HandleFunc("POST /v1/seller/onboarding", requireUser(s.handleStartOnboarding))
