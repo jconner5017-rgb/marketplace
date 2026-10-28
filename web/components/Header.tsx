@@ -126,7 +126,7 @@ function Menu({ label, allHref, items }: { label: string; allHref: string; items
           <path d="M1.5 3.5 5 7l3.5-3.5" stroke="currentColor" strokeWidth="1.6" fill="none" />
         </svg>
       </summary>
-      <div className="absolute left-0 top-full z-20 mt-2 w-[min(440px,90vw)] rounded-lg border border-line bg-paper p-4 shadow-lg">
+      <div className="fixed inset-x-4 z-20 mt-2 sm:absolute sm:inset-x-auto sm:left-0 sm:top-full sm:w-[min(440px,90vw)] rounded-lg border border-line bg-paper p-4 shadow-lg">
         <ul className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-[14px]">
           {items.map((i) => (
             <li key={i.href}><Link href={i.href} className="text-ink hover:text-link hover:underline">{i.label}</Link></li>
