@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { facets as getFacets, search } from "@/lib/api";
 import { ListingRow, ListingTile } from "@/components/CardBits";
-import { ATTRIBUTES, CONDITIONS, money } from "@/lib/format";
+import { ATTRIBUTES, CONDITIONS, gameLabel, money } from "@/lib/format";
 import type { Facet, Facets } from "@/lib/types";
 import SortSelect from "@/components/SortSelect";
 import PriceFilter from "@/components/PriceFilter";
@@ -201,7 +201,6 @@ function ActiveFilters({ params }: { params: URLSearchParams }) {
   );
 }
 
-const GAME_NAMES: Record<string, string> = { Pokemon: "Pokémon" };
 
 function Sidebar({ params, facets }: { params: URLSearchParams; facets: Facets | null }) {
   return (
@@ -213,7 +212,13 @@ function Sidebar({ params, facets }: { params: URLSearchParams; facets: Facets |
         items={facets?.category}
         label={(v) => (v === "tcg" ? "Trading card games" : "Sports cards")}
       />
-      <FacetGroup title="Game or sport" param="game" params={params} items={facets?.game} label={(v) => GAME_NAMES[v] ?? v} />
+      <FacetGroup
+        title={params.get("category") === "sports" ? "Sport" : params.get("category") === "tcg" ? "Game" : "Sport or game"}
+        param="game"
+        params={params}
+        items={facets?.game}
+        label={gameLabel}
+      />
       <FacetGroup
         title="Grading"
         param="grader"

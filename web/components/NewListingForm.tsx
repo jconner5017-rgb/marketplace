@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { send } from "@/lib/client";
-import { ATTRIBUTES, CONDITIONS, money } from "@/lib/format";
+import { ATTRIBUTES, CONDITIONS, GAMES, SPORTS, money } from "@/lib/format";
 import type { Listing } from "@/lib/types";
 import Field from "./Field";
 
@@ -20,6 +20,7 @@ function toCents(v: string): number | null {
 export default function NewListingForm({ capCents }: { capCents: number }) {
   const router = useRouter();
   const [graded, setGraded] = useState(false);
+  const [category, setCategory] = useState("tcg");
   const [price, setPrice] = useState("");
   const [preset, setPreset] = useState("envelope");
   const [busy, setBusy] = useState(false);
@@ -83,12 +84,19 @@ export default function NewListingForm({ capCents }: { capCents: number }) {
       <fieldset className="grid gap-4 sm:grid-cols-2">
         <legend className="mb-2 text-[18px] font-bold">The card</legend>
         <Field label="Category" name="category" error={fields.category}>
-          <select id="category" name="category" className={select} defaultValue="tcg">
+          <select id="category" name="category" className={select} value={category} onChange={(e) => setCategory(e.target.value)}>
             <option value="tcg">Trading card game</option>
             <option value="sports">Sports card</option>
           </select>
         </Field>
-        <Field label="Game or sport" name="game_or_sport" placeholder="Pokemon, Magic, Baseball…" error={fields.game_or_sport} />
+        <Field label={category === "sports" ? "Sport" : "Game"} name="game_or_sport" error={fields.game_or_sport}>
+          <select id="game_or_sport" name="game_or_sport" key={category} className={select} defaultValue="">
+            <option value="" disabled>Choose…</option>
+            {(category === "sports" ? SPORTS : GAMES).map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+        </Field>
         <Field label="Set" name="set_name" placeholder="Base Set, Topps Chrome…" error={fields.set_name} />
         <div className="grid grid-cols-2 gap-4">
           <Field label="Year" name="year" inputMode="numeric" placeholder="1999" error={fields.year} />

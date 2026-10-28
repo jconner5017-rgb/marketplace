@@ -57,6 +57,12 @@ var cards = []card{
 	{"OP-001", "tcg", "One Piece", "Romance Dawn", 2022, "OP01-120", "Shanks Secret Rare", "NM", "", 0, []string{"secret_rare"}, 8900, 1},
 	{"OP-002", "tcg", "One Piece", "Paramount War", 2023, "OP02-013", "Portgas D. Ace Alt Art", "NM", "", 0, []string{"full_art"}, 5500, 2},
 	{"LOR-001", "tcg", "Lorcana", "The First Chapter", 2023, "207/204", "Elsa Spirit of Winter Enchanted", "NM", "", 0, []string{"foil", "secret_rare"}, 39000, 1},
+	{"DBS-001", "tcg", "Dragon Ball", "Fusion World Awakening", 2024, "", "Son Goku Secret Rare", "NM", "", 0, []string{"secret_rare"}, 5200, 1},
+	{"DGM-001", "tcg", "Digimon", "BT-01 Release Special", 2021, "", "Omnimon Alt Art", "NM", "", 0, []string{"full_art"}, 3100, 1},
+	{"FAB-001", "tcg", "Flesh and Blood", "Welcome to Rathe", 2019, "", "Cold Foil Hero", "LP", "", 0, []string{"foil"}, 8800, 1},
+	{"FF-001", "tcg", "Final Fantasy", "Opus I", 2016, "", "Legend Foil", "NM", "", 0, []string{"foil"}, 1450, 2},
+	{"SW-001", "tcg", "Star Wars", "Spark of Rebellion", 2024, "", "Hyperspace Leader", "NM", "", 0, []string{"full_art"}, 2600, 1},
+	{"VG-001", "tcg", "Cardfight!! Vanguard", "Set 1", 2023, "", "Overdress Signature Rare", "NM", "", 0, []string{"secret_rare"}, 1750, 1},
 	{"LOR-002", "tcg", "Lorcana", "Rise of the Floodborn", 2023, "", "Cinderella Stouthearted", "NM", "", 0, []string{"foil"}, 725, 3},
 	// Sports — Baseball
 	{"BB-001", "sports", "Baseball", "Topps Chrome", 2018, "150", "Shohei Ohtani Rookie", "", "PSA", 10, []string{"rookie"}, 52500, 1},
@@ -80,6 +86,15 @@ var cards = []card{
 	{"HK-002", "sports", "Hockey", "O-Pee-Chee", 2023, "", "Base Card", "NM", "", 0, nil, 150, 10},
 	{"SC-001", "sports", "Soccer", "Topps Chrome UEFA", 2023, "", "Jude Bellingham Refractor", "NM", "", 0, []string{"parallel"}, 2900, 1},
 	{"SC-002", "sports", "Soccer", "Panini Prizm World Cup", 2022, "", "Patch Auto /25", "", "PSA", 10, []string{"patch", "auto", "numbered"}, 47500, 1},
+	// Sports — the rest of the lineup
+	{"AR-001", "sports", "Auto Racing", "Wheels High Gear", 1998, "", "Dale Earnhardt Sr. Base", "NM", "", 0, nil, 1200, 1},
+	{"AR-002", "sports", "Auto Racing", "Topps Chrome Formula 1", 2023, "", "Driver Refractor", "NM", "", 0, []string{"parallel"}, 3800, 1},
+	{"WR-001", "sports", "Wrestling", "Topps WWE", 2023, "", "Superstar Base Card", "NM", "", 0, nil, 300, 6},
+	{"MMA-001", "sports", "MMA", "Topps UFC Knockout", 2010, "", "Fighter Rookie", "", "PSA", 9, []string{"rookie"}, 16500, 1},
+	{"GF-001", "sports", "Golf", "Upper Deck", 2001, "1", "Tiger Woods Rookie", "", "BGS", 9, []string{"rookie"}, 24000, 1},
+	{"BX-001", "sports", "Boxing", "Ringside", 1996, "", "Heavyweight Champion", "LP", "", 0, nil, 1400, 1},
+	{"TN-001", "sports", "Tennis", "Ace Authentic", 2003, "", "Grand Slam Champion Auto", "NM", "", 0, []string{"auto"}, 6900, 1},
+	{"CY-001", "sports", "Cycling", "Panini Tour de France", 2004, "", "Stage Winner Sticker Card", "LP", "", 0, nil, 450, 2},
 }
 
 // Seed creates (or refreshes) the sample seller and listings.

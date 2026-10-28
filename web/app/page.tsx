@@ -2,15 +2,14 @@ import Link from "next/link";
 import { search } from "@/lib/api";
 import { ListingTile } from "@/components/CardBits";
 import type { Listing } from "@/lib/types";
+import { GAMES, SPORTS, gameHref, sportHref } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
 const SHELVES = [
-  { title: "Sports cards", items: ["Baseball", "Basketball", "Football", "Hockey", "Soccer"], category: "sports" },
-  { title: "Trading card games", items: ["Pokemon", "Magic", "Yu-Gi-Oh!", "One Piece", "Lorcana"], category: "tcg" },
+  { title: "Sports cards", category: "sports", items: SPORTS.map((s) => ({ label: s.value, href: sportHref(s.value) })) },
+  { title: "Trading card games", category: "tcg", items: GAMES.map((g) => ({ label: g.short, href: gameHref(g.value) })) },
 ];
-
-const DISPLAY: Record<string, string> = { Pokemon: "Pokémon" };
 
 export default async function Home() {
   const [fresh, graded, cheap] = await Promise.all([
@@ -22,7 +21,7 @@ export default async function Home() {
   return (
     <div className="pt-6">
       {/* Opening band: what the place is, in one line, plus the two ways in. */}
-      <section className="grid gap-4 md:grid-cols-[1.3fr_1fr]">
+      <section className="grid gap-4 lg:grid-cols-[1.1fr_1fr]">
         <div className="rounded-lg bg-ink px-6 py-7 text-white">
           <h1 className="text-[28px] font-extrabold leading-tight" style={{ fontStretch: "94%" }}>
             Slabs and singles, sports and TCG. Every card ships free.
@@ -40,21 +39,16 @@ export default async function Home() {
             </Link>
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid gap-4 sm:grid-cols-2">
           {SHELVES.map((s) => (
             <div key={s.title} className="rounded-lg border border-line p-4">
               <h2 className="font-bold">
                 <Link href={`/search?category=${s.category}`} className="hover:underline">{s.title}</Link>
               </h2>
-              <ul className="mt-2 space-y-1 text-[14px]">
+              <ul className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[14px]">
                 {s.items.map((g) => (
-                  <li key={g}>
-                    <Link
-                      href={`/search?category=${s.category}&game=${encodeURIComponent(g)}`}
-                      className="text-link hover:underline"
-                    >
-                      {DISPLAY[g] ?? g}
-                    </Link>
+                  <li key={g.href}>
+                    <Link href={g.href} className="text-link hover:underline">{g.label}</Link>
                   </li>
                 ))}
               </ul>

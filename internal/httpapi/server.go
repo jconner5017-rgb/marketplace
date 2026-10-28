@@ -96,6 +96,7 @@ func (s *Server) Handler() http.Handler {
 	// Listings: public browsing.
 	mux.HandleFunc("GET /v1/listings", s.handleSearch)
 	mux.HandleFunc("GET /v1/listings/facets", s.handleFacets)
+	mux.HandleFunc("GET /v1/catalog", handleCatalog)
 	mux.HandleFunc("GET /demo/card/{name}", handleDemoCard)
 	mux.HandleFunc("GET /v1/listings/{id}", s.handleGetListing)
 

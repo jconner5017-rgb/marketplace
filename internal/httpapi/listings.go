@@ -309,3 +309,15 @@ func (s *Server) handleGetListing(w http.ResponseWriter, r *http.Request) {
 	l.ExternalID = nil
 	writeJSON(w, http.StatusOK, map[string]any{"listing": l})
 }
+
+// GET /v1/catalog — the fixed lists the site and FireCardManager use for menus.
+func handleCatalog(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "public, max-age=3600")
+	writeJSON(w, http.StatusOK, map[string]any{
+		"sports":     listings.Sports,
+		"games":      listings.Games,
+		"conditions": listings.Conditions,
+		"graders":    listings.Graders,
+		"attributes": listings.Attributes,
+	})
+}

@@ -35,18 +35,61 @@ export function gradeLabel(grade: number | null): string {
   return Number.isInteger(grade) ? String(grade) : grade.toFixed(1);
 }
 
-/** Category shortcuts shown under the header, eBay-style. */
-export const CATEGORY_LINKS: { label: string; href: string }[] = [
-  { label: "Baseball", href: "/search?category=sports&game=Baseball" },
-  { label: "Basketball", href: "/search?category=sports&game=Basketball" },
-  { label: "Football", href: "/search?category=sports&game=Football" },
-  { label: "Hockey", href: "/search?category=sports&game=Hockey" },
-  { label: "Soccer", href: "/search?category=sports&game=Soccer" },
-  { label: "Pokémon", href: "/search?category=tcg&game=Pokemon" },
-  { label: "Magic", href: "/search?category=tcg&game=Magic" },
-  { label: "Yu-Gi-Oh!", href: "/search?category=tcg&game=Yu-Gi-Oh!" },
-  { label: "One Piece", href: "/search?category=tcg&game=One%20Piece" },
-  { label: "Lorcana", href: "/search?category=tcg&game=Lorcana" },
+/** Every sport a sports card can be listed under (matches the API). */
+export const SPORTS: { value: string; label: string }[] = [
+  { value: "Baseball", label: "Baseball" },
+  { value: "Football", label: "Football" },
+  { value: "Basketball", label: "Basketball" },
+  { value: "Hockey", label: "Hockey" },
+  { value: "Soccer", label: "Soccer" },
+  { value: "Auto Racing", label: "Auto Racing" },
+  { value: "Wrestling", label: "Wrestling" },
+  { value: "MMA", label: "MMA (Mixed Martial Arts)" },
+  { value: "Golf", label: "Golf" },
+  { value: "Boxing", label: "Boxing" },
+  { value: "Tennis", label: "Tennis" },
+  { value: "Cycling", label: "Cycling" },
+];
+
+/** Every trading card game (matches the API). "Other TCG" covers new games. */
+export const GAMES: { value: string; label: string; short: string }[] = [
+  { value: "Pokemon", label: "Pokémon TCG", short: "Pokémon" },
+  { value: "Magic", label: "Magic: The Gathering", short: "Magic" },
+  { value: "Yu-Gi-Oh!", label: "Yu-Gi-Oh! TCG", short: "Yu-Gi-Oh!" },
+  { value: "One Piece", label: "One Piece Card Game", short: "One Piece" },
+  { value: "Lorcana", label: "Disney Lorcana", short: "Lorcana" },
+  { value: "Dragon Ball", label: "Dragon Ball Super / Z", short: "Dragon Ball" },
+  { value: "Digimon", label: "Digimon Card Game", short: "Digimon" },
+  { value: "Weiss Schwarz", label: "Weiß Schwarz", short: "Weiß Schwarz" },
+  { value: "Flesh and Blood", label: "Flesh and Blood", short: "Flesh and Blood" },
+  { value: "Final Fantasy", label: "Final Fantasy TCG", short: "Final Fantasy" },
+  { value: "Star Wars", label: "Star Wars CCG / Unlimited", short: "Star Wars" },
+  { value: "Lord of the Rings", label: "The Lord of the Rings TCG", short: "Lord of the Rings" },
+  { value: "Naruto", label: "Naruto CCG", short: "Naruto" },
+  { value: "UniVersus", label: "UniVersus (UFS)", short: "UniVersus" },
+  { value: "Cardfight!! Vanguard", label: "Cardfight!! Vanguard", short: "Vanguard" },
+  { value: "Other TCG", label: "Other trading card games", short: "Other TCG" },
+];
+
+const LABELS: Record<string, string> = Object.fromEntries([...SPORTS, ...GAMES].map((x) => [x.value, x.label]));
+export function gameLabel(value: string): string {
+  return LABELS[value] ?? value;
+}
+
+export function sportHref(v: string) {
+  return `/search?category=sports&game=${encodeURIComponent(v)}`;
+}
+export function gameHref(v: string) {
+  return `/search?category=tcg&game=${encodeURIComponent(v)}`;
+}
+
+/** Quick links shown next to the Sports and Trading cards menus. */
+export const QUICK_LINKS: { label: string; href: string }[] = [
+  { label: "Baseball", href: sportHref("Baseball") },
+  { label: "Football", href: sportHref("Football") },
+  { label: "Basketball", href: sportHref("Basketball") },
+  { label: "Pokémon", href: gameHref("Pokemon") },
+  { label: "Magic", href: gameHref("Magic") },
   { label: "Graded", href: "/search?min_grade=1" },
   { label: "Under $5", href: "/search?max_price=5&sort=price_asc" },
 ];

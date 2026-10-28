@@ -134,7 +134,7 @@ func (in *Input) normalize() {
 		}
 	}
 	in.Category = strings.ToLower(strings.TrimSpace(in.Category))
-	in.GameOrSport = strings.TrimSpace(in.GameOrSport)
+	in.GameOrSport = normalizeGameOrSport(in.Category, strings.TrimSpace(in.GameOrSport))
 	in.SetName = strings.TrimSpace(in.SetName)
 	in.Title = strings.TrimSpace(in.Title)
 	in.Description = strings.TrimSpace(in.Description)
@@ -188,8 +188,13 @@ func (in *Input) validate(capCents int) error {
 	if in.Category != "sports" && in.Category != "tcg" {
 		f["category"] = "sports or tcg"
 	}
-	if in.GameOrSport == "" {
+	switch {
+	case in.GameOrSport == "":
 		f["game_or_sport"] = "required (e.g. Pokemon, Baseball)"
+	case in.Category == "sports" && !slices.Contains(Sports, in.GameOrSport):
+		f["game_or_sport"] = "choose one of " + strings.Join(Sports, ", ")
+	case in.Category == "tcg" && !slices.Contains(Games, in.GameOrSport):
+		f["game_or_sport"] = "choose one of " + strings.Join(Games, ", ")
 	}
 	maxLen("game_or_sport", in.GameOrSport, 60)
 	if in.SetName == "" {
