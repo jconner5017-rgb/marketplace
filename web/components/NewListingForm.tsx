@@ -3,12 +3,12 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { send } from "@/lib/client";
-import { ATTRIBUTES, CONDITIONS, GAMES, SPORTS, money, toCents } from "@/lib/format";
+import { CONDITIONS, money, toCents } from "@/lib/format";
+import type { FeeSchedule, SiteCatalog } from "@/lib/catalog";
 import type { Listing } from "@/lib/types";
 import Field from "./Field";
 
 const GRADERS = ["PSA", "BGS", "SGC", "CGC", "TAG", "OTHER"];
-const FEE = (cents: number) => (cents <= 10000 ? 150 : Math.min(2500, Math.max(150, Math.floor((cents * 300) / 10000))));
 const LABEL_ESTIMATE: Record<string, number> = { envelope: 0, bubble: 480, box: 650 };
 
 type Kind = "amount" | "percent";
@@ -23,7 +23,11 @@ function threshold(kind: Kind, v: string): number | null {
   return toCents(v);
 }
 
-export default function NewListingForm({ capCents }: { capCents: number }) {
+export default function NewListingForm({ capCents, catalog, fees }: { capCents: number; catalog: SiteCatalog; fees: FeeSchedule }) {
+  const FEE = (cents: number) =>
+    cents <= fees.threshold_cents
+      ? Math.min(fees.flat_cents, cents)
+      : Math.min(fees.cap_cents, cents, Math.max(fees.flat_cents, Math.floor((cents * fees.percent_bps) / 10000)));
   const router = useRouter();
   const [graded, setGraded] = useState(false);
   const [category, setCategory] = useState("tcg");
@@ -126,7 +130,7 @@ export default function NewListingForm({ capCents }: { capCents: number }) {
         <Field label={category === "sports" ? "Sport" : "Game"} name="game_or_sport" error={fields.game_or_sport}>
           <select id="game_or_sport" name="game_or_sport" key={category} className={select} defaultValue="">
             <option value="" disabled>Choose…</option>
-            {(category === "sports" ? SPORTS : GAMES).map((o) => (
+            {(category === "sports" ? catalog.sports : catalog.games).map((o) => (
               <option key={o.value} value={o.value}>{o.label}</option>
             ))}
           </select>
@@ -185,7 +189,7 @@ export default function NewListingForm({ capCents }: { capCents: number }) {
         <div className="mt-4">
           <p className="text-[14px] font-semibold">Features</p>
           <div className="mt-2 flex flex-wrap gap-x-5 gap-y-2">
-            {Object.entries(ATTRIBUTES).map(([k, v]) => (
+            {Object.entries(catalog.features).map(([k, v]) => (
               <label key={k} className="flex items-center gap-1.5 text-[14px]">
                 <input type="checkbox" name="attributes" value={k} /> {v}
               </label>

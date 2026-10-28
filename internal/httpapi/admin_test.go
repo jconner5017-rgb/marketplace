@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"encoding/base32"
+	"strconv"
 	"testing"
 	"time"
 
@@ -314,5 +315,191 @@ func TestAdminMembersAndStaff(t *testing.T) {
 	}
 	if _, body := do(t, boss.c, "GET", e.ts.URL+"/v1/admin/audit/verify", nil); body["ok"] != true {
 		t.Fatalf("chain: %v", body)
+	}
+}
+
+func TestReportsAndModeration(t *testing.T) {
+	e := setupEnv(t)
+	mod := staff(t, e, "mod_reports", admin.Moderator)
+	enrollMFA(t, e.ts.URL, mod.c)
+	sup := staff(t, e, "sup_reports", admin.Support)
+	enrollMFA(t, e.ts.URL, sup.c)
+	sc, _ := newSeller(t, e, "fake_slabs", true)
+	seller := &httpClientT{sc}
+	fixed := createListing(t, e, seller, rawCard("FK1", 1500))["id"].(string)
+	auc := createListing(t, e, seller, auctionCard("FK2", 100, nil))["id"].(string)
+	a, b := buyer(t, e, "reporter_a"), buyer(t, e, "reporter_b")
+	wantBid(t, e, a, auc, 500, true, 100)
+
+	report := func(c *httpClientT, typ, id, reason string) int {
+		code, _ := do(t, c.c, "POST", e.ts.URL+"/v1/reports", map[string]string{"target_type": typ, "target_id": id, "reason": reason, "details": "slab label looks fake"})
+		return code
+	}
+	if code := report(a, "listing", fixed, "nonsense"); code != 422 {
+		t.Fatalf("bad reason: %d", code)
+	}
+	if code := report(seller, "listing", fixed, "counterfeit"); code != 422 {
+		t.Fatalf("own listing: %d", code)
+	}
+	for _, c := range []*httpClientT{a, a, b} { // a twice is a no-op
+		if code := report(c, "listing", fixed, "counterfeit"); code != 201 {
+			t.Fatalf("report: %d", code)
+		}
+	}
+	if code := report(a, "user", memberID(t, e, "fake_slabs"), "off_platform"); code != 201 {
+		t.Fatalf("report user: %d", code)
+	}
+	if code := report(a, "message", "999999", "abuse"); code != 404 {
+		t.Fatalf("report a message you can't see: %d", code)
+	}
+
+	_, body := do(t, sup.c, "GET", e.ts.URL+"/v1/admin/reports", nil)
+	rs := body["reports"].([]any)
+	if len(rs) != 3 || rs[0].(map[string]any)["open_on_target"].(float64) != 2 {
+		t.Fatalf("queue: %v", body)
+	}
+	first := rs[0].(map[string]any)["id"].(string)
+	_, lst := do(t, sup.c, "GET", e.ts.URL+"/v1/admin/listings?reported=1", nil)
+	if lst["total"].(float64) != 1 {
+		t.Fatalf("reported listings: %v", lst)
+	}
+
+	// Support can't take listings down; a moderator can.
+	if code, _ := do(t, sup.c, "POST", e.ts.URL+"/v1/admin/listings/"+fixed+"/moderate", map[string]any{"action": "remove", "reason": "fake"}); code != 403 {
+		t.Fatalf("support moderating: %d", code)
+	}
+	if code, body := do(t, mod.c, "POST", e.ts.URL+"/v1/admin/listings/"+fixed+"/moderate", map[string]any{"action": "remove", "reason": "counterfeit PSA label"}); code != 204 {
+		t.Fatalf("remove: %d %v", code, body)
+	}
+	if code, _ := do(t, client(t), "GET", e.ts.URL+"/v1/listings/"+fixed, nil); code != 404 {
+		t.Fatalf("removed listing still public: %d", code)
+	}
+	if code, body := do(t, sc, "PATCH", e.ts.URL+"/v1/seller/listings/"+fixed, map[string]any{"status": "active"}); code != 409 || errCode(body) != "blocked" {
+		t.Fatalf("seller re-activating: %d %v", code, body)
+	}
+	// Taking down a live auction ends it and tells the bidder.
+	do(t, mod.c, "POST", e.ts.URL+"/v1/admin/listings/"+auc+"/moderate", map[string]any{"action": "remove", "reason": "counterfeit"})
+	_, n := do(t, a.c, "GET", e.ts.URL+"/v1/notifications", nil)
+	if !hasTitle(n, "An auction you bid on was removed: Charizard Holo FK2") {
+		t.Fatalf("bidder notice: %v", n)
+	}
+	if code, _ := do(t, mod.c, "POST", e.ts.URL+"/v1/admin/listings/"+auc+"/moderate", map[string]any{"action": "restore", "reason": "mistake"}); code != 422 {
+		t.Fatalf("restore auction: %d", code)
+	}
+	if code, _ := do(t, mod.c, "POST", e.ts.URL+"/v1/admin/listings/"+fixed+"/moderate", map[string]any{"action": "restore", "reason": "seller proved it's real"}); code != 204 {
+		t.Fatalf("restore: %d", code)
+	}
+	if code, _ := do(t, client(t), "GET", e.ts.URL+"/v1/listings/"+fixed, nil); code != 200 {
+		t.Fatalf("restored listing: %d", code)
+	}
+
+	// Resolving one report with all=true closes both on that listing; reporters are thanked.
+	if code, body := do(t, sup.c, "POST", e.ts.URL+"/v1/admin/reports/"+first+"/resolve", map[string]any{"status": "actioned", "note": "listing reviewed", "all": true}); code != 200 || body["closed"].(float64) != 2 {
+		t.Fatalf("resolve: %d %v", code, body)
+	}
+	if code, _ := do(t, sup.c, "POST", e.ts.URL+"/v1/admin/reports/"+first+"/resolve", map[string]any{"status": "dismissed", "note": "again"}); code != 409 {
+		t.Fatalf("resolve twice: %d", code)
+	}
+	_, n = do(t, b.c, "GET", e.ts.URL+"/v1/notifications", nil)
+	if !hasTitle(n, "Thanks for your report") {
+		t.Fatalf("reporter thanked: %v", n)
+	}
+}
+
+func TestCatalogAndFees(t *testing.T) {
+	e := setupEnv(t)
+	boss := staff(t, e, "boss_catalog", admin.SuperAdmin)
+	enrollMFA(t, e.ts.URL, boss.c)
+	mod := staff(t, e, "mod_catalog", admin.Moderator)
+	enrollMFA(t, e.ts.URL, mod.c)
+	sc, _ := newSeller(t, e, "catalog_seller", true)
+
+	// Add a game with aliases; sellers can use it right away, by alias too.
+	if code, _ := do(t, mod.c, "POST", e.ts.URL+"/v1/admin/catalog/categories", map[string]any{"kind": "tcg", "value": "Altered"}); code != 403 {
+		t.Fatalf("moderator editing catalog: %d", code)
+	}
+	if code, body := do(t, boss.c, "POST", e.ts.URL+"/v1/admin/catalog/categories",
+		map[string]any{"kind": "tcg", "value": "Altered", "label": "Altered TCG", "aliases": []string{"altered tcg", "ALT"}}); code != 204 {
+		t.Fatalf("add game: %d %v", code, body)
+	}
+	card := rawCard("ALT1", 500)
+	card["game_or_sport"] = "alt"
+	code, body := do(t, sc, "POST", e.ts.URL+"/v1/seller/listings", card)
+	if code != 201 || body["listing"].(map[string]any)["game_or_sport"] != "Altered" {
+		t.Fatalf("list under new game: %d %v", code, body)
+	}
+	_, pub := do(t, client(t), "GET", e.ts.URL+"/v1/catalog", nil)
+	found := false
+	for _, c := range pub["categories"].([]any) {
+		if c.(map[string]any)["value"] == "Altered" && c.(map[string]any)["label"] == "Altered TCG" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("public catalog: %v", pub["categories"])
+	}
+	_, cat := do(t, boss.c, "GET", e.ts.URL+"/v1/admin/catalog", nil)
+	var altID float64
+	for _, c := range cat["categories"].([]any) {
+		if m := c.(map[string]any); m["value"] == "Altered" {
+			altID = m["id"].(float64)
+			if m["listings"].(float64) != 1 {
+				t.Fatalf("listing count: %v", m)
+			}
+		}
+	}
+	idStr := strconv.Itoa(int(altID))
+	if code, _ := do(t, boss.c, "DELETE", e.ts.URL+"/v1/admin/catalog/categories/"+idStr, nil); code != 409 {
+		t.Fatalf("delete in use: %d", code)
+	}
+	// Hiding it stops new listings but keeps the old one.
+	do(t, boss.c, "PATCH", e.ts.URL+"/v1/admin/catalog/categories/"+idStr, map[string]any{"active": false})
+	card["external_id"] = "ALT2"
+	if code, _ := do(t, sc, "POST", e.ts.URL+"/v1/seller/listings", card); code != 422 {
+		t.Fatalf("list under hidden game: %d", code)
+	}
+	// New feature.
+	if code, _ := do(t, boss.c, "PUT", e.ts.URL+"/v1/admin/catalog/features/gold_border", map[string]any{"label": "Gold border", "active": true, "sort": 20}); code != 204 {
+		t.Fatalf("add feature: %d", code)
+	}
+	card = rawCard("GB1", 500)
+	card["attributes"] = []string{"gold_border"}
+	if code, body := do(t, sc, "POST", e.ts.URL+"/v1/seller/listings", card); code != 201 {
+		t.Fatalf("list with new feature: %d %v", code, body)
+	}
+
+	// Fees: schedule new fees for later; they show as upcoming; current stays.
+	_, f := do(t, client(t), "GET", e.ts.URL+"/v1/fees", nil)
+	if f["current"].(map[string]any)["flat_cents"].(float64) != 150 {
+		t.Fatalf("current fees: %v", f)
+	}
+	past := time.Now().Add(-time.Hour).UTC().Format(time.RFC3339)
+	if code, _ := do(t, boss.c, "POST", e.ts.URL+"/v1/admin/fees", map[string]any{"flat_cents": 100, "threshold_cents": 10000, "percent_bps": 250, "cap_cents": 2000, "effective_at": past}); code != 422 {
+		t.Fatalf("fees in the past: %d", code)
+	}
+	later := time.Now().Add(48 * time.Hour).UTC().Format(time.RFC3339)
+	code, body = do(t, boss.c, "POST", e.ts.URL+"/v1/admin/fees", map[string]any{"flat_cents": 100, "threshold_cents": 10000, "percent_bps": 250, "cap_cents": 2000, "effective_at": later, "note": "holiday promo"})
+	if code != 201 {
+		t.Fatalf("schedule fees: %d %v", code, body)
+	}
+	_, f = do(t, client(t), "GET", e.ts.URL+"/v1/fees", nil)
+	if len(f["upcoming"].([]any)) != 1 || f["current"].(map[string]any)["flat_cents"].(float64) != 150 {
+		t.Fatalf("upcoming fees: %v", f)
+	}
+	sid := strconv.Itoa(int(body["schedule"].(map[string]any)["id"].(float64)))
+	if code, _ := do(t, boss.c, "DELETE", e.ts.URL+"/v1/admin/fees/"+sid, nil); code != 204 {
+		t.Fatalf("cancel fees: %d", code)
+	}
+	if code, _ := do(t, boss.c, "PATCH", e.ts.URL+"/v1/admin/fees/upgrades/bold_title", map[string]any{"price_cents": 75, "active": true}); code != 204 {
+		t.Fatalf("upgrade: %d", code)
+	}
+	_, af := do(t, mod.c, "GET", e.ts.URL+"/v1/admin/fees", nil)
+	for _, u := range af["upgrades"].([]any) {
+		if m := u.(map[string]any); m["key"] == "bold_title" && (m["price_cents"].(float64) != 75 || m["active"] != true) {
+			t.Fatalf("upgrade saved: %v", m)
+		}
+	}
+	if _, body := do(t, boss.c, "GET", e.ts.URL+"/v1/admin/audit?action=catalog.", nil); len(body["entries"].([]any)) < 3 {
+		t.Fatalf("catalog audit: %v", body)
 	}
 }

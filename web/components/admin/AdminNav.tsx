@@ -12,6 +12,12 @@ export const ADMIN_NAV: { group: string; items: { href: string; label: string; p
     { href: "/admin/sellers", label: "Seller review", perm: "sellers.review" },
     { href: "/admin/staff", label: "Staff and roles", perm: "staff.manage" },
   ] },
+  { group: "Listings", items: [
+    { href: "/admin/listings", label: "Listings", perm: "users.view" },
+    { href: "/admin/reports", label: "Reports", perm: "reports.manage" },
+    { href: "/admin/catalog", label: "Categories and features", perm: "users.view" },
+  ] },
+  { group: "Money", items: [{ href: "/admin/fees", label: "Fees", perm: "orders.view" }] },
   { group: "Trust & records", items: [{ href: "/admin/audit", label: "Audit log", perm: "audit.view" }] },
   { group: "Site", items: [{ href: "/admin/announce", label: "Announcements", perm: "announce" }] },
 ];

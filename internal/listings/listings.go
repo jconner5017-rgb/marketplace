@@ -24,6 +24,7 @@ var (
 	ErrCannotSell      = errors.New("seller must finish Stripe onboarding before listing")
 	ErrDuplicateExtern = errors.New("external_id already used by another listing")
 	ErrAuctionOver     = errors.New("this auction has ended")
+	ErrBlocked         = errors.New("this listing was taken down by our team and can't be changed")
 	ErrSellerRejected  = errors.New("your seller account wasn't approved, so you can't list cards; contact us if you think this is a mistake")
 )
 
@@ -223,10 +224,10 @@ func (in *Input) validate(capCents int) error {
 	switch {
 	case in.GameOrSport == "":
 		f["game_or_sport"] = "required (e.g. Pokemon, Baseball)"
-	case in.Category == "sports" && !slices.Contains(Sports, in.GameOrSport):
-		f["game_or_sport"] = "choose one of " + strings.Join(Sports, ", ")
-	case in.Category == "tcg" && !slices.Contains(Games, in.GameOrSport):
-		f["game_or_sport"] = "choose one of " + strings.Join(Games, ", ")
+	case in.Category == "sports" && !slices.Contains(ActiveSports(), in.GameOrSport):
+		f["game_or_sport"] = "choose one of " + strings.Join(ActiveSports(), ", ")
+	case in.Category == "tcg" && !slices.Contains(ActiveGames(), in.GameOrSport):
+		f["game_or_sport"] = "choose one of " + strings.Join(ActiveGames(), ", ")
 	}
 	maxLen("game_or_sport", in.GameOrSport, 60)
 	if in.SetName == "" {
@@ -267,7 +268,7 @@ func (in *Input) validate(capCents int) error {
 	}
 
 	for _, a := range in.Attributes {
-		if !slices.Contains(Attributes, a) {
+		if !slices.Contains(ActiveAttributes(), a) {
 			f["attributes"] = "unknown attribute " + a
 			break
 		}
@@ -544,6 +545,9 @@ func (s *Service) Update(ctx context.Context, sellerID, id string, p Patch) (Lis
 	if err != nil {
 		return Listing{}, err
 	}
+	if cur.Status == "blocked" {
+		return Listing{}, ErrBlocked
+	}
 
 	in := inputFrom(cur)
 	applyPatch(&in, p)
@@ -698,7 +702,7 @@ func (s *Service) Remove(ctx context.Context, sellerID, id string) error {
 		UPDATE listings SET status = 'removed', version = version + 1, updated_at = now(),
 			auction_state = CASE WHEN format = 'auction' AND auction_state = 'live' THEN 'ended_early' ELSE auction_state END,
 			ended_at = CASE WHEN format = 'auction' THEN coalesce(ended_at, now()) END
-		WHERE id = $1 AND seller_id = $2 AND status <> 'removed'
+		WHERE id = $1 AND seller_id = $2 AND status NOT IN ('removed', 'blocked')
 		  AND NOT (format = 'auction' AND (auction_state = 'won' OR (auction_state = 'live' AND bid_count > 0)))`,
 		id, sellerID)
 	if err != nil {
@@ -757,6 +761,9 @@ func (s *Service) upsert(ctx context.Context, sellerID string, in Input) (Listin
 		var cur Listing
 		if cur, err = getTx(ctx, tx, id); err != nil {
 			return Listing{}, false, err
+		}
+		if cur.Status == "blocked" {
+			return Listing{}, false, ErrBlocked
 		}
 		if cur.Format != in.Format {
 			return Listing{}, false, &ValidationError{Fields: map[string]string{

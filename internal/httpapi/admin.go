@@ -221,6 +221,9 @@ func (s *Server) handleAdminDashboard(w http.ResponseWriter, r *http.Request) {
 		{"failed_logins_24h", "Failed sign-ins, 24 hours", `SELECT count(*) FROM login_events WHERE NOT success AND created_at > now() - interval '1 day'`, false},
 		{"blocked_msgs_7d", "Blocked messages, 7 days", `SELECT count(*) FROM messages WHERE blocked IS NOT NULL AND created_at > now() - interval '7 days'`, false},
 		{"restricted", "Frozen, suspended or banned", `SELECT count(*) FROM users WHERE status <> 'active'`, false},
+		{"reports_open", "Open reports", `SELECT count(*) FROM reports WHERE status = 'open'`, false},
+		{"sellers_pending", "Sellers waiting for review", `SELECT count(*) FROM seller_profiles WHERE review_status = 'pending' AND charges_enabled`, false},
+		{"listings_blocked", "Listings taken down", `SELECT count(*) FROM listings WHERE status = 'blocked'`, false},
 	}
 	out := []stat{}
 	for _, q := range queries {

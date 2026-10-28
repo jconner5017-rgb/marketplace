@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { FOOTER } from "@/components/Footer";
-import { GAMES, SPORTS, gameHref, sportHref } from "@/lib/format";
+import { gameHref, sportHref } from "@/lib/format";
+import { getCatalog } from "@/lib/catalog";
 
 export const metadata = { title: "Site map" };
 
@@ -13,10 +14,11 @@ const MEMBER = [
   { label: "Upload a CSV", href: "/sell/import" },
 ];
 
-export default function SiteMap() {
+export default async function SiteMap() {
+  const cat = await getCatalog();
   const cols = [
-    { title: "Sports cards", links: SPORTS.map((s) => ({ label: s.label, href: sportHref(s.value) })) },
-    { title: "Trading card games", links: GAMES.map((g) => ({ label: g.label, href: gameHref(g.value) })) },
+    { title: "Sports cards", links: cat.sports.map((s) => ({ label: s.label, href: sportHref(s.value) })) },
+    { title: "Trading card games", links: cat.games.map((g) => ({ label: g.label, href: gameHref(g.value) })) },
     { title: "Your account", links: MEMBER },
     ...FOOTER,
   ];

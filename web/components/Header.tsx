@@ -1,14 +1,15 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { getSummary } from "@/lib/api";
-import { GAMES, QUICK_LINKS, SITE_NAME, SPORTS, gameHref, sportHref } from "@/lib/format";
+import { QUICK_LINKS, SITE_NAME, gameHref, sportHref } from "@/lib/format";
+import { getCatalog } from "@/lib/catalog";
 import SignOutButton from "./SignOutButton";
 import BellMenu from "./BellMenu";
 import { BellIcon, CartIcon, ChevronIcon, HeartIcon } from "./Icons";
 import SearchBar from "./SearchBar";
 
 export default async function Header() {
-  const me = await getSummary();
+  const [me, cat] = await Promise.all([getSummary(), getCatalog()]);
   const signIn = (next: string) => `/signin?next=${encodeURIComponent(next)}`;
   return (
     <header className="border-b border-line">
@@ -83,8 +84,8 @@ export default async function Header() {
       {/* Category menus + shortcuts. <details> menus work without JavaScript. */}
       <nav aria-label="Categories" className="mx-auto max-w-[1280px] px-4">
         <ul className="flex flex-wrap items-center gap-x-5 gap-y-1 pb-2 text-[13px] text-muted">
-          <li><Menu label="Sports cards" allHref="/search?category=sports" items={SPORTS.map((s) => ({ label: s.label, href: sportHref(s.value) }))} /></li>
-          <li><Menu label="Trading card games" allHref="/search?category=tcg" items={GAMES.map((g) => ({ label: g.label, href: gameHref(g.value) }))} /></li>
+          <li><Menu label="Sports cards" allHref="/search?category=sports" items={cat.sports.map((s) => ({ label: s.label, href: sportHref(s.value) }))} /></li>
+          <li><Menu label="Trading card games" allHref="/search?category=tcg" items={cat.games.map((g) => ({ label: g.label, href: gameHref(g.value) }))} /></li>
           {QUICK_LINKS.map((c) => (
             <li key={c.label}>
               <Link href={c.href} className="hover:text-ink hover:underline">{c.label}</Link>

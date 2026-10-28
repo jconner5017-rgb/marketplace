@@ -11,6 +11,7 @@ import (
 
 	"github.com/jconner5017-rgb/marketplace/internal/admin"
 	"github.com/jconner5017-rgb/marketplace/internal/auth"
+	"github.com/jconner5017-rgb/marketplace/internal/fees"
 	"github.com/jconner5017-rgb/marketplace/internal/inbox"
 	"github.com/jconner5017-rgb/marketplace/internal/listings"
 	"github.com/jconner5017-rgb/marketplace/internal/sales"
@@ -41,9 +42,12 @@ type Server struct {
 	sales      *sales.Service
 	bidLimiter *rateLimiter
 
-	mfa      *admin.MFA
-	auditLog *admin.Audit
-	users    *admin.Users
+	mfa        *admin.MFA
+	auditLog   *admin.Audit
+	users      *admin.Users
+	moderation *admin.Moderation
+	catalog    *listings.Catalog
+	fees       *fees.Service
 }
 
 type Options struct {
@@ -64,6 +68,8 @@ type Options struct {
 	Sales    *sales.Service
 	MFA      *admin.MFA
 	Audit    *admin.Audit
+	Catalog  *listings.Catalog
+	Fees     *fees.Service
 }
 
 func New(o Options) *Server {
@@ -84,6 +90,9 @@ func New(o Options) *Server {
 		mfa:           o.MFA,
 		auditLog:      o.Audit,
 		users:         &admin.Users{DB: o.DB, Audit: o.Audit, OwnerEmails: o.Auth.AdminEmails},
+		moderation:    &admin.Moderation{DB: o.DB, Audit: o.Audit},
+		catalog:       o.Catalog,
+		fees:          o.Fees,
 		// 30 bids or offers per user per minute.
 		bidLimiter: newRateLimiter(30, time.Minute),
 		// 20 messages per user per 10 minutes.
@@ -124,6 +133,22 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/admin/staff", s.requireStaff(admin.StaffManage, s.handleAdminSetStaff))
 	mux.HandleFunc("GET /v1/admin/sellers", s.requireStaff(admin.SellersReview, s.handleAdminSellers))
 	mux.HandleFunc("POST /v1/admin/sellers/{id}/review", s.requireStaff(admin.SellersReview, s.handleAdminReviewSeller))
+	mux.HandleFunc("GET /v1/admin/reports", s.requireStaff(admin.ReportsManage, s.handleAdminReports))
+	mux.HandleFunc("POST /v1/admin/reports/{id}/resolve", s.requireStaff(admin.ReportsManage, s.handleAdminResolveReport))
+	mux.HandleFunc("GET /v1/admin/listings", s.requireStaff(admin.UsersView, s.handleAdminListings))
+	mux.HandleFunc("POST /v1/admin/listings/{id}/moderate", s.requireStaff(admin.ListingsModerate, s.handleAdminModerate))
+	mux.HandleFunc("GET /v1/admin/catalog", s.requireStaff(admin.UsersView, s.handleAdminCatalog))
+	mux.HandleFunc("POST /v1/admin/catalog/categories", s.requireStaff(admin.CatalogEdit, s.handleAdminAddCategory))
+	mux.HandleFunc("PATCH /v1/admin/catalog/categories/{id}", s.requireStaff(admin.CatalogEdit, s.handleAdminEditCategory))
+	mux.HandleFunc("DELETE /v1/admin/catalog/categories/{id}", s.requireStaff(admin.CatalogEdit, s.handleAdminDeleteCategory))
+	mux.HandleFunc("PUT /v1/admin/catalog/features/{key}", s.requireStaff(admin.CatalogEdit, s.handleAdminSaveFeature))
+	mux.HandleFunc("DELETE /v1/admin/catalog/features/{key}", s.requireStaff(admin.CatalogEdit, s.handleAdminDeleteFeature))
+	mux.HandleFunc("GET /v1/admin/fees", s.requireStaff(admin.OrdersView, s.handleAdminFees))
+	mux.HandleFunc("POST /v1/admin/fees", s.requireStaff(admin.FeesEdit, s.handleAdminAddFees))
+	mux.HandleFunc("DELETE /v1/admin/fees/{id}", s.requireStaff(admin.FeesEdit, s.handleAdminCancelFees))
+	mux.HandleFunc("PATCH /v1/admin/fees/upgrades/{key}", s.requireStaff(admin.FeesEdit, s.handleAdminUpgrade))
+	mux.HandleFunc("POST /v1/reports", requireUser(s.handleReport))
+	mux.HandleFunc("GET /v1/fees", s.handlePublicFees)
 	mux.HandleFunc("POST /v1/admin/announcements", s.requireStaff(admin.Announce, s.handleAnnounce))
 	mux.HandleFunc("GET /v1/announcements", s.handleAnnouncements)
 

@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { ATTRIBUTES, CONDITIONS, GAMES, SPORTS } from "@/lib/format";
+import { CONDITIONS } from "@/lib/format";
+import { getCatalog } from "@/lib/catalog";
 
 export const metadata = { title: "Advanced search" };
 
@@ -8,6 +9,7 @@ const GRADERS = ["PSA", "BGS", "SGC", "CGC", "TAG", "OTHER"];
 
 // A plain GET form: it works without JavaScript and every result page is a shareable link.
 export default async function AdvancedSearch({ searchParams }: { searchParams: Promise<SP> }) {
+  const catalog = await getCatalog();
   const sp = await searchParams;
   const one = (k: string) => {
     const v = sp[k];
@@ -17,7 +19,7 @@ export default async function AdvancedSearch({ searchParams }: { searchParams: P
     const v = sp[k];
     return (Array.isArray(v) ? v : v ? [v] : []).flatMap((x) => x.split(","));
   };
-  const cat = one("game") ? `${one("category") || (SPORTS.some((s) => s.value === one("game")) ? "sports" : "tcg")}:${one("game")}` : one("category");
+  const cat = one("game") ? `${one("category") || (catalog.sports.some((s) => s.value === one("game")) ? "sports" : "tcg")}:${one("game")}` : one("category");
 
   const label = "block text-[14px] font-semibold";
   const input = "mt-1 w-full rounded-md border border-line bg-paper px-3 py-2 text-[15px] focus:border-ink";
@@ -58,11 +60,11 @@ export default async function AdvancedSearch({ searchParams }: { searchParams: P
               <option value="">All categories</option>
               <option value="sports">All sports cards</option>
               <optgroup label="Sports cards">
-                {SPORTS.map((s) => <option key={s.value} value={`sports:${s.value}`}>{s.label}</option>)}
+                {catalog.sports.map((s) => <option key={s.value} value={`sports:${s.value}`}>{s.label}</option>)}
               </optgroup>
               <option value="tcg">All trading card games</option>
               <optgroup label="Trading card games">
-                {GAMES.map((g) => <option key={g.value} value={`tcg:${g.value}`}>{g.label}</option>)}
+                {catalog.games.map((g) => <option key={g.value} value={`tcg:${g.value}`}>{g.label}</option>)}
               </optgroup>
             </select>
           </div>
@@ -145,7 +147,7 @@ export default async function AdvancedSearch({ searchParams }: { searchParams: P
           <fieldset>
             <legend className={label}>Features <span className="font-normal text-muted">(cards must have all you pick)</span></legend>
             <div className="mt-2 grid grid-cols-2 gap-2 text-[15px] sm:grid-cols-3">
-              {Object.entries(ATTRIBUTES).map(([k, v]) => (
+              {Object.entries(catalog.features).map(([k, v]) => (
                 <label key={k} className="flex items-center gap-2">
                   <input type="checkbox" name="attribute" value={k} defaultChecked={all("attribute").includes(k)} /> {v}
                 </label>

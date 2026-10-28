@@ -26,6 +26,8 @@ func (s *Server) listingError(w http.ResponseWriter, r *http.Request, err error)
 	case errors.Is(err, listings.ErrDuplicateExtern):
 		writeError(w, http.StatusConflict, "external_id_taken", "you already have a listing with that external_id",
 			map[string]string{"external_id": "already in use"})
+	case errors.Is(err, listings.ErrBlocked):
+		writeError(w, http.StatusConflict, "blocked", err.Error(), nil)
 	case errors.Is(err, listings.ErrSellerRejected):
 		writeError(w, http.StatusForbidden, "seller_rejected", err.Error(), nil)
 	case errors.Is(err, listings.ErrHasBids):
@@ -361,13 +363,16 @@ func (s *Server) handleGetListing(w http.ResponseWriter, r *http.Request) {
 
 // GET /v1/catalog — the fixed lists the site and FireCardManager use for menus.
 func handleCatalog(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Cache-Control", "public, max-age=3600")
+	w.Header().Set("Cache-Control", "public, max-age=300")
+	cats, feats := listings.CatalogView()
 	writeJSON(w, http.StatusOK, map[string]any{
-		"sports":            listings.Sports,
-		"games":             listings.Games,
+		"sports":            listings.ActiveSports(),
+		"games":             listings.ActiveGames(),
+		"categories":        cats,
+		"features":          feats,
 		"conditions":        listings.Conditions,
 		"graders":           listings.Graders,
-		"attributes":        listings.Attributes,
+		"attributes":        listings.ActiveAttributes(),
 		"auction_durations": listings.AuctionDurations,
 	})
 }

@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -17,6 +18,7 @@ import (
 	"github.com/jconner5017-rgb/marketplace/internal/config"
 	"github.com/jconner5017-rgb/marketplace/internal/db"
 	"github.com/jconner5017-rgb/marketplace/internal/demo"
+	"github.com/jconner5017-rgb/marketplace/internal/fees"
 	"github.com/jconner5017-rgb/marketplace/internal/httpapi"
 	"github.com/jconner5017-rgb/marketplace/internal/inbox"
 	"github.com/jconner5017-rgb/marketplace/internal/listings"
@@ -88,6 +90,10 @@ func run(log *slog.Logger) error {
 		}
 	}
 	salesSvc := &sales.Service{DB: database}
+	catalog := &listings.Catalog{DB: database}
+	if err := catalog.Load(ctx); err != nil {
+		return fmt.Errorf("load catalog: %w", err)
+	}
 	mfaKey, err := admin.ParseKey(cfg.MFAKey)
 	if err != nil {
 		return err
@@ -113,6 +119,8 @@ func run(log *slog.Logger) error {
 		Sales:    salesSvc,
 		MFA:      &admin.MFA{DB: database, Key: mfaKey},
 		Audit:    &admin.Audit{DB: database},
+		Catalog:  catalog,
+		Fees:     &fees.Service{DB: database},
 	})
 
 	// Close finished auctions, warn watchers and expire offers every 30 seconds.
@@ -126,6 +134,9 @@ func run(log *slog.Logger) error {
 			case <-t.C:
 				if err := salesSvc.RunJobs(ctx); err != nil {
 					log.Error("sales jobs", "err", err)
+				}
+				if err := catalog.Load(ctx); err != nil {
+					log.Error("reload catalog", "err", err)
 				}
 			}
 		}

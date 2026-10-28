@@ -27,6 +27,7 @@ import (
 
 	"github.com/jconner5017-rgb/marketplace/internal/admin"
 	"github.com/jconner5017-rgb/marketplace/internal/auth"
+	"github.com/jconner5017-rgb/marketplace/internal/fees"
 	"github.com/jconner5017-rgb/marketplace/internal/db"
 	"github.com/jconner5017-rgb/marketplace/internal/inbox"
 	"github.com/jconner5017-rgb/marketplace/internal/listings"
@@ -111,6 +112,14 @@ func setupEnv(t *testing.T) *env {
 	authSvc := &auth.Service{DB: d, SessionTTL: time.Hour}
 	sellerSvc := &sellers.Service{DB: d, Stripe: fs}
 	salesSvc := &sales.Service{DB: d}
+	if _, err := d.Exec(`DELETE FROM catalog_categories; DELETE FROM catalog_attributes;
+		DELETE FROM fee_schedules WHERE id > 1; UPDATE fee_upgrades SET active = false`); err != nil {
+		t.Fatal(err)
+	}
+	catalog := &listings.Catalog{DB: d}
+	if err := catalog.Load(ctx); err != nil {
+		t.Fatal(err)
+	}
 	s := New(Options{
 		DB: d, Auth: authSvc,
 		Log:           slog.New(slog.NewTextHandler(io.Discard, nil)),
@@ -124,6 +133,8 @@ func setupEnv(t *testing.T) *env {
 		Sales:         salesSvc,
 		MFA:           &admin.MFA{DB: d, Key: []byte("0123456789abcdef0123456789abcdef")},
 		Audit:         &admin.Audit{DB: d},
+		Catalog:       catalog,
+		Fees:          &fees.Service{DB: d},
 	})
 	ts := httptest.NewServer(s.Handler())
 	t.Cleanup(ts.Close)

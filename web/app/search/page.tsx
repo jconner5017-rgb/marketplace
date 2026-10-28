@@ -3,7 +3,8 @@ import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { facets as getFacets, search } from "@/lib/api";
 import { ListingRow, ListingTile } from "@/components/CardBits";
-import { ATTRIBUTES, CONDITIONS, gameLabel, money } from "@/lib/format";
+import { CONDITIONS, money } from "@/lib/format";
+import { getCatalog, labelFor, type SiteCatalog } from "@/lib/catalog";
 import type { Facet, Facets } from "@/lib/types";
 import SortSelect from "@/components/SortSelect";
 import PriceFilter from "@/components/PriceFilter";
@@ -78,7 +79,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
   apiQs.set("limit", String(PAGE_SIZE));
   apiQs.set("offset", String((page - 1) * PAGE_SIZE));
 
-  const [res, facets] = await Promise.all([search(apiQs.toString()), getFacets(facetQs)]);
+  const [res, facets, cat] = await Promise.all([search(apiQs.toString()), getFacets(facetQs), getCatalog()]);
   const pages = Math.max(1, Math.ceil(res.total / PAGE_SIZE));
   const first = res.total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
   const last = Math.min(page * PAGE_SIZE, res.total);
@@ -89,12 +90,12 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
   return (
     <div className="grid gap-8 pt-4 md:grid-cols-[230px_1fr]">
       <aside aria-label="Filters" className="order-2 md:order-1">
-        <Sidebar params={params} facets={facets} />
+        <Sidebar params={params} facets={facets} cat={cat} />
       </aside>
 
       <section className="order-1 min-w-0 md:order-2">
         <h1 className="text-[22px] font-bold">{heading}</h1>
-        <ActiveFilters params={params} />
+        <ActiveFilters params={params} cat={cat} />
 
         <div className="mt-3 flex flex-wrap items-center gap-3 border-b border-line pb-3 text-[13px]">
           <span className="num">
@@ -185,13 +186,13 @@ const FILTER_NAMES: Record<string, string> = {
 
 const FORMATS: Record<string, string> = { auction: "Auction", fixed: "Buy It Now", offers: "Accepts offers" };
 
-function chipLabel(k: string, v: string): string {
+function chipLabel(k: string, v: string, cat: SiteCatalog): string {
   if (k === "category") return v === "tcg" ? "Trading card games" : "Sports cards";
   if (k === "grader") return v.toUpperCase() === "RAW" ? "Raw (ungraded)" : v;
   if (k === "min_grade") return Number(v) <= 1 ? "Any graded" : `Grade ${v} and up`;
   if (k === "condition") return CONDITIONS[v.toUpperCase()] ?? v;
-  if (k === "attribute") return ATTRIBUTES[v] ?? v;
-  if (k === "game") return gameLabel(v);
+  if (k === "attribute") return cat.features[v] ?? v;
+  if (k === "game") return labelFor(cat, v);
   if (k === "number") return `Card #${v.replace(/^#/, "")}`;
   if (k === "cert") return `Cert ${v}`;
   if (k === "exclude") return `Not “${v}”`;
@@ -200,7 +201,7 @@ function chipLabel(k: string, v: string): string {
   return v;
 }
 
-function ActiveFilters({ params }: { params: URLSearchParams }) {
+function ActiveFilters({ params, cat }: { params: URLSearchParams; cat: SiteCatalog }) {
   const chips: { label: string; href: string }[] = [];
   const without = (k: string, v: string) => {
     const next = new URLSearchParams(params);
@@ -212,7 +213,7 @@ function ActiveFilters({ params }: { params: URLSearchParams }) {
     return "/search" + (s ? "?" + s : "");
   };
   for (const k of Object.keys(FILTER_NAMES)) {
-    for (const v of params.getAll(k)) chips.push({ label: chipLabel(k, v), href: without(k, v) });
+    for (const v of params.getAll(k)) chips.push({ label: chipLabel(k, v, cat), href: without(k, v) });
   }
   const ymin = params.get("year_min"), ymax = params.get("year_max");
   if (ymin || ymax) {
@@ -251,7 +252,7 @@ function ActiveFilters({ params }: { params: URLSearchParams }) {
   );
 }
 
-function Sidebar({ params, facets }: { params: URLSearchParams; facets: Facets | null }) {
+function Sidebar({ params, facets, cat }: { params: URLSearchParams; facets: Facets | null; cat: SiteCatalog }) {
   return (
     <div className="space-y-6 text-[14px]">
       <div>
@@ -282,7 +283,7 @@ function Sidebar({ params, facets }: { params: URLSearchParams; facets: Facets |
         param="game"
         params={params}
         items={facets?.game}
-        label={gameLabel}
+        label={(v) => labelFor(cat, v)}
       />
       <FacetGroup
         title="Grading"
@@ -304,7 +305,7 @@ function Sidebar({ params, facets }: { params: URLSearchParams; facets: Facets |
         </ul>
       </div>
       <FacetGroup title="Condition (raw)" param="condition" params={params} items={facets?.condition} label={(v) => CONDITIONS[v] ?? v} />
-      <FacetGroup title="Features" param="attribute" params={params} items={facets?.attribute} label={(v) => ATTRIBUTES[v] ?? v} />
+      <FacetGroup title="Features" param="attribute" params={params} items={facets?.attribute} label={(v) => cat.features[v] ?? v} />
       <div>
         <h2 className="mb-2 font-bold">Price</h2>
         <ul className="mb-3 space-y-1">

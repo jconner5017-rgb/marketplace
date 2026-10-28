@@ -5,9 +5,11 @@ import { getBids, getListing, getSummary, search } from "@/lib/api";
 import ItemActions from "@/components/ItemActions";
 import AuctionPanel, { BidList } from "@/components/AuctionPanel";
 import ContactSeller from "@/components/ContactSeller";
+import ReportButton from "@/components/ReportButton";
 import { GradeBadge, ListingTile } from "@/components/CardBits";
 import Gallery from "@/components/Gallery";
-import { ATTRIBUTES, CONDITIONS, gradeLabel, money } from "@/lib/format";
+import { CONDITIONS, gradeLabel, money } from "@/lib/format";
+import { getCatalog, labelFor } from "@/lib/catalog";
 
 export const dynamic = "force-dynamic";
 
@@ -24,17 +26,18 @@ export default async function ItemPage({ params }: Props) {
   if (!l) notFound();
 
   const isAuction = l.format === "auction" && !!l.auction;
-  const [more, me, bids] = await Promise.all([
+  const [more, me, bids, catalog] = await Promise.all([
     search(`seller=${encodeURIComponent(l.seller_username)}&limit=7`),
     getSummary(),
     isAuction ? getBids(l.id) : Promise.resolve(null),
+    getCatalog(),
   ]);
   const others = more.listings.filter((x) => x.id !== l.id).slice(0, 6);
   const gameHref = `/search?category=${l.category}&game=${encodeURIComponent(l.game_or_sport)}`;
 
   const specifics: [string, string | null][] = [
     ["Category", l.category === "tcg" ? "Trading card game" : "Sports card"],
-    [l.category === "tcg" ? "Game" : "Sport", l.game_or_sport],
+    [l.category === "tcg" ? "Game" : "Sport", labelFor(catalog, l.game_or_sport)],
     ["Set", l.set_name],
     ["Year", l.year ? String(l.year) : null],
     ["Card number", l.card_number],
@@ -43,7 +46,7 @@ export default async function ItemPage({ params }: Props) {
     ["Grade", l.grader ? gradeLabel(l.grade) : null],
     ["Certification number", l.cert_number],
     ["Condition", l.condition ? CONDITIONS[l.condition] ?? l.condition : null],
-    ["Features", l.attributes.length ? l.attributes.map((a) => ATTRIBUTES[a] ?? a).join(", ") : null],
+    ["Features", l.attributes.length ? l.attributes.map((a) => catalog.features[a] ?? a).join(", ") : null],
   ];
 
   return (
@@ -101,6 +104,9 @@ export default async function ItemPage({ params }: Props) {
               <p className="mt-1 text-muted">Raw cards ship sleeved and protected.</p>
             )}
             <ContactSeller id={l.id} seller={l.seller_username} signedIn={!!me} />
+          </div>
+          <div className="mt-3">
+            <ReportButton type="listing" id={l.id} label="Report this listing" signedIn={!!me} next={`/item/${l.id}`} />
           </div>
         </div>
       </div>

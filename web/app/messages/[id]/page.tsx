@@ -4,6 +4,7 @@ import { apiGet } from "@/lib/api";
 import { requireUser } from "@/lib/auth";
 import type { Message, Thread } from "@/lib/types";
 import ReplyForm from "@/components/ReplyForm";
+import ReportButton from "@/components/ReportButton";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Conversation" };
@@ -38,9 +39,10 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
           <li key={m.id} className={`flex ${m.mine ? "justify-end" : "justify-start"}`}>
             <div className={`max-w-[80%] rounded-2xl px-4 py-2.5 ${m.mine ? "bg-link text-white" : "bg-wash"}`}>
               <p className="whitespace-pre-line text-[15px]">{m.body}</p>
-              <p className={`mt-1 text-[11px] ${m.mine ? "text-white/75" : "text-muted"}`}>
+              <p className={`mt-1 text-[11px] ${m.mine ? "text-white/75" : "text-muted"}`} suppressHydrationWarning>
                 {new Date(m.created_at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
               </p>
+              {!m.mine && <ReportButton type="message" id={String(m.id)} signedIn next={`/messages/${t.id}`} />}
             </div>
           </li>
         ))}

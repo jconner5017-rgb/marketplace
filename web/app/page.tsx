@@ -2,22 +2,23 @@ import Link from "next/link";
 import { search } from "@/lib/api";
 import { ListingTile } from "@/components/CardBits";
 import type { Listing } from "@/lib/types";
-import { GAMES, SPORTS, gameHref, sportHref } from "@/lib/format";
+import { gameHref, sportHref } from "@/lib/format";
+import { getCatalog } from "@/lib/catalog";
 
 export const dynamic = "force-dynamic";
 
-const SHELVES = [
-  { title: "Sports cards", category: "sports", items: SPORTS.map((s) => ({ label: s.value, href: sportHref(s.value) })) },
-  { title: "Trading card games", category: "tcg", items: GAMES.map((g) => ({ label: g.short, href: gameHref(g.value) })) },
-];
-
 export default async function Home() {
-  const [ending, fresh, graded, cheap] = await Promise.all([
+  const [ending, fresh, graded, cheap, cat] = await Promise.all([
     search("format=auction&sort=ending&limit=6"),
     search("sort=newest&limit=12"),
     search("min_grade=1&sort=newest&limit=6"),
     search("max_price=20&sort=price_asc&limit=6"),
+    getCatalog(),
   ]);
+  const SHELVES = [
+    { title: "Sports cards", category: "sports", items: cat.sports.map((s) => ({ label: s.short, href: sportHref(s.value) })) },
+    { title: "Trading card games", category: "tcg", items: cat.games.map((g) => ({ label: g.short, href: gameHref(g.value) })) },
+  ];
 
   return (
     <div className="pt-6">
