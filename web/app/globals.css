@@ -1,0 +1,44 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: var(--font-archivo), ui-sans-serif, system-ui, sans-serif;
+
+  --color-paper: #ffffff;
+  --color-wash: #f2f4f7;
+  --color-line: #d9dee5;
+  --color-ink: #18202b;
+  --color-muted: #5b6573;
+  --color-link: #1a4fd6;
+  --color-link-dark: #123a9e;
+  --color-slab: #c8102e;
+  --color-ship: #1e7f4f;
+  --color-warn: #9a5b00;
+}
+
+html {
+  color: var(--color-ink);
+  background: var(--color-paper);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Prices and counts line up in lists. */
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Narrower width for long card titles in dense grids. */
+.title-tight {
+  font-stretch: 88%;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-link);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}

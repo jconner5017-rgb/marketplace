@@ -1,0 +1,142 @@
+import Link from "next/link";
+import { apiGet, getSeller } from "@/lib/api";
+import { requireUser } from "@/lib/auth";
+import { money } from "@/lib/format";
+import type { Listing } from "@/lib/types";
+import OnboardButton from "@/components/OnboardButton";
+import { GradeBadge, Photo } from "@/components/CardBits";
+import ListingActions from "@/components/ListingActions";
+import BundleDiscountForm from "@/components/BundleDiscountForm";
+
+export const dynamic = "force-dynamic";
+export const metadata = { title: "Seller hub" };
+
+const TIERS = [
+  { tier: 1, cap: 2000, need: "Where every seller starts" },
+  { tier: 2, cap: 25000, need: "50 sales to different buyers, 97% positive, 30 days" },
+  { tier: 3, cap: 100000, need: "150 sales to different buyers, 98% positive, 90 days" },
+];
+
+export default async function SellPage() {
+  const me = await requireUser("/sell");
+  const { status, seller } = await getSeller();
+
+  if (status === 404 || !seller) {
+    return (
+      <div className="mx-auto max-w-[640px] pt-12">
+        <h1 className="text-[26px] font-bold">Start selling, {me.username}</h1>
+        <p className="mt-2 text-muted">
+          Sales are paid straight into your own Stripe account. Setting it up takes about five minutes and asks for
+          your bank details and ID, handled by Stripe.
+        </p>
+        <ul className="mt-5 space-y-2 text-[15px]">
+          <li>Listing is free. A $1.50 fee applies per card sold up to $100, then 3% (capped at $25).</li>
+          <li>Every listing ships free, so build shipping into your price.</li>
+          <li>New sellers can list cards up to $20 each, rising to $250 and then $1,000 as you build feedback.</li>
+        </ul>
+        <div className="mt-6"><OnboardButton label="Set up payments with Stripe" /></div>
+      </div>
+    );
+  }
+
+  if (!seller.charges_enabled) {
+    return (
+      <div className="mx-auto max-w-[640px] pt-12">
+        <h1 className="text-[26px] font-bold">Finish your Stripe setup</h1>
+        <p className="mt-2 text-muted">
+          {seller.details_submitted
+            ? "Stripe is reviewing your details. Listing unlocks as soon as they approve, usually within minutes."
+            : "Your Stripe account isn't finished yet. Pick up where you left off."}
+        </p>
+        {!seller.details_submitted && <div className="mt-6"><OnboardButton label="Continue Stripe setup" /></div>}
+      </div>
+    );
+  }
+
+  const mine = await apiGet<{ listings: Listing[]; total: number }>("/v1/seller/listings?limit=100");
+  const listings = mine.data?.listings ?? [];
+  const total = mine.data?.total ?? 0;
+  const current = TIERS.find((t) => t.tier === seller.tier) ?? TIERS[0];
+  const nextTier = TIERS.find((t) => t.tier === seller.tier + 1);
+
+  return (
+    <div className="pt-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-[26px] font-bold">Seller hub</h1>
+          <p className="text-muted">{me.username} · {total} {total === 1 ? "listing" : "listings"}</p>
+        </div>
+        <div className="flex gap-2">
+          <Link href="/sell/import" className="rounded-full border border-link px-5 py-2 font-semibold text-link hover:bg-wash">Upload a CSV</Link>
+          <Link href="/sell/new" className="rounded-full bg-link px-5 py-2 font-semibold text-white hover:bg-link-dark">List a card</Link>
+        </div>
+      </div>
+
+      <div className="mt-6 grid gap-4 md:grid-cols-2">
+        <div className="rounded-lg border border-line p-4">
+          <h2 className="font-bold">Your price limit: {money(current.cap)} per card</h2>
+          <p className="mt-1 text-[14px] text-muted">
+            {nextTier
+              ? `Next: up to ${money(nextTier.cap)} after ${nextTier.need}.`
+              : "You're at the top tier. Cards up to the marketplace limit."}
+          </p>
+          <ol className="mt-3 flex gap-1" aria-label="Seller tiers">
+            {TIERS.map((t) => (
+              <li key={t.tier} className={`flex-1 rounded px-2 py-1 text-center text-[12px] ${t.tier <= seller.tier ? "bg-ink text-white" : "bg-wash text-muted"}`}>
+                {money(t.cap).replace(".00", "")}
+              </li>
+            ))}
+          </ol>
+        </div>
+        <div className="rounded-lg border border-line p-4">
+          <h2 className="font-bold">Multi-card discount</h2>
+          <p className="mt-1 text-[14px] text-muted">Buyers who order several cards from you ship in one package, so pass the savings on.</p>
+          <BundleDiscountForm type={seller.bundle_discount_type} value={seller.bundle_discount_val} />
+        </div>
+      </div>
+
+      <h2 className="mt-8 border-b border-line pb-2 text-[20px] font-bold">Your listings</h2>
+      {listings.length === 0 ? (
+        <p className="py-10 text-center text-muted">
+          Nothing listed yet. <Link href="/sell/new" className="text-link underline">List your first card</Link> or{" "}
+          <Link href="/sell/import" className="text-link underline">upload a CSV</Link>.
+        </p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[720px] text-[14px]">
+            <thead>
+              <tr className="border-b border-line text-left text-[13px] text-muted">
+                <th className="py-2 pr-3 font-semibold" colSpan={2}>Card</th>
+                <th className="py-2 pr-3 font-semibold">Grade</th>
+                <th className="py-2 pr-3 text-right font-semibold">Price</th>
+                <th className="py-2 pr-3 text-right font-semibold">Qty</th>
+                <th className="py-2 pr-3 font-semibold">Status</th>
+                <th className="py-2 font-semibold"><span className="sr-only">Actions</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              {listings.map((l) => (
+                <tr key={l.id} className="border-b border-wash align-middle">
+                  <td className="w-12 py-2 pr-3"><Photo l={l} className="h-14 w-10 rounded" /></td>
+                  <td className="py-2 pr-3">
+                    <Link href={`/item/${l.id}`} className="title-tight hover:underline">{l.title}</Link>
+                    <div className="text-[12px] text-muted">{l.external_id ? `SKU ${l.external_id} · ` : ""}{l.set_name}</div>
+                  </td>
+                  <td className="py-2 pr-3"><GradeBadge l={l} /></td>
+                  <td className="num py-2 pr-3 text-right font-semibold">{money(l.price_cents)}</td>
+                  <td className="num py-2 pr-3 text-right">{l.quantity}</td>
+                  <td className="py-2 pr-3">
+                    <span className={l.status === "active" ? "text-ship" : "text-muted"}>
+                      {l.status === "active" ? "Active" : l.status === "sold_out" ? "Sold out" : "Hidden"}
+                    </span>
+                  </td>
+                  <td className="py-2 text-right"><ListingActions id={l.id} status={l.status} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}

@@ -26,6 +26,19 @@ services:
           name: marketplace-db
           property: connectionString
 
+  - type: web
+    name: marketplace-web
+    runtime: docker
+    plan: starter            # $7/mo
+    region: virginia
+    branch: main
+    autoDeploy: true
+    dockerfilePath: ./web/Dockerfile
+    dockerContext: ./web
+    envVars:
+      - key: API_URL         # the API over Render's private network
+        value: http://marketplace-api-xqq7:10000
+
 databases:
   - name: marketplace-db
     databaseName: marketplace
