@@ -45,7 +45,15 @@ Migrations run automatically on startup.
 3. Render builds the Dockerfile, creates the database, and wires `DATABASE_URL` automatically.
 4. When it shows **Deployed**, open `https://<your-service>.onrender.com/healthz`.
 
-Every push to `main` redeploys. Make yourself an admin from the service's **Shell** tab: `/app/admin promote you@example.com`.
+Every push to `main` redeploys.
+
+To make yourself an admin on Render, sign up through the API, then open the database in Render → **Connect** → copy the **PSQL Command**, run it on your computer, and enter:
+
+```sql
+UPDATE users SET role = 'admin' WHERE lower(email) = lower('you@example.com');
+```
+
+(The API image has no shell, by design, so Render's Shell tab can't run commands in it.)
 
 ### Make yourself an admin
 
