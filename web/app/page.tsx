@@ -12,7 +12,8 @@ const SHELVES = [
 ];
 
 export default async function Home() {
-  const [fresh, graded, cheap] = await Promise.all([
+  const [ending, fresh, graded, cheap] = await Promise.all([
+    search("format=auction&sort=ending&limit=6"),
     search("sort=newest&limit=12"),
     search("min_grade=1&sort=newest&limit=6"),
     search("max_price=20&sort=price_asc&limit=6"),
@@ -57,6 +58,9 @@ export default async function Home() {
         </div>
       </section>
 
+      {ending.listings.length > 0 && (
+        <Shelf title="Auctions ending soon" href="/search?format=auction&sort=ending" items={ending.listings} />
+      )}
       <Shelf title="Newly listed" href="/search?sort=newest" items={fresh.listings} />
       <Shelf title="Graded slabs" href="/search?min_grade=1" items={graded.listings} />
       <Shelf title="Singles under $20" href="/search?max_price=20&sort=price_asc" items={cheap.listings} />

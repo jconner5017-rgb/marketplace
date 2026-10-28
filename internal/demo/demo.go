@@ -158,8 +158,96 @@ func Seed(ctx context.Context, db *sql.DB, svc *listings.Service, imageBase stri
 			cond := c.cond
 			in.Condition = &cond
 		}
+		// Every third card takes offers, with instant rules so testers see
+		// an answer right away: 90% or more is accepted, under 60% declined.
+		if n%3 == 1 {
+			pct, low, kind := 90, 60, "percent"
+			in.Offers = &listings.OfferSettings{Enabled: true, AcceptKind: &kind, AcceptValue: &pct, DeclineKind: &kind, DeclineValue: &low}
+		}
 		if _, _, err := svc.UpsertByExternalID(ctx, sellerID, in); err != nil {
 			return n, fmt.Errorf("demo listing %s: %w", c.sku, err)
+		}
+		n++
+	}
+	a, err := seedAuctions(ctx, db, svc, sellerID, imageBase)
+	return n + a, err
+}
+
+type auctionCard struct {
+	card
+	start, reserve, bin int
+	days                int
+	endsInHours         int
+}
+
+var auctions = []auctionCard{
+	{card{"AUC-001", "tcg", "Pokemon", "Fossil", 1999, "4/62", "Gengar Holo Fossil", "LP", "", 0, []string{"holo"}, 0, 1}, 99, 0, 0, 5, 3},
+	{card{"AUC-002", "sports", "Baseball", "Topps Chrome", 2018, "1", "Shohei Ohtani Rookie Refractor", "", "PSA", 9, []string{"rookie", "parallel"}, 0, 1}, 2500, 6000, 0, 7, 20},
+	{card{"AUC-003", "tcg", "Magic", "Revised", 1994, "", "Serra Angel", "MP", "", 0, nil, 0, 1}, 199, 0, 1500, 7, 44},
+	{card{"AUC-004", "sports", "Basketball", "Hoops", 1996, "", "Rookie Point Guard", "NM", "", 0, []string{"rookie"}, 0, 1}, 500, 0, 0, 10, 70},
+	{card{"AUC-005", "tcg", "One Piece", "Romance Dawn", 2022, "OP01-001", "Roronoa Zoro Leader Parallel", "", "PSA", 10, []string{"parallel"}, 0, 1}, 4000, 9000, 15000, 7, 110},
+	{card{"AUC-006", "sports", "Football", "Prizm", 2020, "307", "Rookie Quarterback Silver", "", "BGS", 9.5, []string{"rookie", "parallel"}, 0, 1}, 1000, 0, 0, 10, 200},
+}
+
+// seedAuctions keeps six sample auctions running: any that ended are
+// replaced with fresh ones ending at staggered times.
+func seedAuctions(ctx context.Context, db *sql.DB, svc *listings.Service, sellerID, imageBase string) (int, error) {
+	n := 0
+	for _, a := range auctions {
+		sku := "DEMO-" + a.sku
+		var live bool
+		err := db.QueryRowContext(ctx, `SELECT auction_state = 'live' AND status = 'active' FROM listings
+			WHERE seller_id = $1 AND external_id = $2`, sellerID, sku).Scan(&live)
+		if err == nil && live {
+			continue
+		}
+		if err != nil && err != sql.ErrNoRows {
+			return n, err
+		}
+		if _, err := db.ExecContext(ctx, `DELETE FROM listings WHERE seller_id = $1 AND external_id = $2`, sellerID, sku); err != nil {
+			return n, err
+		}
+		img := func(side string) string {
+			v := url.Values{"t": {a.title}, "s": {fmt.Sprintf("%s %d", a.set, a.year)}, "k": {a.cat}, "side": {side}}
+			return fmt.Sprintf("%s/demo/card/%s.svg?%s", imageBase, a.sku, v.Encode())
+		}
+		year := a.year
+		auc := &listings.AuctionInput{StartCents: a.start, DurationDays: a.days, AutoRelist: true}
+		if a.reserve > 0 {
+			r := a.reserve
+			auc.ReserveCents = &r
+		}
+		if a.bin > 0 {
+			b := a.bin
+			auc.BuyNowCents = &b
+		}
+		in := listings.Input{
+			ExternalID: &sku, Category: a.cat, GameOrSport: a.game, SetName: a.set, Year: &year, Title: a.title,
+			Description: "Sample auction for testing the marketplace. This card is not for sale.",
+			Attributes:  a.attrs, PhotoURLs: []string{img("front"), img("back")},
+			Format: listings.FormatAuction, Auction: auc, Quantity: 1,
+		}
+		if a.num != "" {
+			num := a.num
+			in.CardNumber = &num
+		}
+		if a.grader != "" {
+			g, gr := a.grader, a.grade
+			cert := fmt.Sprintf("SAMPLEA%05d", n+1)
+			in.Grader, in.Grade, in.CertNumber = &g, &gr, &cert
+			in.PackagePreset, in.WeightOz = "bubble", 3
+		} else {
+			cond := a.cond
+			in.Condition = &cond
+		}
+		l, err := svc.Create(ctx, sellerID, in)
+		if err != nil {
+			return n, fmt.Errorf("demo auction %s: %w", a.sku, err)
+		}
+		// Stagger the end times so "ending soonest" has something to show.
+		if _, err := db.ExecContext(ctx, `UPDATE listings SET ends_at = now() + make_interval(hours => $2)
+			WHERE id = $1`, l.ID, a.endsInHours); err != nil {
+			return n, err
 		}
 		n++
 	}
