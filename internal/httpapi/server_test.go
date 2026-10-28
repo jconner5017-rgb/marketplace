@@ -27,8 +27,8 @@ import (
 
 	"github.com/jconner5017-rgb/marketplace/internal/admin"
 	"github.com/jconner5017-rgb/marketplace/internal/auth"
-	"github.com/jconner5017-rgb/marketplace/internal/fees"
 	"github.com/jconner5017-rgb/marketplace/internal/db"
+	"github.com/jconner5017-rgb/marketplace/internal/fees"
 	"github.com/jconner5017-rgb/marketplace/internal/inbox"
 	"github.com/jconner5017-rgb/marketplace/internal/listings"
 	"github.com/jconner5017-rgb/marketplace/internal/sales"
