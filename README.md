@@ -10,7 +10,23 @@ Full design: see the **Card Marketplace Build Spec** document.
 
 **Phase 2 (done):** Stripe Connect seller onboarding (Standard accounts), seller tiers and price caps, listings, CSV bulk import, FireCardManager-ready upsert by SKU, public search with filters.
 
+**Website (in progress):** Next.js storefront in `web/` — home, search with filters, listing pages, sign in, register, seller hub, list-a-card, CSV upload. Sample listings via `SEED_DEMO=true`.
+
 Next: phase 3 — cart, bundle discounts, checkout with Stripe direct charges, orders, ledger.
+
+## Website (`web/`)
+
+Next.js 15 (App Router) + Tailwind CSS 4. The browser only talks to the website; `/api/*` is proxied to the Go API, so the login cookie is first-party and the API needs no CORS.
+
+| Setting | Where | Value |
+| --- | --- | --- |
+| `API_URL` | web service | `http://marketplace-api-xqq7:10000` (Render private network) |
+| `NEXT_PUBLIC_SITE_NAME` | web service, optional | Defaults to "Slabs & Singles" |
+| `PUBLIC_URL` | API service | The website's URL, so Stripe sends sellers back to it |
+| `IMAGE_BASE_URL` | API service | The API's own URL, for sample card images |
+| `SEED_DEMO` | API service | `true` loads sample listings; `remove` deletes them |
+
+Run locally: start the API on :8080, then `cd web && npm install && API_URL=http://localhost:8080 npm run dev`.
 
 ## Run it locally
 
