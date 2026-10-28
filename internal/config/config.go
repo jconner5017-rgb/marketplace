@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -15,6 +16,10 @@ type Config struct {
 	CookieSecure bool          // send session cookie only over HTTPS
 	SessionTTL   time.Duration // how long a login lasts
 	TrustProxy   bool          // read the client IP from X-Forwarded-For (behind a load balancer)
+
+	PublicURL           string // e.g. https://marketplace-api-xqq7.onrender.com (Stripe return links)
+	StripeSecretKey     string // sk_test_... or sk_live_...; selling is disabled without it
+	StripeWebhookSecret string // whsec_...; the webhook endpoint is disabled without it
 }
 
 func Load() (Config, error) {
@@ -42,6 +47,16 @@ func Load() (Config, error) {
 	}
 	if c.DatabaseURL == "" {
 		return c, errors.New("DATABASE_URL is required")
+	}
+
+	c.PublicURL = strings.TrimRight(os.Getenv("PUBLIC_URL"), "/")
+	c.StripeSecretKey = strings.TrimSpace(os.Getenv("STRIPE_SECRET_KEY"))
+	c.StripeWebhookSecret = strings.TrimSpace(os.Getenv("STRIPE_WEBHOOK_SECRET"))
+	if k := c.StripeSecretKey; k != "" && !strings.HasPrefix(k, "sk_") && !strings.HasPrefix(k, "rk_") {
+		return c, errors.New("STRIPE_SECRET_KEY should start with sk_ or rk_")
+	}
+	if c.Env != "prod" && strings.HasPrefix(c.StripeSecretKey, "sk_live_") {
+		return c, errors.New("refusing to use a live Stripe key outside APP_ENV=prod")
 	}
 
 	// Secure cookies by default everywhere except local development.

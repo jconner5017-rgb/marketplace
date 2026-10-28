@@ -10,7 +10,9 @@ package httpapi
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -18,14 +20,67 @@ import (
 	"net/http/httptest"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/jconner5017-rgb/marketplace/internal/auth"
 	"github.com/jconner5017-rgb/marketplace/internal/db"
+	"github.com/jconner5017-rgb/marketplace/internal/listings"
+	"github.com/jconner5017-rgb/marketplace/internal/sellers"
+	"github.com/jconner5017-rgb/marketplace/internal/stripe"
 )
 
-func setup(t *testing.T) (*httptest.Server, *auth.Service) {
+// fakeStripe stands in for Stripe Connect in tests.
+type fakeStripe struct {
+	mu       sync.Mutex
+	accounts map[string]*stripe.Account
+	created  int
+}
+
+func newFakeStripe() *fakeStripe { return &fakeStripe{accounts: map[string]*stripe.Account{}} }
+
+func (f *fakeStripe) CreateStandardAccount(ctx context.Context, email string) (stripe.Account, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.created++
+	a := &stripe.Account{ID: fmt.Sprintf("acct_test%d", f.created)}
+	f.accounts[a.ID] = a
+	return *a, nil
+}
+
+func (f *fakeStripe) CreateOnboardingLink(ctx context.Context, id, refreshURL, returnURL string) (string, error) {
+	return "https://connect.stripe.com/setup/" + id + "?return=" + returnURL, nil
+}
+
+func (f *fakeStripe) GetAccount(ctx context.Context, id string) (stripe.Account, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	a, ok := f.accounts[id]
+	if !ok {
+		return stripe.Account{}, &stripe.Error{Status: 404, Message: "No such account"}
+	}
+	return *a, nil
+}
+
+// finish simulates the seller completing Stripe onboarding.
+func (f *fakeStripe) finish(id string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.accounts[id].ChargesEnabled = true
+	f.accounts[id].DetailsSubmitted = true
+}
+
+type env struct {
+	ts     *httptest.Server
+	auth   *auth.Service
+	stripe *fakeStripe
+	db     *sql.DB
+}
+
+const testWebhookSecret = "whsec_test_secret"
+
+func setupEnv(t *testing.T) *env {
 	t.Helper()
 	url := os.Getenv("TEST_DATABASE_URL")
 	if url == "" {
@@ -42,19 +97,30 @@ func setup(t *testing.T) (*httptest.Server, *auth.Service) {
 	if err := db.Migrate(ctx, d); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := d.Exec(`TRUNCATE users CASCADE`); err != nil {
+	if _, err := d.Exec(`TRUNCATE users, stripe_events CASCADE`); err != nil {
 		t.Fatal(err)
 	}
 
-	svc := &auth.Service{DB: d, SessionTTL: time.Hour}
+	fs := newFakeStripe()
+	authSvc := &auth.Service{DB: d, SessionTTL: time.Hour}
+	sellerSvc := &sellers.Service{DB: d, Stripe: fs}
 	s := New(Options{
-		DB: d, Auth: svc,
-		Log:        slog.New(slog.NewTextHandler(io.Discard, nil)),
-		SessionTTL: time.Hour,
+		DB: d, Auth: authSvc,
+		Log:           slog.New(slog.NewTextHandler(io.Discard, nil)),
+		SessionTTL:    time.Hour,
+		Sellers:       sellerSvc,
+		Listings:      &listings.Service{DB: d, Sellers: sellerSvc},
+		PublicURL:     "https://market.test",
+		WebhookSecret: testWebhookSecret,
 	})
 	ts := httptest.NewServer(s.Handler())
 	t.Cleanup(ts.Close)
-	return ts, svc
+	return &env{ts: ts, auth: authSvc, stripe: fs, db: d}
+}
+
+func setup(t *testing.T) (*httptest.Server, *auth.Service) {
+	e := setupEnv(t)
+	return e.ts, e.auth
 }
 
 // client is a browser-like client that keeps cookies.

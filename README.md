@@ -8,7 +8,9 @@ Full design: see the **Card Marketplace Build Spec** document.
 
 **Phase 1 (done):** Go API skeleton, Postgres with migrations, accounts, login sessions, admin role, Docker, CI.
 
-Next: phase 2 — seller onboarding (Stripe Connect, test mode), listings, CSV import, search.
+**Phase 2 (done):** Stripe Connect seller onboarding (Standard accounts), seller tiers and price caps, listings, CSV bulk import, FireCardManager-ready upsert by SKU, public search with filters.
+
+Next: phase 3 — cart, bundle discounts, checkout with Stripe direct charges, orders, ledger.
 
 ## Run it locally
 
@@ -47,6 +49,17 @@ Migrations run automatically on startup.
 
 Every push to `main` redeploys.
 
+Set these in the service's **Environment** tab (never commit them):
+
+| Variable | Value |
+| --- | --- |
+| `DATABASE_URL` | The database's Internal Database URL |
+| `PUBLIC_URL` | The service URL, e.g. `https://marketplace-api-xqq7.onrender.com` |
+| `STRIPE_SECRET_KEY` | `sk_test_…` from Stripe → Developers → API keys |
+| `STRIPE_WEBHOOK_SECRET` | `whsec_…` from the Stripe webhook endpoint (below) |
+
+**Stripe webhook:** in Stripe → Developers → Webhooks, add an endpoint at `<PUBLIC_URL>/v1/webhooks/stripe`, choose **Events on Connected accounts**, and select `account.updated` and `account.application.deauthorized`. Copy its signing secret into `STRIPE_WEBHOOK_SECRET`.
+
 To make yourself an admin on Render, sign up through the API, then open the database in Render → **Connect** → copy the **PSQL Command**, run it on your computer, and enter:
 
 ```sql
@@ -65,9 +78,11 @@ go run ./cmd/admin promote you@example.com
 docker compose exec api /app/admin promote you@example.com
 ```
 
-## API (phase 1)
+## API
 
-All write requests must send `Content-Type: application/json`. Login uses an HttpOnly session cookie (`mp_session`).
+All write requests must send `Content-Type: application/json` (the CSV import uses `text/csv`). Login uses an HttpOnly session cookie (`mp_session`).
+
+**Accounts**
 
 | Method | Path | Who | What |
 | --- | --- | --- | --- |
@@ -77,6 +92,30 @@ All write requests must send `Content-Type: application/json`. Login uses an Htt
 | POST | `/v1/auth/logout` | anyone | Ends the current session |
 | GET | `/v1/me` | logged in | Current user |
 | GET | `/v1/admin/users` | admin | Newest 50 accounts |
+
+**Selling**
+
+| Method | Path | What |
+| --- | --- | --- |
+| POST | `/v1/seller/onboarding` | Creates the seller's Stripe Standard account (first time) and returns `{url}` to Stripe's onboarding |
+| GET | `/v1/seller` | Seller status: `charges_enabled`, `tier`, `tier_cap_cents`, bundle discount |
+| PATCH | `/v1/seller/settings` | `{bundle_discount_type: "per_extra_item"\|"percent_3plus", bundle_discount_val}`; send `{}` to clear |
+| POST | `/v1/seller/listings` | Create a listing |
+| GET | `/v1/seller/listings` | The seller's own listings (`limit`, `offset`) |
+| GET / PATCH / DELETE | `/v1/seller/listings/{id}` | Read, change or remove one listing |
+| PUT | `/v1/seller/listings/external/{sku}` | Create or replace by the seller's own SKU (used by FireCardManager) |
+| POST | `/v1/seller/listings/import` | Bulk CSV import (`Content-Type: text/csv`, up to 5,000 rows) |
+| GET | `/v1/seller/listings/import/template` | Download a sample CSV |
+| POST | `/v1/webhooks/stripe` | Stripe Connect events (`account.updated`, `account.application.deauthorized`) |
+
+Sellers start at tier 1 (cards up to $20), then $250 and $1,000. Listings need at least one `https://` photo; raw cards need a `condition` (NM, LP, MP, HP, DMG); graded cards need `grader` and `grade`.
+
+**Buying**
+
+| Method | Path | What |
+| --- | --- | --- |
+| GET | `/v1/listings` | Search. Filters: `q`, `category` (sports/tcg), `game`, `set`, `year`, `grader` (PSA… or `raw`), `min_grade`, `condition`, `attribute`, `seller`, `min_price`, `max_price` (dollars), `sort` (newest, price_asc, price_desc, relevance), `limit`, `offset` |
+| GET | `/v1/listings/{id}` | One listing |
 
 Errors always look like:
 

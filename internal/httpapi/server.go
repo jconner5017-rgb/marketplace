@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/jconner5017-rgb/marketplace/internal/auth"
+	"github.com/jconner5017-rgb/marketplace/internal/listings"
+	"github.com/jconner5017-rgb/marketplace/internal/sellers"
 )
 
 const sessionCookie = "mp_session"
@@ -22,6 +24,11 @@ type Server struct {
 	sessionTTL   time.Duration
 	trustProxy   bool
 	authLimiter  *rateLimiter
+
+	sellers       *sellers.Service
+	listings      *listings.Service
+	publicURL     string
+	webhookSecret string
 }
 
 type Options struct {
@@ -31,16 +38,25 @@ type Options struct {
 	CookieSecure bool
 	SessionTTL   time.Duration
 	TrustProxy   bool
+
+	Sellers       *sellers.Service
+	Listings      *listings.Service
+	PublicURL     string // base URL for Stripe return links; derived from the request if empty
+	WebhookSecret string // Stripe webhook signing secret
 }
 
 func New(o Options) *Server {
 	return &Server{
-		db:           o.DB,
-		auth:         o.Auth,
-		log:          o.Log,
-		cookieSecure: o.CookieSecure,
-		sessionTTL:   o.SessionTTL,
-		trustProxy:   o.TrustProxy,
+		db:            o.DB,
+		auth:          o.Auth,
+		log:           o.Log,
+		cookieSecure:  o.CookieSecure,
+		sessionTTL:    o.SessionTTL,
+		trustProxy:    o.TrustProxy,
+		sellers:       o.Sellers,
+		listings:      o.Listings,
+		publicURL:     o.PublicURL,
+		webhookSecret: o.WebhookSecret,
 		// 10 login/signup attempts per IP per 5 minutes.
 		authLimiter: newRateLimiter(10, 5*time.Minute),
 	}
@@ -58,6 +74,28 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/me", requireUser(s.handleMe))
 
 	mux.HandleFunc("GET /v1/admin/users", requireAdmin(s.handleAdminUsers))
+
+	// Selling: Stripe Connect onboarding and settings.
+	mux.HandleFunc("POST /v1/seller/onboarding", requireUser(s.handleStartOnboarding))
+	mux.HandleFunc("GET /v1/seller", requireUser(s.handleGetSeller))
+	mux.HandleFunc("PATCH /v1/seller/settings", requireUser(s.handleSellerSettings))
+	mux.HandleFunc("GET /seller/onboarding/return", s.handleOnboardingReturn)
+	mux.HandleFunc("GET /seller/onboarding/refresh", s.handleOnboardingRefresh)
+	mux.HandleFunc("POST /v1/webhooks/stripe", s.handleStripeWebhook)
+
+	// Listings: seller management.
+	mux.HandleFunc("POST /v1/seller/listings", requireUser(s.handleCreateListing))
+	mux.HandleFunc("GET /v1/seller/listings", requireUser(s.handleMyListings))
+	mux.HandleFunc("GET /v1/seller/listings/{id}", requireUser(s.handleMyListing))
+	mux.HandleFunc("PATCH /v1/seller/listings/{id}", requireUser(s.handleUpdateListing))
+	mux.HandleFunc("DELETE /v1/seller/listings/{id}", requireUser(s.handleRemoveListing))
+	mux.HandleFunc("PUT /v1/seller/listings/external/{externalID}", requireUser(s.handleUpsertExternal))
+	mux.HandleFunc("POST /v1/seller/listings/import", requireUser(s.handleImportCSV))
+	mux.HandleFunc("GET /v1/seller/listings/import/template", s.handleCSVTemplate)
+
+	// Listings: public browsing.
+	mux.HandleFunc("GET /v1/listings", s.handleSearch)
+	mux.HandleFunc("GET /v1/listings/{id}", s.handleGetListing)
 
 	var h http.Handler = mux
 	h = s.loadUser(h)

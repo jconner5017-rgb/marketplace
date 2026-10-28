@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -15,6 +16,9 @@ import (
 	"github.com/jconner5017-rgb/marketplace/internal/config"
 	"github.com/jconner5017-rgb/marketplace/internal/db"
 	"github.com/jconner5017-rgb/marketplace/internal/httpapi"
+	"github.com/jconner5017-rgb/marketplace/internal/listings"
+	"github.com/jconner5017-rgb/marketplace/internal/sellers"
+	"github.com/jconner5017-rgb/marketplace/internal/stripe"
 )
 
 func main() {
@@ -46,6 +50,19 @@ func run(log *slog.Logger) error {
 	log.Info("migrations applied")
 
 	authSvc := &auth.Service{DB: database, SessionTTL: cfg.SessionTTL}
+
+	sellerSvc := &sellers.Service{DB: database}
+	if cfg.StripeSecretKey != "" {
+		sellerSvc.Stripe = stripe.NewClient(cfg.StripeSecretKey)
+		mode := "test"
+		if strings.HasPrefix(cfg.StripeSecretKey, "sk_live_") || strings.HasPrefix(cfg.StripeSecretKey, "rk_live_") {
+			mode = "live"
+		}
+		log.Info("stripe enabled", "mode", mode, "webhooks", cfg.StripeWebhookSecret != "")
+	} else {
+		log.Warn("STRIPE_SECRET_KEY not set; seller onboarding disabled")
+	}
+	listingSvc := &listings.Service{DB: database, Sellers: sellerSvc}
 	api := httpapi.New(httpapi.Options{
 		DB:           database,
 		Auth:         authSvc,
@@ -53,6 +70,11 @@ func run(log *slog.Logger) error {
 		CookieSecure: cfg.CookieSecure,
 		SessionTTL:   cfg.SessionTTL,
 		TrustProxy:   cfg.TrustProxy,
+
+		Sellers:       sellerSvc,
+		Listings:      listingSvc,
+		PublicURL:     cfg.PublicURL,
+		WebhookSecret: cfg.StripeWebhookSecret,
 	})
 
 	// Clear out expired sessions once an hour.
