@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { facets as getFacets, search } from "@/lib/api";
 import { ListingRow, ListingTile } from "@/components/CardBits";
@@ -12,19 +13,31 @@ export const dynamic = "force-dynamic";
 type SP = Record<string, string | string[] | undefined>;
 
 // Query keys the API understands; anything else in the URL is ignored.
-const API_KEYS = ["q", "category", "game", "set", "year", "grader", "min_grade", "condition", "attribute",
-  "seller", "min_price", "max_price", "sort"];
-const PAGE_SIZE = 48;
+const API_KEYS = ["q", "mode", "exclude", "in", "category", "game", "set", "year", "year_min", "year_max", "number",
+  "grader", "min_grade", "cert", "condition", "attribute", "seller", "min_price", "max_price", "discount", "sort"];
+// Keys that can repeat (?grader=PSA&grader=BGS).
+const MULTI = new Set(["game", "grader", "condition", "attribute"]);
+const PER_PAGE = [24, 48, 96];
 
 function pick(sp: SP): URLSearchParams {
   const out = new URLSearchParams();
-  for (const k of [...API_KEYS, "view", "page"]) {
+  for (const k of [...API_KEYS, "view", "page", "per"]) {
     const v = sp[k];
-    const s = Array.isArray(v) ? v[0] : v;
-    if (s) out.set(k, s);
+    const vals = (Array.isArray(v) ? v : v ? [v] : []).filter(Boolean) as string[];
+    if (MULTI.has(k)) vals.forEach((x) => out.append(k, x));
+    else if (vals[0]) out.set(k, vals[0]);
+  }
+  // The advanced form sends category and sport/game together as "sports:Baseball".
+  const cat = Array.isArray(sp.cat) ? sp.cat[0] : sp.cat;
+  if (cat) {
+    const [c, g] = cat.split(":");
+    if (c === "sports" || c === "tcg") out.set("category", c);
+    if (g) out.set("game", g);
   }
   return out;
 }
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function hrefWith(base: URLSearchParams, changes: Record<string, string | null>): string {
   const next = new URLSearchParams(base);
@@ -45,13 +58,17 @@ export async function generateMetadata({ searchParams }: { searchParams: Promise
 
 export default async function SearchPage({ searchParams }: { searchParams: Promise<SP> }) {
   const params = pick(await searchParams);
+  // An item number typed into search goes straight to that listing.
+  const typed = params.get("q")?.trim() ?? "";
+  if (!typed && params.get("sort") === "relevance") params.delete("sort");
+  if (UUID.test(typed)) redirect(`/item/${typed.toLowerCase()}`);
+  const PAGE_SIZE = PER_PAGE.includes(Number(params.get("per"))) ? Number(params.get("per")) : 48;
   const page = Math.max(1, Number(params.get("page")) || 1);
   const view = params.get("view") === "grid" ? "grid" : "list";
 
   const apiQs = new URLSearchParams();
   for (const k of API_KEYS) {
-    const v = params.get(k);
-    if (v) apiQs.set(k, v);
+    for (const v of params.getAll(k)) if (v) apiQs.append(k, v);
   }
   const facetQs = apiQs.toString();
   apiQs.set("limit", String(PAGE_SIZE));
@@ -79,6 +96,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
           <span className="num">
             {res.total === 0 ? "No results" : `${first}–${last} of ${res.total.toLocaleString()} results`}
           </span>
+          <Link href={`/search/advanced?${params.toString()}`} className="text-link hover:underline">Advanced search</Link>
           <div className="ml-auto flex items-center gap-3">
             <SortSelect value={params.get("sort") || "newest"} hasQuery={!!q} />
             <div className="flex overflow-hidden rounded border border-line" role="group" aria-label="View">
@@ -156,33 +174,58 @@ function PageLink({ params, n, label, current }: { params: URLSearchParams; n: n
 }
 
 const FILTER_NAMES: Record<string, string> = {
-  category: "Category", game: "Game or sport", grader: "Grading", min_grade: "Grade",
+  category: "Category", game: "Sport or game", grader: "Grading", min_grade: "Grade",
   condition: "Condition", attribute: "Feature", set: "Set", year: "Year", seller: "Seller",
+  number: "Card number", cert: "Cert", exclude: "Excluding",
 };
+
+function chipLabel(k: string, v: string): string {
+  if (k === "category") return v === "tcg" ? "Trading card games" : "Sports cards";
+  if (k === "grader") return v.toUpperCase() === "RAW" ? "Raw (ungraded)" : v;
+  if (k === "min_grade") return Number(v) <= 1 ? "Any graded" : `Grade ${v} and up`;
+  if (k === "condition") return CONDITIONS[v.toUpperCase()] ?? v;
+  if (k === "attribute") return ATTRIBUTES[v] ?? v;
+  if (k === "game") return gameLabel(v);
+  if (k === "number") return `Card #${v.replace(/^#/, "")}`;
+  if (k === "cert") return `Cert ${v}`;
+  if (k === "exclude") return `Not “${v}”`;
+  if (k === "seller") return `Seller: ${v}`;
+  return v;
+}
 
 function ActiveFilters({ params }: { params: URLSearchParams }) {
   const chips: { label: string; href: string }[] = [];
+  const without = (k: string, v: string) => {
+    const next = new URLSearchParams(params);
+    const rest = next.getAll(k).filter((x) => x !== v);
+    next.delete(k);
+    rest.forEach((x) => next.append(k, x));
+    next.delete("page");
+    const s = next.toString();
+    return "/search" + (s ? "?" + s : "");
+  };
   for (const k of Object.keys(FILTER_NAMES)) {
-    const v = params.get(k);
-    if (!v) continue;
-    let shown = v;
-    if (k === "category") shown = v === "tcg" ? "Trading card games" : "Sports cards";
-    if (k === "grader") shown = v === "RAW" ? "Raw (ungraded)" : v;
-    if (k === "min_grade") shown = Number(v) <= 1 ? "Any graded" : `${v} and up`;
-    if (k === "condition") shown = CONDITIONS[v] ?? v;
-    if (k === "attribute") shown = ATTRIBUTES[v] ?? v;
-    chips.push({ label: shown, href: hrefWith(params, { [k]: null }) });
+    for (const v of params.getAll(k)) chips.push({ label: chipLabel(k, v), href: without(k, v) });
+  }
+  const ymin = params.get("year_min"), ymax = params.get("year_max");
+  if (ymin || ymax) {
+    chips.push({ label: ymin && ymax ? `${ymin}–${ymax}` : ymin ? `${ymin} or later` : `${ymax} or earlier`, href: hrefWith(params, { year_min: null, year_max: null }) });
   }
   const min = params.get("min_price"), max = params.get("max_price");
   if (min || max) {
     const label = min && max ? `$${min} to $${max}` : min ? `$${min} and up` : `Under $${max}`;
     chips.push({ label, href: hrefWith(params, { min_price: null, max_price: null }) });
   }
+  if (params.get("discount")) chips.push({ label: "Multi-card discount", href: hrefWith(params, { discount: null }) });
+  if (params.get("in") === "title") chips.push({ label: "Titles only", href: hrefWith(params, { in: null }) });
+  if (params.get("mode") === "any" || params.get("mode") === "exact") {
+    chips.push({ label: params.get("mode") === "any" ? "Any of the words" : "Exact phrase", href: hrefWith(params, { mode: null }) });
+  }
   if (chips.length === 0) return null;
   return (
     <ul className="mt-2 flex flex-wrap gap-2" aria-label="Active filters">
       {chips.map((c) => (
-        <li key={c.label}>
+        <li key={c.label + c.href}>
           <Link
             href={c.href}
             className="inline-flex items-center gap-1 rounded-full border border-line bg-wash px-3 py-1 text-[13px] hover:border-ink"
@@ -200,7 +243,6 @@ function ActiveFilters({ params }: { params: URLSearchParams }) {
     </ul>
   );
 }
-
 
 function Sidebar({ params, facets }: { params: URLSearchParams; facets: Facets | null }) {
   return (
@@ -269,14 +311,14 @@ function FacetGroup({
   title: string; param: string; params: URLSearchParams; items?: Facet[]; label: (v: string) => string;
 }) {
   if (!items || items.length === 0) return null;
-  const current = params.get(param);
+  const current = params.getAll(param).map((v) => v.toLowerCase());
   const shown = items.slice(0, 10);
   return (
     <div>
       <h2 className="mb-2 font-bold">{title}</h2>
       <ul className="space-y-1">
         {shown.map((f) => {
-          const on = current?.toLowerCase() === f.value.toLowerCase();
+          const on = current.includes(f.value.toLowerCase());
           return (
             <li key={f.value}>
               <Option href={hrefWith(params, { [param]: on ? null : f.value })} on={on}>

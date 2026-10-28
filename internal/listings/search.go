@@ -4,25 +4,58 @@ import (
 	"context"
 	"fmt"
 	"strings"
+
+	"github.com/lib/pq"
 )
 
 // SearchParams are the buyer-facing filters. Zero values mean "any".
+// List filters (Games, Graders, Conditions) match any of their values;
+// Attributes must all be present.
 type SearchParams struct {
-	Query       string
-	Category    string // sports | tcg
-	GameOrSport string
-	SetName     string
-	Year        int
-	Grader      string // PSA, BGS, ... or "RAW" for ungraded
-	MinGrade    float64
-	Condition   string
-	Attribute   string
-	Seller      string // username
-	MinCents    int
-	MaxCents    int
-	Sort        string // newest (default), price_asc, price_desc, relevance
-	Limit       int
-	Offset      int
+	Query      string
+	QueryMode  string // all (default): every word; any: at least one word; exact: the exact phrase
+	Exclude    string // words that must not appear
+	TitleOnly  bool   // match keywords against the title only, not the description
+	Category   string // sports | tcg
+	Games      []string
+	SetName    string
+	Year       int
+	YearMin    int
+	YearMax    int
+	CardNumber string
+	Graders    []string // PSA, BGS, ... or "RAW" for ungraded
+	MinGrade   float64
+	CertNumber string
+	Conditions []string
+	Attributes []string
+	Seller     string // username
+	MinCents   int
+	MaxCents   int
+	Discount   bool   // seller offers a multi-card discount
+	Sort       string // newest (default), price_asc, price_desc, relevance
+	Limit      int
+	Offset     int
+}
+
+// tsQueryText turns keywords, mode and exclusions into websearch syntax.
+func tsQueryText(p SearchParams) string {
+	q := strings.TrimSpace(p.Query)
+	words := strings.Fields(strings.ReplaceAll(q, `"`, " "))
+	switch p.QueryMode {
+	case "any":
+		q = strings.Join(words, " or ")
+	case "exact":
+		if len(words) > 0 {
+			q = `"` + strings.Join(words, " ") + `"`
+		}
+	}
+	for _, w := range strings.Fields(strings.ReplaceAll(p.Exclude, `"`, " ")) {
+		w = strings.TrimLeft(w, "-")
+		if w != "" {
+			q += " -" + w
+		}
+	}
+	return strings.TrimSpace(q)
 }
 
 type SearchResult struct {
@@ -110,17 +143,29 @@ func buildFilter(p SearchParams, skip ...string) filter {
 		return false
 	}
 
-	q := strings.TrimSpace(p.Query)
 	tsq := ""
-	if q != "" {
+	if q := tsQueryText(p); q != "" {
 		tsq = "websearch_to_tsquery('simple', " + arg(q) + ")"
-		where = append(where, "l.search @@ "+tsq)
+		target := "l.search"
+		if p.TitleOnly {
+			target = "to_tsvector('simple', l.title)"
+		}
+		where = append(where, target+" @@ "+tsq)
+	}
+	upper := func(xs []string) []string {
+		out := []string{}
+		for _, x := range xs {
+			if x = strings.ToUpper(strings.TrimSpace(x)); x != "" {
+				out = append(out, x)
+			}
+		}
+		return out
 	}
 	if p.Category != "" && !skipping("category") {
 		where = append(where, "l.category = "+arg(strings.ToLower(p.Category)))
 	}
-	if p.GameOrSport != "" && !skipping("game") {
-		where = append(where, "lower(l.game_or_sport) = lower("+arg(p.GameOrSport)+")")
+	if games := upper(p.Games); len(games) > 0 && !skipping("game") {
+		where = append(where, "upper(l.game_or_sport) = ANY("+arg(pq.Array(games))+"::text[])")
 	}
 	if p.SetName != "" {
 		where = append(where, "lower(l.set_name) = lower("+arg(p.SetName)+")")
@@ -128,23 +173,55 @@ func buildFilter(p SearchParams, skip ...string) filter {
 	if p.Year != 0 {
 		where = append(where, "l.year = "+arg(p.Year))
 	}
-	if !skipping("grader") {
-		switch g := strings.ToUpper(p.Grader); g {
-		case "":
-		case "RAW":
-			where = append(where, "l.grader IS NULL")
-		default:
-			where = append(where, "l.grader = "+arg(g))
+	if p.YearMin != 0 {
+		where = append(where, "l.year >= "+arg(p.YearMin))
+	}
+	if p.YearMax != 0 {
+		where = append(where, "l.year <= "+arg(p.YearMax))
+	}
+	if p.CardNumber != "" {
+		where = append(where, "lower(l.card_number) = lower("+arg(strings.TrimPrefix(strings.TrimSpace(p.CardNumber), "#"))+")")
+	}
+	if gs := upper(p.Graders); len(gs) > 0 && !skipping("grader") {
+		raw, named := false, []string{}
+		for _, g := range gs {
+			if g == "RAW" {
+				raw = true
+			} else {
+				named = append(named, g)
+			}
 		}
+		parts := []string{}
+		if raw {
+			parts = append(parts, "l.grader IS NULL")
+		}
+		if len(named) > 0 {
+			parts = append(parts, "l.grader = ANY("+arg(pq.Array(named))+"::text[])")
+		}
+		where = append(where, "("+strings.Join(parts, " OR ")+")")
 	}
 	if p.MinGrade > 0 {
 		where = append(where, "l.grade >= "+arg(p.MinGrade))
 	}
-	if p.Condition != "" && !skipping("condition") {
-		where = append(where, "l.condition = "+arg(strings.ToUpper(p.Condition)))
+	if p.CertNumber != "" {
+		where = append(where, "l.cert_number = "+arg(strings.TrimSpace(p.CertNumber)))
 	}
-	if p.Attribute != "" && !skipping("attribute") {
-		where = append(where, arg(strings.ToLower(p.Attribute))+" = ANY(l.attributes)")
+	if cs := upper(p.Conditions); len(cs) > 0 && !skipping("condition") {
+		where = append(where, "l.condition = ANY("+arg(pq.Array(cs))+"::text[])")
+	}
+	if len(p.Attributes) > 0 && !skipping("attribute") {
+		attrs := []string{}
+		for _, a := range p.Attributes {
+			if a = strings.ToLower(strings.TrimSpace(a)); a != "" {
+				attrs = append(attrs, a)
+			}
+		}
+		if len(attrs) > 0 {
+			where = append(where, "l.attributes @> "+arg(pq.Array(attrs))+"::text[]")
+		}
+	}
+	if p.Discount {
+		where = append(where, "sp.bundle_discount_type IS NOT NULL")
 	}
 	if p.Seller != "" {
 		where = append(where, "lower(u.username) = lower("+arg(p.Seller)+")")

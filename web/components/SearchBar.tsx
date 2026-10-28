@@ -2,6 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
+import Link from "next/link";
 
 const SCOPES = [
   { value: "", label: "All categories" },
@@ -25,7 +26,8 @@ export default function SearchBar() {
   }
 
   return (
-    <form role="search" onSubmit={submit} className="flex min-w-[280px] flex-1 items-stretch">
+    <div className="flex min-w-[280px] flex-1 items-center gap-3">
+    <form role="search" onSubmit={submit} className="flex flex-1 items-stretch">
       <div className="flex flex-1 items-stretch rounded-l-full border-2 border-ink">
         <label htmlFor="q" className="sr-only">Search for cards</label>
         <input
@@ -53,5 +55,7 @@ export default function SearchBar() {
         Search
       </button>
     </form>
+    <Link href="/search/advanced" className="hidden text-[13px] text-muted hover:text-ink hover:underline sm:inline">Advanced</Link>
+    </div>
   );
 }

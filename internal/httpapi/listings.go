@@ -207,20 +207,38 @@ func pageParams(r *http.Request) (limit, offset int) {
 func parseSearch(w http.ResponseWriter, r *http.Request) (listings.SearchParams, bool) {
 	q := r.URL.Query()
 	limit, offset := pageParams(r)
-	p := listings.SearchParams{
-		Query:       q.Get("q"),
-		Category:    q.Get("category"),
-		GameOrSport: q.Get("game"),
-		SetName:     q.Get("set"),
-		Grader:      q.Get("grader"),
-		Condition:   q.Get("condition"),
-		Attribute:   q.Get("attribute"),
-		Seller:      q.Get("seller"),
-		Sort:        q.Get("sort"),
-		Limit:       limit,
-		Offset:      offset,
+	// List filters accept repeated params (?grader=PSA&grader=BGS) or commas.
+	list := func(key string) []string {
+		out := []string{}
+		for _, v := range q[key] {
+			for _, part := range strings.Split(v, ",") {
+				if part = strings.TrimSpace(part); part != "" {
+					out = append(out, part)
+				}
+			}
+		}
+		return out
 	}
-	if len(p.Query) > 200 {
+	p := listings.SearchParams{
+		Query:      q.Get("q"),
+		QueryMode:  q.Get("mode"),
+		Exclude:    q.Get("exclude"),
+		TitleOnly:  q.Get("in") == "title",
+		Category:   q.Get("category"),
+		Games:      list("game"),
+		SetName:    q.Get("set"),
+		CardNumber: q.Get("number"),
+		Graders:    list("grader"),
+		CertNumber: q.Get("cert"),
+		Conditions: list("condition"),
+		Attributes: list("attribute"),
+		Seller:     q.Get("seller"),
+		Discount:   q.Get("discount") == "1" || q.Get("discount") == "true",
+		Sort:       q.Get("sort"),
+		Limit:      limit,
+		Offset:     offset,
+	}
+	if len(p.Query) > 200 || len(p.Exclude) > 200 {
 		writeError(w, http.StatusBadRequest, "bad_query", "search text is too long", nil)
 		return p, false
 	}
@@ -231,6 +249,20 @@ func parseSearch(w http.ResponseWriter, r *http.Request) (listings.SearchParams,
 			bad["year"] = "must be a year"
 		}
 		p.Year = y
+	}
+	for key, dst := range map[string]*int{"year_min": &p.YearMin, "year_max": &p.YearMax} {
+		if v := q.Get(key); v != "" {
+			y, err := strconv.Atoi(v)
+			if err != nil {
+				bad[key] = "must be a year"
+			}
+			*dst = y
+		}
+	}
+	switch p.QueryMode {
+	case "", "all", "any", "exact":
+	default:
+		bad["mode"] = "all, any or exact"
 	}
 	if v := q.Get("min_grade"); v != "" {
 		g, err := strconv.ParseFloat(v, 64)
