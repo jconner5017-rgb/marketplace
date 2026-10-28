@@ -1,6 +1,6 @@
 import "server-only";
 import { cookies, headers } from "next/headers";
-import type { Facets, Listing, SearchResult, Seller, Summary, User } from "./types";
+import type { BidHistory, Facets, Listing, SearchResult, Seller, Summary, User } from "./types";
 
 // The Go API, reached over Render's private network in production.
 export const API_URL = (process.env.API_URL || "http://localhost:8080").replace(/\/$/, "");
@@ -55,4 +55,8 @@ export async function facets(qs: string): Promise<Facets | null> {
 export async function getListing(id: string): Promise<Listing | null> {
   const r = await apiGet<{ listing: Listing }>("/v1/listings/" + encodeURIComponent(id));
   return r.data?.listing ?? null;
+}
+
+export async function getBids(id: string): Promise<BidHistory | null> {
+  return (await apiGet<BidHistory>("/v1/listings/" + encodeURIComponent(id) + "/bids")).data;
 }

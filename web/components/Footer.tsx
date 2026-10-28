@@ -14,6 +14,7 @@ export const FOOTER: { title: string; links: { label: string; href: string }[] }
     links: [
       { label: "Registration", href: "/help/registration" },
       { label: "How buying works", href: "/help/buying" },
+      { label: "Auctions and offers", href: "/help/auctions-offers" },
       { label: "Shop sports cards", href: "/search?category=sports" },
       { label: "Shop TCG singles", href: "/search?category=tcg" },
       { label: "Sales and events", href: "/help/sales-events" },

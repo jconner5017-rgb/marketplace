@@ -56,6 +56,38 @@ export const ARTICLES: Article[] = [
     ],
   },
   {
+    slug: "auctions-offers",
+    title: "Auctions and offers",
+    section: "Buying",
+    summary: "How bidding, Buy It Now on auctions, reserves and Best Offer work.",
+    body: [
+      { h: "Bidding" },
+      { list: [
+        "Enter the most you're willing to pay. We bid for you, one step at a time, only as much as needed to keep you ahead.",
+        "If someone else's maximum is higher, the price rises to just above yours and you're told you've been outbid.",
+        "Steps: 5¢ under $1, 25¢ to $5, 50¢ to $25, $1 to $100, $2.50 to $250, $5 to $500, $10 to $1,000.",
+        "Bids can't be taken back, so bid only what you mean to pay.",
+      ] },
+      { h: "How auctions end" },
+      { list: [
+        "Auctions run 5, 7 or 10 days.",
+        "A bid in the last 2 minutes adds 2 minutes, so last-second sniping doesn't decide the winner.",
+        "If the price reaches the seller's limit, the auction ends right away and the bidder who got there first wins.",
+        "Some auctions have a hidden reserve price. If bidding ends below it, the card doesn't sell.",
+        "Some auctions offer Buy It Now until the first bid.",
+      ] },
+      { h: "If you win" },
+      { p: "The card is held for you under Purchases. Pay within 4 days. Unpaid wins are cancelled and count against your account." },
+      { h: "Best Offer" },
+      { list: [
+        "Listings that say “or Best Offer” let you offer less than the price.",
+        "You can make up to 3 offers on a listing. Each lasts 48 hours.",
+        "The seller can accept, decline or counter. Some sellers set rules that answer offers instantly.",
+        "If your offer is accepted, the card is held for you. Pay within 48 hours.",
+      ] },
+    ],
+  },
+  {
     slug: "sales-events",
     title: "Sales and events",
     section: "Buying",

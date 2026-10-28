@@ -23,6 +23,8 @@ export default async function Header() {
               <div className="absolute left-0 top-full z-30 mt-2 w-60 rounded-lg border border-line bg-paper p-2 shadow-lg">
                 <p className="px-3 py-2 text-[12px] text-muted">Signed in as {me.user.email}</p>
                 <MenuLink href="/sell">{me.is_seller ? "Seller hub" : "Start selling"}</MenuLink>
+                <MenuLink href="/purchases">Purchases</MenuLink>
+                <MenuLink href="/offers">Offers</MenuLink>
                 <MenuLink href="/watchlist">Watchlist</MenuLink>
                 <MenuLink href="/messages">Messages{me.unread_messages > 0 ? ` (${me.unread_messages})` : ""}</MenuLink>
                 <MenuLink href="/cart">Cart</MenuLink>

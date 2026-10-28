@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { apiGet, getSeller } from "@/lib/api";
 import { requireUser } from "@/lib/auth";
-import { money } from "@/lib/format";
-import type { Listing } from "@/lib/types";
+import { money, timeLeft } from "@/lib/format";
+import type { Hold, Listing, Offer } from "@/lib/types";
 import OnboardButton from "@/components/OnboardButton";
 import { GradeBadge, Photo } from "@/components/CardBits";
 import ListingActions from "@/components/ListingActions";
@@ -55,6 +55,12 @@ export default async function SellPage() {
 
   const mine = await apiGet<{ listings: Listing[]; total: number }>("/v1/seller/listings?limit=100");
   const listings = mine.data?.listings ?? [];
+  const [offersR, holdsR] = await Promise.all([
+    apiGet<{ offers: Offer[] }>("/v1/offers?side=selling"),
+    apiGet<{ holds: Hold[] }>("/v1/holds?side=selling"),
+  ]);
+  const offersWaiting = (offersR.data?.offers ?? []).filter((o) => o.can_respond).length;
+  const awaitingPay = (holdsR.data?.holds ?? []).filter((h) => h.status === "awaiting_payment");
   const total = mine.data?.total ?? 0;
   const current = TIERS.find((t) => t.tier === seller.tier) ?? TIERS[0];
   const nextTier = TIERS.find((t) => t.tier === seller.tier + 1);
@@ -95,6 +101,21 @@ export default async function SellPage() {
         </div>
       </div>
 
+      {(offersWaiting > 0 || awaitingPay.length > 0) && (
+        <div className="mt-6 flex flex-wrap gap-3 text-[14px]">
+          {offersWaiting > 0 && (
+            <Link href="/offers?side=selling" className="rounded-lg border border-ink px-4 py-2 font-semibold hover:bg-wash">
+              {offersWaiting} {offersWaiting === 1 ? "offer needs" : "offers need"} a reply
+            </Link>
+          )}
+          {awaitingPay.length > 0 && (
+            <span className="rounded-lg bg-wash px-4 py-2">
+              {awaitingPay.length} sold, awaiting the buyer&apos;s payment ({money(awaitingPay.reduce((s, h) => s + h.unit_cents * h.quantity, 0))})
+            </span>
+          )}
+        </div>
+      )}
+
       <h2 className="mt-8 border-b border-line pb-2 text-[20px] font-bold">Your listings</h2>
       {listings.length === 0 ? (
         <p className="py-10 text-center text-muted">
@@ -126,11 +147,21 @@ export default async function SellPage() {
                   <td className="num py-2 pr-3 text-right font-semibold">{money(l.price_cents)}</td>
                   <td className="num py-2 pr-3 text-right">{l.quantity}</td>
                   <td className="py-2 pr-3">
-                    <span className={l.status === "active" ? "text-ship" : "text-muted"}>
-                      {l.status === "active" ? "Active" : l.status === "sold_out" ? "Sold out" : "Hidden"}
-                    </span>
+                    {l.format === "auction" && l.auction ? (
+                      <span className={l.auction.state === "live" ? "text-ship" : "text-muted"}>
+                        {l.auction.state === "live"
+                          ? <>Auction · {l.auction.bid_count} {l.auction.bid_count === 1 ? "bid" : "bids"} · <span suppressHydrationWarning>{timeLeft(l.auction.ends_at)}</span></>
+                          : l.auction.state === "won" ? "Sold, awaiting payment" : l.auction.state === "unsold" ? "Ended, unsold" : "Ended"}
+                      </span>
+                    ) : (
+                      <span className={l.status === "active" ? "text-ship" : "text-muted"}>
+                        {l.status === "active" ? (l.offers_enabled ? "Active · offers on" : "Active") : l.status === "sold_out" ? "Sold out" : "Hidden"}
+                      </span>
+                    )}
                   </td>
-                  <td className="py-2 text-right"><ListingActions id={l.id} status={l.status} /></td>
+                  <td className="py-2 text-right">
+                    <ListingActions id={l.id} status={l.status} auction={l.format === "auction" ? l.auction : undefined} />
+                  </td>
                 </tr>
               ))}
             </tbody>

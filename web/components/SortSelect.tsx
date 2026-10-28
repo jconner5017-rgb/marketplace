@@ -23,6 +23,7 @@ export default function SortSelect({ value, hasQuery }: { value: string; hasQuer
         <option value="newest">Newly listed</option>
         <option value="price_asc">Price: lowest first</option>
         <option value="price_desc">Price: highest first</option>
+        <option value="ending">Ending soonest</option>
       </select>
     </label>
   );

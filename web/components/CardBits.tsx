@@ -1,6 +1,20 @@
 import Link from "next/link";
 import type { Listing } from "@/lib/types";
-import { CONDITIONS, gradeLabel, money } from "@/lib/format";
+import { CONDITIONS, gradeLabel, money, timeLeft } from "@/lib/format";
+
+/** "3 bids · 2d 4h left" for auctions; "Buy It Now" or "or Best Offer" otherwise. */
+export function SaleLine({ l, className = "" }: { l: Listing; className?: string }) {
+  if (l.format === "auction" && l.auction) {
+    const a = l.auction;
+    return (
+      <p className={className}>
+        {a.bid_count} {a.bid_count === 1 ? "bid" : "bids"} · <span className="num">{timeLeft(a.ends_at)}</span>
+        {a.buy_now_cents != null && <span className="text-muted"> · or Buy It Now {money(a.buy_now_cents)}</span>}
+      </p>
+    );
+  }
+  return <p className={className}>{l.offers_enabled ? "Buy It Now or Best Offer" : "Buy It Now"}</p>;
+}
 
 /**
  * Graded cards: a tiny grading-slab label (red band, white body).
@@ -63,6 +77,7 @@ export function ListingTile({ l }: { l: Listing }) {
       </div>
       <p className="mt-0.5 line-clamp-1 text-[12px] text-muted">{subtitle(l)}</p>
       <p className="num mt-1 text-[18px] font-bold">{money(l.price_cents)}</p>
+      <SaleLine l={l} className="text-[12px] text-muted" />
       <p className="text-[12px] text-ship">Free shipping</p>
     </Link>
   );
@@ -91,7 +106,7 @@ export function ListingRow({ l }: { l: Listing }) {
           )}
         </div>
         <p className="num mt-3 text-[22px] font-bold leading-none">{money(l.price_cents)}</p>
-        <p className="mt-1 text-[13px]">Buy It Now</p>
+        <SaleLine l={l} className="mt-1 text-[13px]" />
         <p className="text-[13px] text-ship">Free shipping</p>
         <p className="mt-2 text-[12px] text-muted">
           {l.quantity > 1 ? `${l.quantity} available · ` : ""}Seller: {l.seller_username}

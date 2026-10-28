@@ -175,6 +175,16 @@ export default async function AdvancedSearch({ searchParams }: { searchParams: P
               <input id="seller" name="seller" defaultValue={one("seller")} placeholder="Username" className={input} />
             </div>
           </div>
+          <fieldset>
+            <legend className={label}>Buying format</legend>
+            <div className="mt-2 flex flex-wrap gap-x-5 gap-y-2 text-[15px]">
+              {[["", "All listings"], ["auction", "Auction"], ["fixed", "Buy It Now"], ["offers", "Accepts offers"]].map(([v, l]) => (
+                <label key={v || "all"} className="flex items-center gap-2">
+                  <input type="radio" name="format" value={v} defaultChecked={(one("format") || "") === v} /> {l}
+                </label>
+              ))}
+            </div>
+          </fieldset>
           <label className="flex items-center gap-2 text-[15px]">
             <input type="checkbox" name="discount" value="1" defaultChecked={one("discount") === "1"} /> Seller offers a multi-card discount
           </label>
@@ -191,6 +201,7 @@ export default async function AdvancedSearch({ searchParams }: { searchParams: P
                 <option value="newest">Newly listed</option>
                 <option value="price_asc">Price: lowest first</option>
                 <option value="price_desc">Price: highest first</option>
+                <option value="ending">Ending soonest</option>
               </select>
             </div>
             <div>

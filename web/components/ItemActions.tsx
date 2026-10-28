@@ -5,11 +5,14 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { send } from "@/lib/client";
 import { HeartIcon } from "./Icons";
+import OfferBox from "./OfferBox";
 
-type Me = { watching: boolean; in_cart: number; own: boolean; thread_id: string };
+type Me = { watching: boolean; in_cart: number; own: boolean; thread_id: string; offers_left: number; pending_offer_id: string | null };
 
 /** Buy It Now, Add to cart, Watch and Contact seller. Signed-out visitors are sent to sign in first. */
-export default function ItemActions({ id, signedIn, quantity }: { id: string; signedIn: boolean; quantity: number }) {
+export default function ItemActions({ id, signedIn, quantity, price, offers }: {
+  id: string; signedIn: boolean; quantity: number; price: number; offers: boolean;
+}) {
   const router = useRouter();
   const [me, setMe] = useState<Me | null>(null);
   const [busy, setBusy] = useState<"" | "buy" | "cart" | "watch">("");
@@ -77,6 +80,10 @@ export default function ItemActions({ id, signedIn, quantity }: { id: string; si
           className="rounded-full border border-link py-3 font-semibold text-link hover:bg-wash disabled:opacity-60">
           {busy === "cart" ? "Adding…" : "Add to cart"}
         </button>
+      )}
+      {offers && (!signedIn || me) && (
+        <OfferBox id={id} price={price} quantity={quantity} signedIn={signedIn}
+          offersLeft={me?.offers_left ?? 3} pendingOfferId={me?.pending_offer_id ?? null} />
       )}
       <button type="button" onClick={toggleWatch} disabled={busy !== ""} aria-pressed={me?.watching ?? false}
         className="flex items-center justify-center gap-2 rounded-full border border-line py-3 font-semibold hover:border-ink disabled:opacity-60">

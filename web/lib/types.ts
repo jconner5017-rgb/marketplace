@@ -23,6 +23,82 @@ export type Listing = {
   version: number;
   created_at: string;
   updated_at: string;
+  format: "fixed" | "auction";
+  auction?: Auction;
+  offers_enabled: boolean;
+  offer_settings?: OfferSettings;
+};
+
+export type Auction = {
+  start_cents: number;
+  current_cents: number;
+  bid_count: number;
+  has_reserve: boolean;
+  reserve_met: boolean;
+  reserve_cents?: number; // seller only
+  buy_now_cents?: number; // only while Buy It Now is available
+  duration_days: number;
+  starts_at: string;
+  ends_at: string;
+  ended_at?: string;
+  state: "live" | "won" | "unsold" | "ended_early";
+  auto_relist: boolean;
+  round: number;
+};
+
+export type OfferSettings = {
+  enabled: boolean;
+  accept_kind: "amount" | "percent" | null;
+  accept_value: number | null;
+  decline_kind: "amount" | "percent" | null;
+  decline_value: number | null;
+};
+
+export type BidHistory = {
+  bids: { bidder: string; cents: number; at: string; you: boolean }[];
+  bidders: number;
+  leading: boolean;
+  my_max_cents?: number;
+  won: boolean;
+  outbid: boolean;
+  min_next_cents: number;
+  cap_cents: number;
+};
+
+export type Offer = {
+  id: string;
+  listing_id: string;
+  listing_title: string;
+  listing_photo: string;
+  price_cents: number;
+  from_role: "buyer" | "seller";
+  amount_cents: number;
+  quantity: number;
+  message: string;
+  status: "pending" | "accepted" | "declined" | "countered" | "expired";
+  decided_by?: "auto" | "person" | "system";
+  expires_at: string;
+  responded_at?: string;
+  created_at: string;
+  buyer: string;
+  seller: string;
+  can_respond: boolean;
+  offers_left: number;
+};
+
+export type Hold = {
+  id: string;
+  listing_id: string;
+  listing_title: string;
+  listing_photo: string;
+  source: "auction" | "offer";
+  quantity: number;
+  unit_cents: number;
+  status: "awaiting_payment" | "paid" | "expired" | "cancelled";
+  due_at: string;
+  created_at: string;
+  buyer: string;
+  seller: string;
 };
 
 export type SearchResult = {
@@ -39,6 +115,7 @@ export type Facets = {
   grader: Facet[];
   condition: Facet[];
   attribute: Facet[];
+  format: Facet[];
 };
 
 export type User = {

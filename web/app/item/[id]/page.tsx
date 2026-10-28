@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { getListing, getSummary, search } from "@/lib/api";
+import { getBids, getListing, getSummary, search } from "@/lib/api";
 import ItemActions from "@/components/ItemActions";
+import AuctionPanel, { BidList } from "@/components/AuctionPanel";
 import ContactSeller from "@/components/ContactSeller";
 import { GradeBadge, ListingTile } from "@/components/CardBits";
 import Gallery from "@/components/Gallery";
@@ -14,14 +15,20 @@ type Props = { params: Promise<{ id: string }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const l = await getListing((await params).id);
-  return { title: l ? `${l.title} — ${money(l.price_cents)}` : "Listing not found" };
+  if (!l) return { title: "Listing not found" };
+  return { title: l.format === "auction" ? `${l.title} — auction, ${money(l.price_cents)}` : `${l.title} — ${money(l.price_cents)}` };
 }
 
 export default async function ItemPage({ params }: Props) {
   const l = await getListing((await params).id);
   if (!l) notFound();
 
-  const [more, me] = await Promise.all([search(`seller=${encodeURIComponent(l.seller_username)}&limit=7`), getSummary()]);
+  const isAuction = l.format === "auction" && !!l.auction;
+  const [more, me, bids] = await Promise.all([
+    search(`seller=${encodeURIComponent(l.seller_username)}&limit=7`),
+    getSummary(),
+    isAuction ? getBids(l.id) : Promise.resolve(null),
+  ]);
   const others = more.listings.filter((x) => x.id !== l.id).slice(0, 6);
   const gameHref = `/search?category=${l.category}&game=${encodeURIComponent(l.game_or_sport)}`;
 
@@ -69,10 +76,19 @@ export default async function ItemPage({ params }: Props) {
             )}
           </div>
 
-          <p className="num mt-4 text-[32px] font-extrabold leading-none">{money(l.price_cents)}</p>
-          <p className="mt-1 text-[14px] text-ship">Free shipping · USPS</p>
-
-          <ItemActions id={l.id} signedIn={!!me} quantity={l.quantity} />
+          {isAuction && bids ? (
+            <>
+              <AuctionPanel l={l} history={bids} signedIn={!!me} />
+              <p className="mt-2 text-[14px] text-ship">Free shipping · USPS</p>
+            </>
+          ) : (
+            <>
+              <p className="num mt-4 text-[32px] font-extrabold leading-none">{money(l.price_cents)}</p>
+              <p className="mt-1 text-[14px] text-muted">{l.offers_enabled ? "Buy It Now or Best Offer" : "Buy It Now"}</p>
+              <p className="mt-1 text-[14px] text-ship">Free shipping · USPS</p>
+              <ItemActions id={l.id} signedIn={!!me} quantity={l.quantity} price={l.price_cents} offers={l.offers_enabled} />
+            </>
+          )}
 
           <div className="mt-6 rounded-lg border border-line p-4 text-[14px]">
             <p>
@@ -108,6 +124,7 @@ export default async function ItemPage({ params }: Props) {
               <p className="mt-3 max-w-[70ch] whitespace-pre-line text-[15px]">{l.description}</p>
             </>
           )}
+          {isAuction && bids && <BidList history={bids} auction={l.auction!} />}
         </div>
       </section>
 

@@ -104,3 +104,43 @@ export function ago(iso: string): string {
   if (s < 86400 * 7) return `${Math.floor(s / 86400)}d ago`;
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
+
+/** "2d 4h", "3h 12m", "4m 10s" — time left until an ISO date; "Ended" when past. */
+export function timeLeft(iso: string, now: number = Date.now()): string {
+  let s = Math.floor((Date.parse(iso) - now) / 1000);
+  if (s <= 0) return "Ended";
+  const d = Math.floor(s / 86400);
+  s -= d * 86400;
+  const h = Math.floor(s / 3600);
+  s -= h * 3600;
+  const m = Math.floor(s / 60);
+  s -= m * 60;
+  if (d > 0) return `${d}d ${h}h`;
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m ${s}s`;
+}
+
+/** "Sat, Nov 7, 8:15 PM" in the viewer's time zone. */
+export function endTime(iso: string): string {
+  return new Date(iso).toLocaleString("en-US", {
+    weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
+  });
+}
+
+/** Bid increments, matching the API. */
+export function increment(c: number): number {
+  if (c < 100) return 5;
+  if (c < 500) return 25;
+  if (c < 2500) return 50;
+  if (c < 10000) return 100;
+  if (c < 25000) return 250;
+  if (c < 50000) return 500;
+  return 1000;
+}
+
+/** "$12.50" → 1250; null when it isn't a dollar amount. */
+export function toCents(v: string): number | null {
+  const m = v.trim().replace(/[$,]/g, "").match(/^(\d+)(?:\.(\d{1,2}))?$/);
+  if (!m) return null;
+  return Number(m[1]) * 100 + Number((m[2] ?? "0").padEnd(2, "0"));
+}

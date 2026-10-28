@@ -14,7 +14,7 @@ type SP = Record<string, string | string[] | undefined>;
 
 // Query keys the API understands; anything else in the URL is ignored.
 const API_KEYS = ["q", "mode", "exclude", "in", "category", "game", "set", "year", "year_min", "year_max", "number",
-  "grader", "min_grade", "cert", "condition", "attribute", "seller", "min_price", "max_price", "discount", "sort"];
+  "grader", "min_grade", "cert", "condition", "attribute", "seller", "min_price", "max_price", "discount", "sort", "format"];
 // Keys that can repeat (?grader=PSA&grader=BGS).
 const MULTI = new Set(["game", "grader", "condition", "attribute"]);
 const PER_PAGE = [24, 48, 96];
@@ -180,8 +180,10 @@ function PageLink({ params, n, label, current }: { params: URLSearchParams; n: n
 const FILTER_NAMES: Record<string, string> = {
   category: "Category", game: "Sport or game", grader: "Grading", min_grade: "Grade",
   condition: "Condition", attribute: "Feature", set: "Set", year: "Year", seller: "Seller",
-  number: "Card number", cert: "Cert", exclude: "Excluding",
+  number: "Card number", cert: "Cert", exclude: "Excluding", format: "Format",
 };
+
+const FORMATS: Record<string, string> = { auction: "Auction", fixed: "Buy It Now", offers: "Accepts offers" };
 
 function chipLabel(k: string, v: string): string {
   if (k === "category") return v === "tcg" ? "Trading card games" : "Sports cards";
@@ -194,6 +196,7 @@ function chipLabel(k: string, v: string): string {
   if (k === "cert") return `Cert ${v}`;
   if (k === "exclude") return `Not “${v}”`;
   if (k === "seller") return `Seller: ${v}`;
+  if (k === "format") return FORMATS[v] ?? v;
   return v;
 }
 
@@ -251,6 +254,22 @@ function ActiveFilters({ params }: { params: URLSearchParams }) {
 function Sidebar({ params, facets }: { params: URLSearchParams; facets: Facets | null }) {
   return (
     <div className="space-y-6 text-[14px]">
+      <div>
+        <h2 className="mb-2 font-bold">Buying format</h2>
+        <ul className="space-y-1">
+          {[["", "All listings"], ["auction", "Auction"], ["fixed", "Buy It Now"], ["offers", "Accepts offers"]].map(([v, l]) => {
+            const on = (params.get("format") ?? "") === v;
+            const n = facets?.format?.find((f) => f.value === v)?.count;
+            return (
+              <li key={v || "all"}>
+                <Option href={hrefWith(params, { format: v || null, sort: v === "auction" && !params.get("sort") ? "ending" : params.get("sort") })} on={on}>
+                  {l} {n != null && <span className="num text-muted">({n})</span>}
+                </Option>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
       <FacetGroup
         title="Category"
         param="category"
