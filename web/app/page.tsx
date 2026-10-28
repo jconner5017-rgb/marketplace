@@ -4,6 +4,8 @@ import { ListingTile } from "@/components/CardBits";
 import type { Listing } from "@/lib/types";
 import { gameHref, sportHref } from "@/lib/format";
 import { getCatalog } from "@/lib/catalog";
+import { SITE_URL, ldJson } from "@/lib/seo";
+import { SITE_NAME } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -20,8 +22,16 @@ export default async function Home() {
     { title: "Trading card games", category: "tcg", items: cat.games.map((g) => ({ label: g.short, href: gameHref(g.value) })) },
   ];
 
+  const site = {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    name: SITE_NAME,
+    url: SITE_URL,
+    potentialAction: { "@type": "SearchAction", target: `${SITE_URL}/search?q={search_term_string}`, "query-input": "required name=search_term_string" },
+  };
   return (
     <div className="pt-6">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: ldJson(site) }} />
       {/* Opening band: what the place is, in one line, plus the two ways in. */}
       <section className="grid gap-4 lg:grid-cols-[1.1fr_1fr]">
         <div className="rounded-lg bg-ink px-6 py-7 text-white">

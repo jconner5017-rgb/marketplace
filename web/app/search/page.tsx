@@ -58,7 +58,8 @@ export async function generateMetadata({ searchParams }: { searchParams: Promise
   // are endless, so crawlers are kept off them (see also app/robots.ts).
   const keys = new Set(p.keys());
   const plain = keys.size <= 2 && [...keys].every((k) => ["q", "category", "game", "sport"].includes(k));
-  return { title: what, ...(plain ? {} : { robots: { index: false, follow: false } }) };
+  const canonical = "/search" + (plain && keys.size ? "?" + p.toString() : "");
+  return { title: what, alternates: { canonical }, ...(plain ? {} : { robots: { index: false, follow: false } }) };
 }
 
 export default async function SearchPage({ searchParams }: { searchParams: Promise<SP> }) {

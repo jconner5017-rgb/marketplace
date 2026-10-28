@@ -13,6 +13,8 @@ const archivo = Archivo({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL((process.env.SITE_URL || "https://slabsnsingles.com").replace(/\/$/, "")),
+  openGraph: { siteName: SITE_NAME, type: "website", locale: "en_US" },
   title: { default: `${SITE_NAME} — sports cards and TCG singles`, template: `%s | ${SITE_NAME}` },
   description: "Buy and sell sports cards and trading card game singles, raw or graded, up to $1,000. US only, free shipping on every card.",
 };

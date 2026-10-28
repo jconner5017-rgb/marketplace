@@ -10,15 +10,27 @@ import { GradeBadge, ListingTile } from "@/components/CardBits";
 import Gallery from "@/components/Gallery";
 import { CONDITIONS, gradeLabel, money } from "@/lib/format";
 import { getCatalog, labelFor } from "@/lib/catalog";
+import { SITE_URL, describeListing, ldJson, productJsonLd } from "@/lib/seo";
 
 export const dynamic = "force-dynamic";
 
 type Props = { params: Promise<{ id: string }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const l = await getListing((await params).id);
-  if (!l) return { title: "Listing not found" };
-  return { title: l.format === "auction" ? `${l.title} — auction, ${money(l.price_cents)}` : `${l.title} — ${money(l.price_cents)}` };
+  const [l, cat] = await Promise.all([getListing((await params).id), getCatalog()]);
+  if (!l) return { title: "Listing not found", robots: { index: false } };
+  const title = l.format === "auction" ? `${l.title} — auction, ${money(l.price_cents)}` : `${l.title} — ${money(l.price_cents)}`;
+  const description = describeListing(l, labelFor(cat, l.game_or_sport));
+  const url = `${SITE_URL}/item/${l.id}`;
+  return {
+    title,
+    description,
+    alternates: { canonical: url },
+    openGraph: { type: "website", url, title, description, images: l.photo_urls.slice(0, 1) },
+    twitter: { card: "summary_large_image", title, description, images: l.photo_urls.slice(0, 1) },
+    // Finished auctions stay viewable for bidders but leave search results.
+    ...(l.status !== "active" ? { robots: { index: false, follow: true } } : {}),
+  };
 }
 
 export default async function ItemPage({ params }: Props) {
@@ -51,6 +63,7 @@ export default async function ItemPage({ params }: Props) {
 
   return (
     <div className="pt-4">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: ldJson(productJsonLd(l, labelFor(catalog, l.game_or_sport))) }} />
       <nav aria-label="Breadcrumb" className="text-[13px] text-muted">
         <Link href="/" className="hover:underline">Home</Link>
         <span className="mx-1.5">›</span>
