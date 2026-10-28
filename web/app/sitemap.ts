@@ -5,7 +5,9 @@ import { API_URL } from "@/lib/api";
 import { getCatalog } from "@/lib/catalog";
 import { SITE_URL } from "@/lib/seo";
 
-export const revalidate = 3600; // rebuilt at most once an hour
+// Built on request (the API isn't reachable during the build); the listing
+// fetches below are cached for an hour.
+export const dynamic = "force-dynamic";
 
 const esc = (p: string) => SITE_URL + p.replace(/&/g, "&amp;");
 
