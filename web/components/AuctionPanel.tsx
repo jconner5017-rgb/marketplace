@@ -159,7 +159,7 @@ export default function AuctionPanel({ l, history, signedIn }: { l: Listing; his
                 className="num min-w-0 flex-1 bg-transparent px-1 py-3 outline-none"
               />
             </div>
-            <button type="submit" disabled={busy !== ""} className="rounded-full bg-link px-6 font-semibold text-white hover:bg-link-dark disabled:opacity-60">
+            <button type="submit" disabled={busy !== ""} className="whitespace-nowrap rounded-full bg-link px-5 font-semibold text-white hover:bg-link-dark disabled:opacity-60">
               {busy === "bid" ? "Bidding…" : "Place bid"}
             </button>
           </form>
