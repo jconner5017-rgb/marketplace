@@ -215,8 +215,16 @@ export interface ShipTo {
 }
 
 export interface OrderFeedback {
+  id: string;
   rating: -1 | 0 | 1;
   comment: string;
+  item_rating: number | null;
+  shipping_rating: number | null;
+  communication_rating: number | null;
+  state: "published" | "held" | "mediation";
+  visible: boolean;
+  held_until: string | null;
+  reply: string | null;
   created_at: string;
 }
 
@@ -245,8 +253,43 @@ export interface Order {
   } | null;
   my_feedback: OrderFeedback | null;
   their_feedback: OrderFeedback | null;
+  their_feedback_hidden: boolean;
   cases: { number: number; kind: string; status: string }[];
   side: "buying" | "selling";
   tax_cents: number;
   stripe_payment_url?: string;
+}
+
+export interface FeedbackSummary {
+  username: string;
+  score: number;
+  positive_percent: number | null;
+  positive_12m: number;
+  neutral_12m: number;
+  negative_12m: number;
+  total: number;
+  item_avg: number | null;
+  shipping_avg: number | null;
+  communication_avg: number | null;
+  under_review: number;
+  member_since: string;
+  sales: number;
+  badges: { key: string; label: string; hint: string }[];
+  outside: { platform: string; profile_url: string; feedback_count: number; positive_percent: number; verified_at: string }[];
+}
+
+export interface FeedbackEntry {
+  id: string;
+  from: string;
+  role: string;
+  rating: -1 | 0 | 1;
+  comment: string;
+  item_rating: number | null;
+  shipping_rating: number | null;
+  communication_rating: number | null;
+  item_title: string;
+  reply: string | null;
+  can_reply?: boolean;
+  created_at: string;
+  verified_purchase: boolean;
 }

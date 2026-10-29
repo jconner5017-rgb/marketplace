@@ -1,4 +1,5 @@
 import Link from "next/link";
+import BuyerRecord from "@/components/feedback/BuyerRecord";
 import { apiGet } from "@/lib/api";
 import { requireUser } from "@/lib/auth";
 import type { Offer } from "@/lib/types";
@@ -83,6 +84,7 @@ function OfferRow({ o, side }: { o: Offer; side: string }) {
         {o.status === "accepted" && side === "buying" && (
           <Link href="/purchases" className="mt-1 inline-block font-semibold text-link underline">Pay within 48 hours</Link>
         )}
+        {side === "selling" && <div className="mt-1"><BuyerRecord username={o.buyer} /></div>}
         {o.can_respond && <OfferRespond o={o} />}
       </div>
     </li>

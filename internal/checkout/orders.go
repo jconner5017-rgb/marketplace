@@ -46,9 +46,17 @@ type Shipment struct {
 }
 
 type Feedback struct {
-	Rating    int       `json:"rating"`
-	Comment   string    `json:"comment"`
-	CreatedAt time.Time `json:"created_at"`
+	ID            string     `json:"id"`
+	Rating        int        `json:"rating"`
+	Comment       string     `json:"comment"`
+	Item          *int       `json:"item_rating"`
+	Shipping      *int       `json:"shipping_rating"`
+	Communication *int       `json:"communication_rating"`
+	State         string     `json:"state"`   // published, held, mediation
+	Visible       bool       `json:"visible"` // revealed to the other side
+	HeldUntil     *time.Time `json:"held_until"`
+	Reply         *string    `json:"reply"`
+	CreatedAt     time.Time  `json:"created_at"`
 }
 
 type CaseRef struct {
@@ -79,9 +87,11 @@ type Order struct {
 	Shipment      *Shipment       `json:"shipment"`
 	MyFeedback    *Feedback       `json:"my_feedback"`
 	TheirFeedback *Feedback       `json:"their_feedback"`
-	Cases         []CaseRef       `json:"cases"`
-	Side          string          `json:"side"` // buying or selling, from the viewer's side
-	TaxCents      int             `json:"tax_cents"`
+	// TheirFeedbackHidden: the other side has rated, but it's hidden until you rate too.
+	TheirFeedbackHidden bool      `json:"their_feedback_hidden"`
+	Cases               []CaseRef `json:"cases"`
+	Side                string    `json:"side"` // buying or selling, from the viewer's side
+	TaxCents            int       `json:"tax_cents"`
 	// StripeRefundURL opens the payment in the seller's own Stripe dashboard (seller only).
 	StripeRefundURL string `json:"stripe_payment_url,omitempty"`
 }
@@ -228,7 +238,8 @@ func (s *Service) fill(ctx context.Context, userID string, o *Order) error {
 		return err
 	}
 
-	fr, err := s.DB.QueryContext(ctx, `SELECT from_user = $2, rating, comment, created_at FROM feedback
+	fr, err := s.DB.QueryContext(ctx, `SELECT from_user = $2, id, rating, comment, item_rating, shipping_rating, communication_rating,
+		state, visible_at IS NOT NULL, held_until, reply, created_at FROM feedback
 		WHERE order_id = $1 AND removed_at IS NULL`, o.ID, userID)
 	if err != nil {
 		return err
@@ -236,14 +247,19 @@ func (s *Service) fill(ctx context.Context, userID string, o *Order) error {
 	for fr.Next() {
 		var mine bool
 		var f Feedback
-		if err := fr.Scan(&mine, &f.Rating, &f.Comment, &f.CreatedAt); err != nil {
+		if err := fr.Scan(&mine, &f.ID, &f.Rating, &f.Comment, &f.Item, &f.Shipping, &f.Communication, &f.State, &f.Visible,
+			&f.HeldUntil, &f.Reply, &f.CreatedAt); err != nil {
 			fr.Close()
 			return err
 		}
-		if mine {
+		switch {
+		case mine:
 			o.MyFeedback = &f
-		} else {
+		case f.Visible && f.State == "published":
 			o.TheirFeedback = &f
+		default:
+			// Blind until both sides rate: say only that it's there.
+			o.TheirFeedbackHidden = true
 		}
 	}
 	fr.Close()
@@ -335,58 +351,6 @@ func (s *Service) MarkDelivered(ctx context.Context, buyerID, orderID string) er
 		last_event_at = now(), updated_at = now()
 		WHERE order_id = (SELECT id FROM orders WHERE id::text = $1 OR number::text = $1)`, orderID)
 	return err
-}
-
-// FeedbackWindow is how long after payment either side can leave feedback.
-const FeedbackWindow = 60 * 24 * time.Hour
-
-// LeaveFeedback records a positive (1), neutral (0) or negative (-1) rating.
-// Buyers can rate once the order has shipped; sellers once it's paid.
-func (s *Service) LeaveFeedback(ctx context.Context, userID, orderID string, rating int, comment string) error {
-	if rating < -1 || rating > 1 {
-		return &FieldError{"rating", "choose positive, neutral or negative"}
-	}
-	comment = strings.TrimSpace(comment)
-	if utf8.RuneCountInString(comment) > 500 {
-		return &FieldError{"comment", "keep it under 500 characters"}
-	}
-	if rating < 1 && utf8.RuneCountInString(comment) < 5 {
-		return &FieldError{"comment", "say what went wrong (at least a few words)"}
-	}
-	var id, buyer, seller, status string
-	var paid sql.NullTime
-	err := s.DB.QueryRowContext(ctx, `SELECT id, buyer_id, seller_id, status, paid_at FROM orders
-		WHERE (id::text = $2 OR number::text = $2) AND (buyer_id = $1 OR seller_id = $1)`, userID, orderID).
-		Scan(&id, &buyer, &seller, &status, &paid)
-	if errors.Is(err, sql.ErrNoRows) {
-		return ErrNotFound
-	}
-	if err != nil {
-		return err
-	}
-	if !paid.Valid || s.now().Sub(paid.Time) > FeedbackWindow {
-		return ErrState
-	}
-	role, to := "seller_to_buyer", buyer
-	if userID == buyer {
-		role, to = "buyer_to_seller", seller
-		if status != "shipped" && status != "delivered" {
-			return ErrState
-		}
-	}
-	if msg, ok := inboxScreen(comment); !ok {
-		return &FieldError{"comment", msg}
-	}
-	if _, err := s.DB.ExecContext(ctx, `INSERT INTO feedback (order_id, from_user, to_user, role, rating, comment)
-		VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (order_id, from_user) DO NOTHING`, id, userID, to, role, rating, comment); err != nil {
-		return err
-	}
-	if role == "buyer_to_seller" && s.Rep != nil {
-		if _, _, err := s.Rep.Review(ctx, seller); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 // ReportProblem opens a case for staff on a paid order.

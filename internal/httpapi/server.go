@@ -14,6 +14,7 @@ import (
 	"github.com/jconner5017-rgb/marketplace/internal/blocklist"
 	"github.com/jconner5017-rgb/marketplace/internal/checkout"
 	"github.com/jconner5017-rgb/marketplace/internal/fcm"
+	"github.com/jconner5017-rgb/marketplace/internal/feedback"
 	"github.com/jconner5017-rgb/marketplace/internal/fees"
 	"github.com/jconner5017-rgb/marketplace/internal/inbox"
 	"github.com/jconner5017-rgb/marketplace/internal/listings"
@@ -58,6 +59,7 @@ type Server struct {
 	ipRules    *admin.IPRules
 	standing   *admin.Standing
 	fcm        *fcm.Service
+	feedback   *feedback.Service
 	// shippingToken guards the carrier tracking webhook URL.
 	shippingToken string
 }
@@ -84,6 +86,7 @@ type Options struct {
 	Fees     *fees.Service
 	Checkout *checkout.Service
 	FCM      *fcm.Service
+	Feedback *feedback.Service
 	// ShippingWebhookToken must be in the tracking webhook URL (?token=).
 	ShippingWebhookToken string
 	// AdminIPAllowlistOff turns off the admin IP allowlist (break-glass).
@@ -116,6 +119,7 @@ func New(o Options) *Server {
 		fees:          o.Fees,
 		checkout:      o.Checkout,
 		fcm:           o.FCM,
+		feedback:      o.Feedback,
 		shippingToken: o.ShippingWebhookToken,
 		ipRules:       &admin.IPRules{DB: o.DB, Audit: o.Audit, Disabled: o.AdminIPAllowlistOff},
 		// 30 bids or offers per user per minute.
@@ -164,6 +168,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/admin/appeals", s.requireStaff(admin.UsersRestrict, s.handleAdminAppeals))
 	mux.HandleFunc("POST /v1/admin/appeals/{id}", s.requireStaff(admin.UsersRestrict, s.handleAdminDecideAppeal))
 	mux.HandleFunc("GET /v1/admin/orders/{id}/evidence", s.requireStaff(admin.OrdersView, s.handleAdminEvidence))
+	mux.HandleFunc("GET /v1/admin/outside-feedback", s.requireStaff(admin.SellersReview, s.handleAdminOutside))
+	mux.HandleFunc("POST /v1/admin/outside-feedback/{id}", s.requireStaff(admin.SellersReview, s.handleAdminReviewOutside))
 	mux.HandleFunc("GET /v1/admin/staff", s.requireStaff(admin.StaffManage, s.handleAdminStaff))
 	mux.HandleFunc("POST /v1/admin/staff", s.requireStaff(admin.StaffManage, s.handleAdminSetStaff))
 	mux.HandleFunc("GET /v1/admin/sellers", s.requireStaff(admin.SellersReview, s.handleAdminSellers))
@@ -248,6 +254,13 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/orders/{id}/label", requireUser(s.handleBuyLabel))
 	mux.HandleFunc("POST /v1/orders/{id}/label/void", requireUser(s.handleVoidLabel))
 	mux.HandleFunc("POST /v1/webhooks/shipping/{provider}", s.handleShippingWebhook)
+	mux.HandleFunc("POST /v1/feedback/{id}/reply", requireUser(s.handleFeedbackReply))
+	mux.HandleFunc("POST /v1/orders/{id}/messages", requireUser(s.handleOrderMessage))
+	mux.HandleFunc("GET /v1/members/{username}/feedback", s.handleMemberFeedback)
+	mux.HandleFunc("GET /v1/members/{username}/buyer-record", requireUser(s.handleBuyerRecord))
+	mux.HandleFunc("GET /v1/seller/feedback", requireUser(s.handleSellerFeedback))
+	mux.HandleFunc("PUT /v1/seller/feedback", requireUser(s.handleSetSellerFeedback))
+	mux.HandleFunc("POST /v1/seller/outside-feedback", requireUser(s.handleClaimOutside))
 	mux.HandleFunc("GET /v1/seller/connect", requireUser(s.handleConnect))
 	mux.HandleFunc("PUT /v1/seller/connect", requireUser(s.handleSetConnect))
 	mux.HandleFunc("POST /v1/seller/connect/test", requireUser(s.handleTestWebhook))

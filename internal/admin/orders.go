@@ -724,10 +724,17 @@ type FeedbackRow struct {
 	RemovedAt   *time.Time `json:"removed_at"`
 	RemovedWhy  *string    `json:"removed_reason"`
 	Reported    int        `json:"open_reports"`
+	State       string     `json:"state"`
+	Visible     bool       `json:"visible"`
+	Scrubbed    *string    `json:"scrubbed_comment"`
+	Item        *int       `json:"item_rating"`
+	Shipping    *int       `json:"shipping_rating"`
+	Comm        *int       `json:"communication_rating"`
+	Auto        bool       `json:"auto"`
 }
 
 type FeedbackQuery struct {
-	Filter  string // negative, removed, reported
+	Filter  string // negative, removed, reported, mediation, held, scrubbed
 	OrderID string
 	User    string // username (given or received)
 	Limit   int
@@ -743,6 +750,12 @@ func (r *Records) Feedback(ctx context.Context, q FeedbackQuery) ([]FeedbackRow,
 		w.add("f.rating < 0 AND f.removed_at IS NULL")
 	case "removed":
 		w.add("f.removed_at IS NOT NULL")
+	case "mediation":
+		w.add("f.state = 'mediation' AND f.removed_at IS NULL")
+	case "held":
+		w.add("f.state = 'held' AND f.removed_at IS NULL")
+	case "scrubbed":
+		w.add("f.scrubbed_comment IS NOT NULL")
 	case "reported":
 		w.add("EXISTS (SELECT 1 FROM reports x WHERE x.target_type = 'user' AND x.target_id = f.from_user::text AND x.status = 'open')")
 	}
@@ -756,7 +769,8 @@ func (r *Records) Feedback(ctx context.Context, q FeedbackQuery) ([]FeedbackRow,
 	rows, err := r.DB.QueryContext(ctx, `
 		SELECT f.id, f.order_id, o.number, fu.username, fu.id, tu.username, tu.id, f.role, f.rating, f.comment, f.reply,
 		       f.created_at, f.removed_at, f.removed_reason,
-		       (SELECT count(*) FROM reports x WHERE x.target_type = 'user' AND x.target_id = f.from_user::text AND x.status = 'open')
+		       (SELECT count(*) FROM reports x WHERE x.target_type = 'user' AND x.target_id = f.from_user::text AND x.status = 'open'),
+		       f.state, f.visible_at IS NOT NULL, f.scrubbed_comment, f.item_rating, f.shipping_rating, f.communication_rating, f.auto
 		FROM feedback f JOIN orders o ON o.id = f.order_id
 		JOIN users fu ON fu.id = f.from_user JOIN users tu ON tu.id = f.to_user`+w.sql()+
 		fmt.Sprintf(" ORDER BY f.created_at DESC LIMIT $%d", len(args)), args...)
@@ -770,7 +784,8 @@ func (r *Records) Feedback(ctx context.Context, q FeedbackQuery) ([]FeedbackRow,
 		var reply, why sql.NullString
 		var removed sql.NullTime
 		if err := rows.Scan(&f.ID, &f.OrderID, &f.OrderNumber, &f.From, &f.FromID, &f.To, &f.ToID, &f.Role, &f.Rating, &f.Comment,
-			&reply, &f.CreatedAt, &removed, &why, &f.Reported); err != nil {
+			&reply, &f.CreatedAt, &removed, &why, &f.Reported, &f.State, &f.Visible, &f.Scrubbed, &f.Item, &f.Shipping, &f.Comm,
+			&f.Auto); err != nil {
 			return nil, err
 		}
 		f.Reply, f.RemovedAt, f.RemovedWhy = nstr(reply), ntime(removed), nstr(why)
@@ -793,8 +808,9 @@ func (r *Records) ModerateFeedback(ctx context.Context, a Actor, id, action, rea
 	defer tx.Rollback()
 	var removed sql.NullTime
 	var rating int
-	var to string
-	err = tx.QueryRowContext(ctx, `SELECT removed_at, rating, to_user FROM feedback WHERE id::text = $1 FOR UPDATE`, id).Scan(&removed, &rating, &to)
+	var to, state string
+	err = tx.QueryRowContext(ctx, `SELECT removed_at, rating, to_user, state FROM feedback WHERE id::text = $1 FOR UPDATE`, id).
+		Scan(&removed, &rating, &to, &state)
 	if errors.Is(err, sql.ErrNoRows) {
 		return ErrNotFound
 	}
@@ -812,13 +828,19 @@ func (r *Records) ModerateFeedback(ctx context.Context, a Actor, id, action, rea
 			return &FieldError{"action", "it isn't removed"}
 		}
 		_, err = tx.ExecContext(ctx, `UPDATE feedback SET removed_at = NULL, removed_by = NULL, removed_reason = NULL WHERE id::text = $1`, id)
+	case "publish":
+		// Mediation done: the new seller's negative stands.
+		if state != "mediation" || removed.Valid {
+			return &FieldError{"action", "only feedback waiting in mediation can be published"}
+		}
+		_, err = tx.ExecContext(ctx, `UPDATE feedback SET state = 'published', updated_at = now() WHERE id::text = $1`, id)
 	default:
-		return &FieldError{"action", "remove or restore"}
+		return &FieldError{"action", "remove, restore or publish"}
 	}
 	if err != nil {
 		return err
 	}
-	if err := r.Audit.Log(ctx, tx, a.entry("feedback."+map[string]string{"remove": "removed", "restore": "restored"}[action],
+	if err := r.Audit.Log(ctx, tx, a.entry("feedback."+map[string]string{"remove": "removed", "restore": "restored", "publish": "published"}[action],
 		"feedback", id, reason, map[string]any{"rating": rating, "to_user": to})); err != nil {
 		return err
 	}

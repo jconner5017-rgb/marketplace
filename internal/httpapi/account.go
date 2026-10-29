@@ -215,6 +215,29 @@ func (s *Server) handleAskSeller(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, map[string]string{"thread_id": threadID})
 }
 
+// POST /v1/orders/{id}/messages {"body"} — message the other side of an order.
+func (s *Server) handleOrderMessage(w http.ResponseWriter, r *http.Request) {
+	u, _ := currentUser(r)
+	id, ok := orderParam(w, r)
+	if !ok {
+		return
+	}
+	var req messageRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	if !s.msgLimiter.allow(u.ID) {
+		writeError(w, http.StatusTooManyRequests, "rate_limited", "you're sending messages too quickly; wait a few minutes", nil)
+		return
+	}
+	threadID, err := s.inbox.MessageAboutOrder(r.Context(), u.ID, u.Username, id, req.Body)
+	if err != nil {
+		s.accountError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]string{"thread_id": threadID})
+}
+
 func (s *Server) handleThreads(w http.ResponseWriter, r *http.Request) {
 	u, _ := currentUser(r)
 	ts, err := s.inbox.Threads(r.Context(), u.ID)

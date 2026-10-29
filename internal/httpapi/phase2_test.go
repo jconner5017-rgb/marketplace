@@ -159,7 +159,7 @@ func TestListingLifecycleAndTierCap(t *testing.T) {
 func TestGradedCardAndPromotion(t *testing.T) {
 	e := setupEnv(t)
 	c, _ := newSeller(t, e, "slab_seller", true)
-	if _, err := e.db.Exec(`UPDATE seller_profiles SET tier = 3`); err != nil {
+	if _, err := e.db.Exec(`UPDATE seller_profiles SET tier = 3, tier_locked = true`); err != nil {
 		t.Fatal(err)
 	}
 	card := map[string]any{
@@ -289,7 +289,7 @@ func TestCSVImport(t *testing.T) {
 func TestSearch(t *testing.T) {
 	e := setupEnv(t)
 	c, _ := newSeller(t, e, "shop_a", true)
-	e.db.Exec(`UPDATE seller_profiles SET tier = 3`)
+	e.db.Exec(`UPDATE seller_profiles SET tier = 3, tier_locked = true`)
 	add := func(m map[string]any) {
 		if code, body := do(t, c, "POST", e.ts.URL+"/v1/seller/listings", m); code != 201 {
 			t.Fatalf("add: %d %v", code, body)

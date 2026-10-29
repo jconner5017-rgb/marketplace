@@ -12,6 +12,7 @@ export const ADMIN_NAV: { group: string; items: { href: string; label: string; p
     { href: "/admin/sellers", label: "Seller review", perm: "sellers.review" },
     { href: "/admin/staff", label: "Staff and roles", perm: "staff.manage" },
     { href: "/admin/appeals", label: "Appeals", perm: "users.restrict" },
+    { href: "/admin/outside-feedback", label: "Outside feedback", perm: "sellers.review" },
   ] },
   { group: "Listings", items: [
     { href: "/admin/listings", label: "Listings", perm: "users.view" },

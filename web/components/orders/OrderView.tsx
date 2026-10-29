@@ -99,11 +99,19 @@ export default function OrderView({ o }: { o: Order }) {
             {o.cases.map((c) => <p key={c.number} className="mt-1">#{c.number} · {c.status.replace(/_/g, " ")}</p>)}
           </div>
         )}
-        {(o.my_feedback || o.their_feedback) && (
+        {(o.my_feedback || o.their_feedback || o.their_feedback_hidden) && (
           <div className="rounded-lg border border-line p-4">
             <h2 className="font-semibold">Feedback</h2>
-            {o.my_feedback && <p className="mt-1">You: {o.my_feedback.rating > 0 ? "Positive" : o.my_feedback.rating < 0 ? "Negative" : "Neutral"}{o.my_feedback.comment ? ` · “${o.my_feedback.comment}”` : ""}</p>}
-            {o.their_feedback && <p className="mt-1">{selling ? o.buyer : o.seller}: {o.their_feedback.rating > 0 ? "Positive" : o.their_feedback.rating < 0 ? "Negative" : "Neutral"}{o.their_feedback.comment ? ` · “${o.their_feedback.comment}”` : ""}</p>}
+            {o.my_feedback && (
+              <p className="mt-1">You: {o.my_feedback.rating > 0 ? "Positive" : o.my_feedback.rating < 0 ? "Negative" : "Neutral"}{o.my_feedback.comment ? ` · “${o.my_feedback.comment}”` : ""}
+                {!o.my_feedback.visible && <span className="block text-[12px] text-muted">Hidden from {selling ? o.buyer : o.seller} until they leave theirs.</span>}
+              </p>
+            )}
+            {o.their_feedback && (
+              <p className="mt-1">{selling ? o.buyer : o.seller}: {o.their_feedback.rating > 0 ? "Positive" : o.their_feedback.rating < 0 ? "Negative" : "Neutral"}{o.their_feedback.comment ? ` · “${o.their_feedback.comment}”` : ""}
+                {o.their_feedback.reply && <span className="block text-[13px] text-muted">Reply: {o.their_feedback.reply}</span>}
+              </p>
+            )}
           </div>
         )}
       </aside>

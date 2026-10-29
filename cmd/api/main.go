@@ -20,6 +20,7 @@ import (
 	"github.com/jconner5017-rgb/marketplace/internal/db"
 	"github.com/jconner5017-rgb/marketplace/internal/demo"
 	"github.com/jconner5017-rgb/marketplace/internal/fcm"
+	"github.com/jconner5017-rgb/marketplace/internal/feedback"
 	"github.com/jconner5017-rgb/marketplace/internal/fees"
 	"github.com/jconner5017-rgb/marketplace/internal/httpapi"
 	"github.com/jconner5017-rgb/marketplace/internal/inbox"
@@ -123,6 +124,7 @@ func run(log *slog.Logger) error {
 	}
 	log.Info("checkout", "enabled", checkoutSvc.Ready(), "return_to", cfg.WebURL)
 	fcmSvc := &fcm.Service{DB: database}
+	feedbackSvc := &feedback.Service{DB: database, Rep: reputation}
 	api := httpapi.New(httpapi.Options{
 		DB:           database,
 		Auth:         authSvc,
@@ -145,6 +147,7 @@ func run(log *slog.Logger) error {
 		Fees:     feeSvc,
 		Checkout: checkoutSvc,
 		FCM:      fcmSvc,
+		Feedback: feedbackSvc,
 
 		ShippingWebhookToken: cfg.ShippingWebhookToken,
 
@@ -184,6 +187,9 @@ func run(log *slog.Logger) error {
 				}
 				if err := checkoutSvc.RunJobs(ctx); err != nil {
 					log.Error("checkout jobs", "err", err)
+				}
+				if err := feedbackSvc.RunJobs(ctx); err != nil {
+					log.Error("feedback jobs", "err", err)
 				}
 				if _, err := fcmSvc.RunDeliveries(ctx); err != nil {
 					log.Error("webhook deliveries", "err", err)

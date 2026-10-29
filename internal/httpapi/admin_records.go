@@ -193,6 +193,15 @@ func (s *Server) handleAdminModerateFeedback(w http.ResponseWriter, r *http.Requ
 		s.adminError(w, r, err)
 		return
 	}
+	// Removing or publishing feedback can change the seller's level.
+	if s.checkout != nil && s.checkout.Rep != nil {
+		var to string
+		if s.db.QueryRowContext(r.Context(), `SELECT to_user FROM feedback WHERE id = $1 AND role = 'buyer_to_seller'`, id).Scan(&to) == nil {
+			if _, _, err := s.checkout.Rep.Review(r.Context(), to); err != nil {
+				s.log.Error("reputation after moderation", "err", err)
+			}
+		}
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 

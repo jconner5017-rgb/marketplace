@@ -80,6 +80,7 @@ export default async function SellPage() {
           <Link href="/sell/reports" className="rounded-full border border-link px-5 py-2 font-semibold text-link hover:bg-wash">Reports</Link>
           <Link href="/sell/connect" className="rounded-full border border-link px-5 py-2 font-semibold text-link hover:bg-wash">Connect FCM</Link>
           <Link href="/sell/shipping" className="rounded-full border border-link px-5 py-2 font-semibold text-link hover:bg-wash">Shipping</Link>
+          <Link href="/sell/feedback" className="rounded-full border border-link px-5 py-2 font-semibold text-link hover:bg-wash">Feedback</Link>
           <Link href="/sell/import" className="rounded-full border border-link px-5 py-2 font-semibold text-link hover:bg-wash">Upload a CSV</Link>
           <Link href="/sell/new" className="rounded-full bg-link px-5 py-2 font-semibold text-white hover:bg-link-dark">List a card</Link>
         </div>

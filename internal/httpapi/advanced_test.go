@@ -8,7 +8,7 @@ import (
 func TestAdvancedSearch(t *testing.T) {
 	e := setupEnv(t)
 	c, _ := newSeller(t, e, "adv_shop", true)
-	e.db.Exec(`UPDATE seller_profiles SET tier = 3`)
+	e.db.Exec(`UPDATE seller_profiles SET tier = 3, tier_locked = true`)
 	add := func(m map[string]any) {
 		if code, body := do(t, c, "POST", e.ts.URL+"/v1/seller/listings", m); code != 201 {
 			t.Fatalf("add: %d %v", code, body)

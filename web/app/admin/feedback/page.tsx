@@ -8,7 +8,8 @@ import type { FeedbackRow } from "@/lib/admin-types";
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Feedback" };
 
-const TABS = [["negative", "Negative"], ["reported", "From reported members"], ["", "All"], ["removed", "Removed"]];
+const TABS = [["mediation", "New-seller mediation"], ["negative", "Negative"], ["held", "Cooling off"], ["scrubbed", "Extortion scrubbed"],
+  ["reported", "From reported members"], ["", "All"], ["removed", "Removed"]];
 const RATING: Record<number, [string, string]> = { 1: ["Positive", "text-ship"], 0: ["Neutral", "text-muted"], [-1]: ["Negative", "text-slab"] };
 
 export default async function FeedbackPage({ searchParams }: { searchParams: Promise<{ filter?: string; user?: string }> }) {
@@ -40,14 +41,29 @@ export default async function FeedbackPage({ searchParams }: { searchParams: Pro
               <p><span className={`font-semibold ${RATING[f.rating][1]}`}>{RATING[f.rating][0]}</span> from{" "}
                 <Link href={`/admin/users/${f.from_id}`} className="underline">{f.from}</Link> to <Link href={`/admin/users/${f.to_id}`} className="underline">{f.to}</Link>
                 {f.open_reports > 0 && <span className="ml-2 rounded-full bg-slab/10 px-2 text-[12px] text-slab">author reported</span>}</p>
-              <p className={`mt-1 ${f.removed_at ? "text-muted line-through" : ""}`}>“{f.comment}”</p>
+              <p className="mt-1 text-[12px]">
+                {f.state !== "published" && <span className="mr-2 rounded-full bg-wash px-2">{f.state === "held" ? "cooling off" : "in mediation"}</span>}
+                {!f.visible && <span className="mr-2 rounded-full bg-wash px-2">hidden until both rate</span>}
+                {f.auto && <span className="mr-2 rounded-full bg-wash px-2">automatic</span>}
+                {f.item_rating != null && <span className="text-muted">Item {f.item_rating}/5 · Shipping {f.shipping_rating}/5 · Communication {f.communication_rating}/5</span>}
+              </p>
+              <p className={`mt-1 ${f.removed_at ? "text-muted line-through" : ""}`}>{f.comment ? `“${f.comment}”` : <span className="text-muted">No comment</span>}</p>
+              {f.scrubbed_comment && <p className="mt-1 text-slab">Removed comment (tried to trade the rating): “{f.scrubbed_comment}”</p>}
               {f.reply && <p className="mt-1 text-muted">Reply: {f.reply}</p>}
               <p className="mt-1 text-[12px] text-muted">Order <Link href={`/admin/orders/${f.order_id}`} className="underline">#{f.order_number}</Link> · <span suppressHydrationWarning>{when(f.created_at)}</span>
                 {f.removed_reason && ` · removed: ${f.removed_reason}`}</p>
             </div>
-            <ActionForm endpoint={`/v1/admin/feedback/${f.id}/moderate`} extra={{ action: f.removed_at ? "restore" : "remove" }}
-              fields={[{ name: "reason", label: "Reason", placeholder: f.removed_at ? "Removed by mistake" : "Abusive language" }]}
-              submit={f.removed_at ? "Restore" : "Remove feedback"} danger={!f.removed_at} done="Saved." compact />
+            {f.state === "mediation" && !f.removed_at ? (
+              <ActionForm endpoint={`/v1/admin/feedback/${f.id}/moderate`} submit="Save decision" done="Saved." compact
+                fields={[
+                  { name: "action", label: "Decision", type: "select", options: [["publish", "Let it stand (it counts)"], ["remove", "Remove it"]] },
+                  { name: "reason", label: "Reason", placeholder: "Seller refunded in full" },
+                ]} />
+            ) : (
+              <ActionForm endpoint={`/v1/admin/feedback/${f.id}/moderate`} extra={{ action: f.removed_at ? "restore" : "remove" }}
+                fields={[{ name: "reason", label: "Reason", placeholder: f.removed_at ? "Removed by mistake" : "Abusive language" }]}
+                submit={f.removed_at ? "Restore" : "Remove feedback"} danger={!f.removed_at} done="Saved." compact />
+            )}
           </li>
         ))}
       </ul>

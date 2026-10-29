@@ -10,7 +10,7 @@ import (
 func TestShippingLabels(t *testing.T) {
 	e := setupEnv(t)
 	sc, acct := newSeller(t, e, "label_shop", true)
-	e.db.Exec(`UPDATE seller_profiles SET tier = 3`)
+	e.db.Exec(`UPDATE seller_profiles SET tier = 3, tier_locked = true`)
 	a := createListing(t, e, &httpClientT{sc}, rawCard("LB1", 3000))["id"].(string)
 	c := rawCard("LB2", 2000)
 	c["package_preset"] = "bubble"

@@ -61,8 +61,8 @@ func TestReputationJob(t *testing.T) {
 	pricey := createListing(t, e, &httpClientT{sc}, rawCard("RP2", 9000))["id"].(string)
 
 	// Negative feedback drops the seller below 97%: demoted, pricey card hidden.
-	e.db.Exec(`INSERT INTO feedback (order_id, from_user, to_user, role, rating, comment)
-		SELECT id, buyer_id, seller_id, 'buyer_to_seller', -1, 'Never arrived' FROM orders WHERE id = $1`, orders[0])
+	e.db.Exec(`INSERT INTO feedback (order_id, from_user, to_user, role, rating, comment, visible_at)
+		SELECT id, buyer_id, seller_id, 'buyer_to_seller', -1, 'Never arrived', now() FROM orders WHERE id = $1`, orders[0])
 	if from, to, err := rep.Review(ctx, sid); err != nil || from != 2 || to != 1 {
 		t.Fatalf("demotion: %d→%d %v", from, to, err)
 	}

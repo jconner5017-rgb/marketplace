@@ -134,6 +134,11 @@ All write requests must send `Content-Type: application/json` (the CSV import us
 | POST | `/v1/orders/{id}/confirm` · `/cancel` | buyer returned from Stripe: record payment, or release the cards |
 | GET | `/v1/orders?side=buying\|selling&status=` · `/v1/orders/{id}` | orders for either side |
 | POST | `/v1/orders/{id}/ship` · `/delivered` · `/feedback` · `/problem` | seller ships; buyer confirms, rates, or opens a case |
+| POST | `/v1/orders/{id}/messages` | message the other side of an order (works after the card sold) |
+| GET | `/v1/members/{username}/feedback?role=seller\|buyer&filter=` | public score, 12-month %, sub-ratings, badges, feedback list |
+| POST | `/v1/feedback/{id}/reply` | seller's one public reply (300 chars) to neutral/negative feedback |
+| GET | `/v1/members/{username}/buyer-record` | buyer reliability, for sellers dealing with that buyer |
+| GET/PUT | `/v1/seller/feedback` · POST `/v1/seller/outside-feedback` | automatic buyer feedback; verified feedback from other sites |
 
 Sellers start at tier 1 (cards up to $20), then $250 and $1,000. Listings need at least one `https://` photo; raw cards need a `condition` (NM, LP, MP, HP, DMG); graded cards need `grader` and `grade`.
 

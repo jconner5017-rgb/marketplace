@@ -30,6 +30,8 @@ export type RefundReport = {
 export type FeedbackRow = {
   id: string; order_id: string; order_number: number; from: string; from_id: string; to: string; to_id: string; role: string;
   rating: number; comment: string; reply: string | null; created_at: string; removed_at: string | null; removed_reason: string | null; open_reports: number;
+  state: "published" | "held" | "mediation"; visible: boolean; scrubbed_comment: string | null;
+  item_rating: number | null; shipping_rating: number | null; communication_rating: number | null; auto: boolean;
 };
 
 export type OrderDetail = import("@/components/admin/OrderBits").OrderRow & {

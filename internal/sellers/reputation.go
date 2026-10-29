@@ -54,7 +54,8 @@ func SellerStats(ctx context.Context, q interface {
 	}
 	if err := q.QueryRowContext(ctx, `
 		SELECT count(*) FILTER (WHERE rating = 1), count(*) FILTER (WHERE rating = -1) FROM feedback
-		WHERE to_user = $1 AND role = 'buyer_to_seller' AND removed_at IS NULL AND created_at > now() - interval '12 months'`,
+		WHERE to_user = $1 AND role = 'buyer_to_seller' AND removed_at IS NULL AND state = 'published' AND visible_at IS NOT NULL
+		  AND created_at > now() - interval '12 months'`,
 		userID).Scan(&st.Positive, &st.Negative); err != nil {
 		return st, err
 	}

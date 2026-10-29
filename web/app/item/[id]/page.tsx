@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { getBids, getListing, getSummary, search } from "@/lib/api";
+import { apiGet, getBids, getListing, getSummary, search } from "@/lib/api";
+import type { FeedbackSummary } from "@/lib/types";
+import { BadgeList, SellerLine } from "@/components/feedback/Bits";
 import ItemActions from "@/components/ItemActions";
 import AuctionPanel, { BidList } from "@/components/AuctionPanel";
 import ContactSeller from "@/components/ContactSeller";
@@ -38,11 +40,12 @@ export default async function ItemPage({ params }: Props) {
   if (!l) notFound();
 
   const isAuction = l.format === "auction" && !!l.auction;
-  const [more, me, bids, catalog] = await Promise.all([
+  const [more, me, bids, catalog, rep] = await Promise.all([
     search(`seller=${encodeURIComponent(l.seller_username)}&limit=7`),
     getSummary(),
     isAuction ? getBids(l.id) : Promise.resolve(null),
     getCatalog(),
+    apiGet<{ summary: FeedbackSummary }>(`/v1/members/${encodeURIComponent(l.seller_username)}/feedback?role=seller&limit=1`),
   ]);
   const others = more.listings.filter((x) => x.id !== l.id).slice(0, 6);
   const gameHref = `/search?category=${l.category}&game=${encodeURIComponent(l.game_or_sport)}`;
@@ -108,8 +111,11 @@ export default async function ItemPage({ params }: Props) {
 
           <div className="mt-6 rounded-lg border border-line p-4 text-[14px]">
             <p>
-              Sold by <Link href={`/search?seller=${encodeURIComponent(l.seller_username)}`} className="font-semibold text-link hover:underline">{l.seller_username}</Link>
+              Sold by {rep.data ? <SellerLine s={rep.data.summary} /> : (
+                <Link href={`/seller/${encodeURIComponent(l.seller_username)}`} className="font-semibold text-link hover:underline">{l.seller_username}</Link>
+              )}
             </p>
+            {rep.data && <BadgeList s={rep.data.summary} />}
             <p className="mt-1 text-muted">Ships from the United States. Delivery to US addresses only.</p>
             {l.grader ? (
               <p className="mt-1 text-muted">Graded cards ship in a padded mailer with tracking.</p>

@@ -6,6 +6,7 @@ import type { Order } from "@/lib/types";
 import OrderView, { StatusPill, day } from "@/components/orders/OrderView";
 import ShipForm from "@/components/orders/ShipForm";
 import BuyerActions from "@/components/orders/BuyerActions";
+import BuyerRecord from "@/components/feedback/BuyerRecord";
 import { BuyLabel, VoidLabel } from "@/components/orders/LabelBuyer";
 
 export const dynamic = "force-dynamic";
@@ -26,6 +27,7 @@ export default async function SellerOrder({ params }: { params: Promise<{ id: st
         <StatusPill o={o} />
       </div>
       <p className="text-[14px] text-muted">Paid {day(o.paid_at)} · Buyer {o.buyer}</p>
+      <BuyerRecord username={o.buyer} />
       {o.status === "paid" && (
         <div className="mt-4 max-w-[560px] rounded-lg border border-ink p-4">
           <h2 className="font-semibold">Ship by {day(o.ship_by)}</h2>

@@ -34,7 +34,7 @@ func sessionOf(t *testing.T, e *env, orderID string) string {
 func TestCheckoutFromCart(t *testing.T) {
 	e := setupEnv(t)
 	sc, acct := newSeller(t, e, "pay_shop", true)
-	e.db.Exec(`UPDATE seller_profiles SET tier = 3`)
+	e.db.Exec(`UPDATE seller_profiles SET tier = 3, tier_locked = true`)
 	do(t, sc, "PATCH", e.ts.URL+"/v1/seller/settings", map[string]any{"bundle_discount_type": "per_extra_item", "bundle_discount_val": 50})
 	a := createListing(t, e, &httpClientT{sc}, rawCard("P1", 1200))["id"].(string)
 	card := rawCard("P2", 20000)
@@ -150,7 +150,8 @@ func TestCheckoutFromCart(t *testing.T) {
 	if code, _ := do(t, pat.c, "POST", e.ts.URL+"/v1/orders/"+orderID+"/feedback", map[string]any{"rating": -1, "comment": ""}); code != 422 {
 		t.Fatalf("negative needs a reason: %d", code)
 	}
-	code, body = do(t, pat.c, "POST", e.ts.URL+"/v1/orders/"+orderID+"/feedback", map[string]any{"rating": 1, "comment": "Fast and well packed"})
+	code, body = do(t, pat.c, "POST", e.ts.URL+"/v1/orders/"+orderID+"/feedback", map[string]any{"rating": 1, "comment": "Fast and well packed",
+		"item_rating": 5, "shipping_rating": 5, "communication_rating": 4})
 	if code != 200 || body["order"].(map[string]any)["my_feedback"] == nil {
 		t.Fatalf("feedback: %d %v", code, body)
 	}
@@ -159,8 +160,8 @@ func TestCheckoutFromCart(t *testing.T) {
 		t.Fatalf("delivered: %d %v", code, body)
 	}
 	_, body = do(t, sc, "GET", e.ts.URL+"/v1/orders/"+orderID, nil)
-	if body["order"].(map[string]any)["their_feedback"] == nil {
-		t.Fatalf("seller sees feedback: %v", body)
+	if o := body["order"].(map[string]any); o["their_feedback"] != nil || o["their_feedback_hidden"] != true {
+		t.Fatalf("seller shouldn't see the buyer's feedback before leaving theirs: %v", o)
 	}
 
 	// Report a problem: opens one case for staff.
@@ -174,7 +175,10 @@ func TestCheckoutFromCart(t *testing.T) {
 
 	// A second order, paid but confirmed only by the webhook.
 	do(t, pat.c, "PUT", e.ts.URL+"/v1/cart/"+b2, map[string]int{"quantity": 1})
-	_, body = do(t, pat.c, "POST", e.ts.URL+"/v1/checkout", map[string]any{"seller": "pay_shop"})
+	code, body = do(t, pat.c, "POST", e.ts.URL+"/v1/checkout", map[string]any{"seller": "pay_shop"})
+	if code != 201 {
+		t.Fatalf("second checkout: %d %v", code, body)
+	}
 	o2 := body["order_id"].(string)
 	cs2 := sessionOf(t, e, o2)
 	if p := e.pay.Params(cs2); len(p.Lines) != 1 || p.Lines[0].UnitCents != 20000 || p.FeeCents != 600 {
@@ -203,7 +207,7 @@ func TestCheckoutExpiryAndHolds(t *testing.T) {
 	e := setupEnv(t)
 	ctx := context.Background()
 	sc, hacct := newSeller(t, e, "hold_shop", true)
-	e.db.Exec(`UPDATE seller_profiles SET tier = 3`)
+	e.db.Exec(`UPDATE seller_profiles SET tier = 3, tier_locked = true`)
 	seller := &httpClientT{sc}
 	a := createListing(t, e, seller, rawCard("H1", 900))["id"].(string)
 	quinn := buyer(t, e, "quinn")

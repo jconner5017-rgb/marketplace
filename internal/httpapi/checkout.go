@@ -184,27 +184,6 @@ func (s *Server) handleOrderDelivered(w http.ResponseWriter, r *http.Request) {
 	s.handleOrder(w, r)
 }
 
-// POST /v1/orders/{id}/feedback {"rating": 1, "comment": "..."}
-func (s *Server) handleOrderFeedback(w http.ResponseWriter, r *http.Request) {
-	u, _ := currentUser(r)
-	id, ok := orderParam(w, r)
-	if !ok {
-		return
-	}
-	var req struct {
-		Rating  int    `json:"rating"`
-		Comment string `json:"comment"`
-	}
-	if !decodeJSON(w, r, &req) {
-		return
-	}
-	if err := s.checkout.LeaveFeedback(r.Context(), u.ID, id, req.Rating, req.Comment); err != nil {
-		s.checkoutError(w, r, err)
-		return
-	}
-	s.handleOrder(w, r)
-}
-
 // POST /v1/orders/{id}/problem {"kind": "inr"|"snad"|"other", "summary": "..."}
 func (s *Server) handleOrderProblem(w http.ResponseWriter, r *http.Request) {
 	u, _ := currentUser(r)

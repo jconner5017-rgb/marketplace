@@ -28,7 +28,7 @@ export default function robots(): MetadataRoute.Robots {
           "/purchases",
           "/checkout/",
           "/sell",
-          "/seller/",
+          "/seller/onboarding/",
           "/admin/",
           "/signin",
           "/register",

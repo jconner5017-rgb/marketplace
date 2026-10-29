@@ -385,3 +385,36 @@ func (s *Service) Announcements(ctx context.Context, limit int) ([]Announcement,
 	}
 	return out, rows.Err()
 }
+
+// MessageAboutOrder starts (or continues) the conversation for an order,
+// from either side, even after the card has sold. It returns the thread ID.
+func (s *Service) MessageAboutOrder(ctx context.Context, userID, userName, orderID, body string) (string, error) {
+	body, err := clean(body)
+	if err != nil {
+		return "", err
+	}
+	var buyer, seller, listingID, title string
+	err = s.DB.QueryRowContext(ctx, `SELECT o.buyer_id, o.seller_id, oi.listing_id, oi.title FROM orders o
+		JOIN order_items oi ON oi.order_id = o.id
+		WHERE (o.id::text = $1 OR o.number::text = $1) AND (o.buyer_id = $2 OR o.seller_id = $2)
+		  AND o.paid_at IS NOT NULL AND oi.listing_id IS NOT NULL
+		ORDER BY oi.id LIMIT 1`, orderID, userID).Scan(&buyer, &seller, &listingID, &title)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", ErrNotAvailable
+	}
+	if err != nil {
+		return "", err
+	}
+	var threadID string
+	if err := s.DB.QueryRowContext(ctx, `
+		INSERT INTO message_threads (listing_id, buyer_id, seller_id) VALUES ($1, $2, $3)
+		ON CONFLICT (listing_id, buyer_id) DO UPDATE SET listing_id = EXCLUDED.listing_id
+		RETURNING id`, listingID, buyer, seller).Scan(&threadID); err != nil {
+		return "", err
+	}
+	to := seller
+	if userID == seller {
+		to = buyer
+	}
+	return threadID, s.post(ctx, threadID, userID, userName, to, title, body)
+}
