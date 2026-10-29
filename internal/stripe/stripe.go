@@ -210,6 +210,24 @@ type Payments interface {
 	GetCheckoutSession(ctx context.Context, account, id string) (CheckoutSession, error)
 	// ExpireCheckoutSession closes an open session so it can no longer be paid.
 	ExpireCheckoutSession(ctx context.Context, account, id string) (CheckoutSession, error)
+	// Refund returns a payment in full (and our application fee with it).
+	Refund(ctx context.Context, account, paymentIntent string, metadata map[string]string) (Refund, error)
+}
+
+type Refund struct {
+	ID     string `json:"id"`
+	Amount int    `json:"amount"`
+	Status string `json:"status"`
+}
+
+func (c *Client) Refund(ctx context.Context, account, paymentIntent string, metadata map[string]string) (Refund, error) {
+	f := url.Values{"payment_intent": {paymentIntent}, "refund_application_fee": {"true"}}
+	for k, v := range metadata {
+		f.Set("metadata["+k+"]", v)
+	}
+	var r Refund
+	err := c.doAs(ctx, account, http.MethodPost, "/v1/refunds", f, &r)
+	return r, err
 }
 
 type LineItem struct {

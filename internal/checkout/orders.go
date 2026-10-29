@@ -22,12 +22,13 @@ func (e *FieldError) Error() string { return e.Msg }
 var ErrState = errors.New("the order isn't at a stage where you can do that")
 
 type Line struct {
-	ListingID *string `json:"listing_id"`
-	Title     string  `json:"title"`
-	Photo     string  `json:"photo"`
-	Source    string  `json:"source"`
-	UnitCents int     `json:"unit_cents"`
-	Quantity  int     `json:"quantity"`
+	ListingID  *string `json:"listing_id"`
+	ExternalID *string `json:"external_id,omitempty"` // seller's SKU, seller only
+	Title      string  `json:"title"`
+	Photo      string  `json:"photo"`
+	Source     string  `json:"source"`
+	UnitCents  int     `json:"unit_cents"`
+	Quantity   int     `json:"quantity"`
 }
 
 type Shipment struct {
@@ -179,7 +180,7 @@ func (s *Service) Order(ctx context.Context, userID, id string) (Order, error) {
 
 func (s *Service) fill(ctx context.Context, userID string, o *Order) error {
 	rows, err := s.DB.QueryContext(ctx, `
-		SELECT oi.listing_id::text, oi.title, coalesce(l.photo_urls[1], ''), oi.source, oi.unit_cents, oi.quantity
+		SELECT oi.listing_id::text, oi.title, coalesce(l.photo_urls[1], ''), oi.source, oi.unit_cents, oi.quantity, l.external_id
 		FROM order_items oi LEFT JOIN listings l ON l.id = oi.listing_id
 		WHERE oi.order_id = $1 ORDER BY oi.id`, o.ID)
 	if err != nil {
@@ -187,13 +188,16 @@ func (s *Service) fill(ctx context.Context, userID string, o *Order) error {
 	}
 	for rows.Next() {
 		var l Line
-		var lid sql.NullString
-		if err := rows.Scan(&lid, &l.Title, &l.Photo, &l.Source, &l.UnitCents, &l.Quantity); err != nil {
+		var lid, ext sql.NullString
+		if err := rows.Scan(&lid, &l.Title, &l.Photo, &l.Source, &l.UnitCents, &l.Quantity, &ext); err != nil {
 			rows.Close()
 			return err
 		}
 		if lid.Valid {
 			l.ListingID = &lid.String
+		}
+		if ext.Valid && o.Side == "selling" {
+			l.ExternalID = &ext.String
 		}
 		o.Lines = append(o.Lines, l)
 	}

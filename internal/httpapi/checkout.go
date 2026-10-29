@@ -121,6 +121,9 @@ func (s *Server) handleOrders(w http.ResponseWriter, r *http.Request) {
 	if side != "selling" {
 		side = "buying"
 	}
+	if viaAPIKey(r) {
+		side = "selling"
+	}
 	os, err := s.checkout.Orders(r.Context(), u.ID, side, r.URL.Query().Get("status"), 100)
 	if err != nil {
 		s.internalError(w, r, err)

@@ -389,3 +389,13 @@ func (s *Service) DisabledAccount(ctx context.Context, email, password string) (
 	}
 	return u, nil
 }
+
+// UserByID returns an account that may sign in (active, frozen, or a finished suspension).
+func (s *Service) UserByID(ctx context.Context, id string) (User, error) {
+	u, err := scanUser(s.DB.QueryRowContext(ctx, `SELECT `+prefixed("u.", userCols)+` FROM users u
+		WHERE u.id = $1 AND `+signInStatus, id))
+	if errors.Is(err, sql.ErrNoRows) {
+		return User{}, ErrNoSession
+	}
+	return u, err
+}

@@ -5,7 +5,7 @@ import { type NextRequest } from "next/server";
 
 const API_URL = (process.env.API_URL || "http://localhost:8080").replace(/\/$/, "");
 
-const PASS_REQUEST = ["content-type", "cookie", "user-agent", "stripe-signature", "idempotency-key"];
+const PASS_REQUEST = ["content-type", "cookie", "user-agent", "stripe-signature", "idempotency-key", "authorization"];
 const PASS_RESPONSE = ["content-type", "content-disposition", "cache-control", "location"];
 
 async function proxy(req: NextRequest, ctx: { params: Promise<{ path: string[] }> }) {

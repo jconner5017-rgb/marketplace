@@ -501,6 +501,9 @@ func (s *Service) markPaid(ctx context.Context, orderID string, sess stripe.Chec
 	if err := s.flagBlockedAddress(ctx, tx, buyer, orderID, shipTo); err != nil {
 		return err
 	}
+	if err := queueOrderPaid(ctx, tx, orderID, seller, number, now); err != nil {
+		return err
+	}
 	if _, err := tx.ExecContext(ctx, `
 		UPDATE holds SET status = 'paid', updated_at = now()
 		WHERE id IN (SELECT hold_id FROM order_items WHERE order_id = $1 AND hold_id IS NOT NULL)`, orderID); err != nil {

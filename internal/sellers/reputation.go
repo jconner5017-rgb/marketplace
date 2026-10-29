@@ -27,6 +27,8 @@ type Stats struct {
 	Percent        float64 `json:"percent_positive"`
 	AgeDays        int     `json:"account_age_days"`
 	Chargebacks    int     `json:"chargebacks_lost"`
+	Oversells      int     `json:"oversells_90d"`
+	Orders90       int     `json:"orders_90d"`
 }
 
 // A sale qualifies when: one per buyer; a card at $2 or more; the order
@@ -63,6 +65,12 @@ func SellerStats(ctx context.Context, q interface {
 		AND created_at > now() - interval '12 months'`, userID).Scan(&st.Chargebacks); err != nil {
 		return st, err
 	}
+	if err := q.QueryRowContext(ctx, `SELECT
+		(SELECT count(*) FROM oversells WHERE seller_id = $1 AND outcome = 'refunded' AND created_at > now() - interval '90 days'),
+		(SELECT count(*) FROM orders WHERE seller_id = $1 AND paid_at > now() - interval '90 days')`, userID).
+		Scan(&st.Oversells, &st.Orders90); err != nil {
+		return st, err
+	}
 	st.Percent = 100
 	if n := st.Positive + st.Negative; n > 0 {
 		st.Percent = float64(st.Positive) * 100 / float64(n)
@@ -71,14 +79,20 @@ func SellerStats(ctx context.Context, q interface {
 	return st, nil
 }
 
-// TierFor is the tier a seller's numbers earn.
+// TierFor is the tier a seller's numbers earn. Frequent cross-listing
+// oversells (3 or more, over 5% of orders in 90 days) cost one level.
 func TierFor(st Stats) int {
+	t := 1
 	for _, r := range TierRules {
 		if st.QualifiedSales >= r.Sales && st.Percent >= r.MinPercent && st.AgeDays >= int(r.MinAge.Hours()/24) {
-			return r.Tier
+			t = r.Tier
+			break
 		}
 	}
-	return 1
+	if st.Oversells >= 3 && st.Orders90 > 0 && st.Oversells*100 > st.Orders90*5 && t > 1 {
+		t--
+	}
+	return t
 }
 
 // Reputation is the job that moves sellers between tiers.

@@ -14,7 +14,8 @@ type FakePayments struct {
 	sessions map[string]*CheckoutSession
 	accounts map[string]string
 	params   map[string]CheckoutParams
-	Fail     error // returned by CreateCheckoutSession when set
+	Fail     error    // returned by CreateCheckoutSession when set
+	Refunds  []string // payment intents refunded
 }
 
 func NewFakePayments() *FakePayments {
@@ -87,6 +88,19 @@ func (f *FakePayments) ExpireCheckoutSession(_ context.Context, account, id stri
 	}
 	s.Status = "expired"
 	return *s, nil
+}
+
+func (f *FakePayments) Refund(_ context.Context, account, pi string, md map[string]string) (Refund, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for id, s := range f.sessions {
+		if s.PaymentIntent == pi && f.accounts[id] == account {
+			f.n++
+			f.Refunds = append(f.Refunds, pi)
+			return Refund{ID: fmt.Sprintf("re_fake%d", f.n), Amount: s.AmountTotal, Status: "succeeded"}, nil
+		}
+	}
+	return Refund{}, &Error{Status: 404, Message: "No such payment_intent"}
 }
 
 // Expire ends a session unpaid.

@@ -13,6 +13,7 @@ import (
 	"github.com/jconner5017-rgb/marketplace/internal/auth"
 	"github.com/jconner5017-rgb/marketplace/internal/blocklist"
 	"github.com/jconner5017-rgb/marketplace/internal/checkout"
+	"github.com/jconner5017-rgb/marketplace/internal/fcm"
 	"github.com/jconner5017-rgb/marketplace/internal/fees"
 	"github.com/jconner5017-rgb/marketplace/internal/inbox"
 	"github.com/jconner5017-rgb/marketplace/internal/listings"
@@ -56,6 +57,7 @@ type Server struct {
 	checkout   *checkout.Service
 	ipRules    *admin.IPRules
 	standing   *admin.Standing
+	fcm        *fcm.Service
 }
 
 type Options struct {
@@ -79,6 +81,7 @@ type Options struct {
 	Catalog  *listings.Catalog
 	Fees     *fees.Service
 	Checkout *checkout.Service
+	FCM      *fcm.Service
 	// AdminIPAllowlistOff turns off the admin IP allowlist (break-glass).
 	AdminIPAllowlistOff bool
 }
@@ -108,6 +111,7 @@ func New(o Options) *Server {
 		catalog:       o.Catalog,
 		fees:          o.Fees,
 		checkout:      o.Checkout,
+		fcm:           o.FCM,
 		ipRules:       &admin.IPRules{DB: o.DB, Audit: o.Audit, Disabled: o.AdminIPAllowlistOff},
 		// 30 bids or offers per user per minute.
 		bidLimiter: newRateLimiter(30, time.Minute),
@@ -224,7 +228,18 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/checkout", requireUser(s.handleStartCheckout))
 	mux.HandleFunc("POST /v1/orders/{id}/confirm", requireUser(s.handleConfirmOrder))
 	mux.HandleFunc("POST /v1/orders/{id}/cancel", requireUser(s.handleAbandonOrder))
-	mux.HandleFunc("GET /v1/orders", requireUser(s.handleOrders))
+	mux.HandleFunc("GET /v1/orders", s.sellerAPI(s.handleOrders))
+	mux.HandleFunc("POST /v1/orders/{id}/oversold", s.sellerAPI(s.handleOversold))
+	// FireCardManager and other inventory tools (API key or session).
+	mux.HandleFunc("POST /v1/listings", s.sellerAPI(s.handleAPICreateListing))
+	mux.HandleFunc("POST /v1/listings/bulk", s.sellerAPI(s.handleAPIBulk))
+	mux.HandleFunc("PATCH /v1/listings/{externalID}", s.sellerAPI(s.handleAPIPatchListing))
+	mux.HandleFunc("DELETE /v1/listings/{externalID}", s.sellerAPI(s.handleAPIDeleteListing))
+	mux.HandleFunc("GET /v1/seller/connect", requireUser(s.handleConnect))
+	mux.HandleFunc("PUT /v1/seller/connect", requireUser(s.handleSetConnect))
+	mux.HandleFunc("POST /v1/seller/connect/test", requireUser(s.handleTestWebhook))
+	mux.HandleFunc("POST /v1/seller/api-keys", requireUser(s.handleCreateKey))
+	mux.HandleFunc("DELETE /v1/seller/api-keys/{id}", requireUser(s.handleRevokeKey))
 	mux.HandleFunc("GET /v1/orders/{id}", requireUser(s.handleOrder))
 	mux.HandleFunc("POST /v1/orders/{id}/ship", requireUser(s.handleShipOrder))
 	mux.HandleFunc("POST /v1/orders/{id}/delivered", requireUser(s.handleOrderDelivered))

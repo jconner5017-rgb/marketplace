@@ -19,6 +19,7 @@ import (
 	"github.com/jconner5017-rgb/marketplace/internal/config"
 	"github.com/jconner5017-rgb/marketplace/internal/db"
 	"github.com/jconner5017-rgb/marketplace/internal/demo"
+	"github.com/jconner5017-rgb/marketplace/internal/fcm"
 	"github.com/jconner5017-rgb/marketplace/internal/fees"
 	"github.com/jconner5017-rgb/marketplace/internal/httpapi"
 	"github.com/jconner5017-rgb/marketplace/internal/inbox"
@@ -110,6 +111,7 @@ func run(log *slog.Logger) error {
 		checkoutSvc.Pay = stripe.NewClient(cfg.StripeSecretKey)
 	}
 	log.Info("checkout", "enabled", checkoutSvc.Ready(), "return_to", cfg.WebURL)
+	fcmSvc := &fcm.Service{DB: database}
 	api := httpapi.New(httpapi.Options{
 		DB:           database,
 		Auth:         authSvc,
@@ -131,6 +133,7 @@ func run(log *slog.Logger) error {
 		Catalog:  catalog,
 		Fees:     feeSvc,
 		Checkout: checkoutSvc,
+		FCM:      fcmSvc,
 
 		AdminIPAllowlistOff: cfg.AdminIPAllowlistOff,
 	})
@@ -169,6 +172,9 @@ func run(log *slog.Logger) error {
 				if err := checkoutSvc.RunJobs(ctx); err != nil {
 					log.Error("checkout jobs", "err", err)
 				}
+				if _, err := fcmSvc.RunDeliveries(ctx); err != nil {
+					log.Error("webhook deliveries", "err", err)
+				}
 				if err := catalog.Load(ctx); err != nil {
 					log.Error("reload catalog", "err", err)
 				}
@@ -185,6 +191,12 @@ func run(log *slog.Logger) error {
 			case <-ctx.Done():
 				return
 			case <-t.C:
+				if err := fcmSvc.RunReconcile(ctx, checkoutSvc.ReleaseListing, func(m string, kv ...any) { log.Info(m, kv...) }); err != nil {
+					log.Error("inventory reconcile", "err", err)
+				}
+				if err := fcmSvc.PurgeIdempotency(ctx); err != nil {
+					log.Error("purge idempotency keys", "err", err)
+				}
 				if n, err := reputation.RunNightly(ctx); err != nil {
 					log.Error("reputation job", "err", err)
 				} else if n > 0 {
