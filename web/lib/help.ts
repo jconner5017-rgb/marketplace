@@ -121,13 +121,14 @@ export const ARTICLES: Article[] = [
     slug: "fees",
     title: "Selling fees",
     section: "Selling",
-    summary: "Listing is free. One fee per card sold: $1.50 up to $100, then 3% capped at $25.",
+    summary: "Listing is free. One fee per card sold: {fee.flat} up to {fee.threshold}, then {fee.percent} capped at {fee.cap}.",
     body: [
       { h: "Our fee" },
       { list: [
         "Listing is free.",
-        "Cards that sell for $100 or less: $1.50 each.",
-        "Cards over $100: 3% of the sale price, capped at $25.",
+        "Cards that sell for {fee.threshold} or less: {fee.flat} each.",
+        "Cards over {fee.threshold}: {fee.percent} of the sale price, never less than {fee.flat} and capped at {fee.cap}.",
+        "The fee applies to the final auction price or the accepted offer, the same way.",
       ] },
       { h: "Stripe's fee" },
       { p: "Stripe charges its card processing fee on each sale. It comes out of your own Stripe balance." },

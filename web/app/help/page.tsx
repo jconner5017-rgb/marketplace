@@ -1,9 +1,12 @@
 import Link from "next/link";
 import { ARTICLES, SECTIONS } from "@/lib/help";
+import { fillFees, getFees } from "@/lib/catalog";
 
 export const metadata = { title: "Help center" };
+export const dynamic = "force-dynamic";
 
-export default function HelpCenter() {
+export default async function HelpCenter() {
+  const fees = await getFees();
   return (
     <div className="pt-8">
       <h1 className="text-[28px] font-bold">Help center</h1>
@@ -16,7 +19,7 @@ export default function HelpCenter() {
               {ARTICLES.filter((a) => a.section === sec).map((a) => (
                 <li key={a.slug}>
                   <Link href={`/help/${a.slug}`} className="text-[15px] font-semibold text-link hover:underline">{a.title}</Link>
-                  <p className="text-[14px] text-muted">{a.summary}</p>
+                  <p className="text-[14px] text-muted">{fillFees(a.summary, fees)}</p>
                 </li>
               ))}
             </ul>

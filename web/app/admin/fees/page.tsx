@@ -79,7 +79,7 @@ export default async function FeesPage() {
             submit="Save new fees"
             done="Saved. The fee schedule is updated."
           />
-          <p className="mt-2 text-[12px] text-muted">Update the Selling fees help page to match when fees change.</p>
+          <p className="mt-2 text-[12px] text-muted">The Selling fees help page, the seller hub and the listing form update on their own within a minute of a change taking effect.</p>
         </section>
       )}
 

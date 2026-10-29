@@ -8,6 +8,7 @@ import { GradeBadge, Photo } from "@/components/CardBits";
 import ListingActions from "@/components/ListingActions";
 import BundleDiscountForm from "@/components/BundleDiscountForm";
 import TaxToggle from "@/components/TaxToggle";
+import { feeSentence, getFees } from "@/lib/catalog";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Seller hub" };
@@ -20,7 +21,7 @@ const TIERS = [
 
 export default async function SellPage() {
   const me = await requireUser("/sell");
-  const { status, seller } = await getSeller();
+  const [{ status, seller }, fees] = await Promise.all([getSeller(), getFees()]);
 
   if (status === 404 || !seller) {
     return (
@@ -31,7 +32,7 @@ export default async function SellPage() {
           your bank details and ID, handled by Stripe.
         </p>
         <ul className="mt-5 space-y-2 text-[15px]">
-          <li>Listing is free. A $1.50 fee applies per card sold up to $100, then 3% (capped at $25).</li>
+          <li>Listing is free. Our fee is {feeSentence(fees)}.</li>
           <li>Every listing ships free, so build shipping into your price.</li>
           <li>New sellers can list cards up to $20 each, rising to $250 and then $1,000 as you build feedback.</li>
         </ul>

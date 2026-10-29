@@ -38,11 +38,49 @@ export function labelFor(cat: SiteCatalog, value: string): string {
   return [...cat.sports, ...cat.games].find((c) => c.value === value)?.label ?? value;
 }
 
-/** The fee schedule in force (cached 5 minutes). */
-export async function getFees(): Promise<FeeSchedule> {
+const FEE_FALLBACK: FeeSchedule = { flat_cents: 150, threshold_cents: 10000, percent_bps: 300, cap_cents: 2500 };
+
+export type FeeInfo = { current: FeeSchedule; upcoming: (FeeSchedule & { effective_at: string })[] };
+
+/** The fee schedule in force and any scheduled changes (cached 1 minute). */
+export async function getFeeInfo(): Promise<FeeInfo> {
   try {
-    const res = await fetch(API_URL + "/v1/fees", { next: { revalidate: 300 } });
-    if (res.ok) return ((await res.json()) as { current: FeeSchedule }).current;
+    const res = await fetch(API_URL + "/v1/fees", { next: { revalidate: 60 } });
+    if (res.ok) {
+      const d = (await res.json()) as Partial<FeeInfo>;
+      if (d.current) return { current: d.current, upcoming: d.upcoming ?? [] };
+    }
   } catch {}
-  return { flat_cents: 150, threshold_cents: 10000, percent_bps: 300, cap_cents: 2500 };
+  return { current: FEE_FALLBACK, upcoming: [] };
+}
+
+/** The fee schedule in force. */
+export async function getFees(): Promise<FeeSchedule> {
+  return (await getFeeInfo()).current;
+}
+
+function dollars(cents: number): string {
+  return cents % 100 === 0 ? `$${(cents / 100).toLocaleString("en-US")}` : `$${(cents / 100).toFixed(2)}`;
+}
+
+/** Fee amounts as words, for text: { flat: "$1.50", threshold: "$100", percent: "3%", cap: "$25" }. */
+export function feeWords(f: FeeSchedule): Record<"flat" | "threshold" | "percent" | "cap", string> {
+  return {
+    flat: dollars(f.flat_cents),
+    threshold: dollars(f.threshold_cents),
+    percent: `${+(f.percent_bps / 100).toFixed(2)}%`,
+    cap: dollars(f.cap_cents),
+  };
+}
+
+/** One sentence describing the fees. */
+export function feeSentence(f: FeeSchedule): string {
+  const w = feeWords(f);
+  return `${w.flat} per card sold up to ${w.threshold}, then ${w.percent} (capped at ${w.cap})`;
+}
+
+/** Replaces {fee.flat}, {fee.threshold}, {fee.percent} and {fee.cap} in help text. */
+export function fillFees(text: string, f: FeeSchedule): string {
+  const w = feeWords(f);
+  return text.replace(/\{fee\.(flat|threshold|percent|cap)\}/g, (_, k: keyof typeof w) => w[k]);
 }
