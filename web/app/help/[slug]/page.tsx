@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { ARTICLES, article } from "@/lib/help";
+import { ARTICLES, article, type Block } from "@/lib/help";
 import { feeWords, fillFees, getFeeInfo } from "@/lib/catalog";
 
 type Props = { params: Promise<{ slug: string }> };
@@ -24,8 +24,12 @@ export default async function HelpArticle({ params }: Props) {
   const a = {
     ...raw,
     summary: fill(raw.summary),
-    body: raw.body.map((b) =>
-      "h" in b ? { h: fill(b.h) } : "list" in b ? { list: b.list.map(fill) } : "note" in b ? { note: fill(b.note) } : { p: fill(b.p) }),
+    body: raw.body.map((b): Block => {
+      if ("list" in b && b.list) return { list: b.list.map(fill) };
+      if ("h" in b && b.h != null) return { h: fill(b.h) };
+      if ("note" in b && b.note != null) return { note: fill(b.note) };
+      return { p: fill((b as { p: string }).p) };
+    }),
   };
   const next = raw.slug === "fees" ? upcoming[0] : undefined;
   const related = ARTICLES.filter((x) => x.section === a.section && x.slug !== a.slug);
