@@ -7,17 +7,19 @@ import SignOutButton from "./SignOutButton";
 import BellMenu from "./BellMenu";
 import { BellIcon, CartIcon, ChevronIcon, HeartIcon } from "./Icons";
 import SearchBar from "./SearchBar";
+import MenuCloser from "./MenuCloser";
 
 export default async function Header() {
   const [me, cat] = await Promise.all([getSummary(), getCatalog()]);
   const signIn = (next: string) => `/signin?next=${encodeURIComponent(next)}`;
   return (
     <header className="border-b border-line">
+      <MenuCloser />
       {/* Utility row, eBay-style: greeting on the left, account shortcuts on the right */}
       <div className="border-b border-wash">
         <div className="mx-auto flex max-w-[1280px] items-center gap-5 px-4 py-1.5 text-[13px]">
           {me ? (
-            <details className="group relative">
+            <details data-menu className="group relative">
               <summary className="flex cursor-pointer list-none items-center gap-1 font-semibold hover:underline [&::-webkit-details-marker]:hidden">
                 Hi {me.user.username}! <ChevronIcon />
               </summary>
@@ -122,7 +124,7 @@ function MenuLink({ href, children }: { href: string; children: React.ReactNode 
 
 function Menu({ label, allHref, items }: { label: string; allHref: string; items: { label: string; href: string }[] }) {
   return (
-    <details className="group relative">
+    <details data-menu className="group relative">
       <summary className="flex cursor-pointer list-none items-center gap-1 font-semibold text-ink hover:underline [&::-webkit-details-marker]:hidden">
         {label}
         <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true" className="transition-transform group-open:rotate-180">
