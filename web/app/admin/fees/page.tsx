@@ -18,7 +18,6 @@ function fee(s: Schedule, c: number) {
 const pct = (bps: number) => `${(bps / 100).toFixed(bps % 100 ? 2 : 0)}%`;
 const describe = (s: Schedule) =>
   `${money(s.flat_cents)} per card up to ${money(s.threshold_cents)}, then ${pct(s.percent_bps)} capped at ${money(s.cap_cents)}`;
-const cents = (v: unknown) => Math.round(Number(String(v ?? "").replace(/[$,]/g, "")) * 100);
 
 export default async function FeesPage() {
   const s = await requireStaff("/admin/fees", "orders.view");
@@ -70,17 +69,13 @@ export default async function FeesPage() {
           <ActionForm
             endpoint="/v1/admin/fees"
             fields={[
-              { name: "flat", label: "Flat fee per card ($)", initial: (current.flat_cents / 100).toFixed(2) },
-              { name: "threshold", label: "Flat fee applies up to ($)", initial: (current.threshold_cents / 100).toFixed(2) },
-              { name: "percent", label: "Above that, percent of the price", initial: String(current.percent_bps / 100) },
-              { name: "cap", label: "Fee cap per card ($)", initial: (current.cap_cents / 100).toFixed(2) },
-              { name: "effective", label: "Starts (leave blank for now)", type: "datetime" },
+              { name: "flat", key: "flat_cents", as: "cents", label: "Flat fee per card ($)", initial: (current.flat_cents / 100).toFixed(2) },
+              { name: "threshold", key: "threshold_cents", as: "cents", label: "Flat fee applies up to ($)", initial: (current.threshold_cents / 100).toFixed(2) },
+              { name: "percent", key: "percent_bps", as: "bps", label: "Above that, percent of the price", initial: String(current.percent_bps / 100) },
+              { name: "cap", key: "cap_cents", as: "cents", label: "Fee cap per card ($)", initial: (current.cap_cents / 100).toFixed(2) },
+              { name: "effective", key: "effective_at", as: "iso", omitEmpty: true, label: "Starts (leave blank for now)", type: "datetime" },
               { name: "note", label: "Note (shown in history and the audit log)", placeholder: "Holiday promotion" },
             ]}
-            transform={(v) => ({
-              flat_cents: cents(v.flat), threshold_cents: cents(v.threshold), percent_bps: Math.round(Number(v.percent) * 100),
-              cap_cents: cents(v.cap), note: v.note, ...(v.effective ? { effective_at: new Date(String(v.effective)).toISOString() } : {}),
-            })}
             submit="Save new fees"
             done="Saved. The fee schedule is updated."
           />
@@ -106,10 +101,9 @@ export default async function FeesPage() {
                       fields={[
                         { name: "label", label: "Name", initial: u.label },
                         { name: "description", label: "Description", type: "textarea", initial: u.description },
-                        { name: "price", label: "Price ($)", initial: (u.price_cents / 100).toFixed(2) },
+                        { name: "price", key: "price_cents", as: "cents", label: "Price ($)", initial: (u.price_cents / 100).toFixed(2) },
                         { name: "active", label: "Offer this upgrade", type: "checkbox", initial: u.active },
                       ]}
-                      transform={(v) => ({ label: v.label, description: v.description, price_cents: cents(v.price), active: v.active })}
                       submit="Save"
                       compact
                     />

@@ -74,13 +74,10 @@ export default async function CasePage({ params }: { params: Promise<{ id: strin
               fields={[
                 { name: "status", label: "Status", type: "select", options: Object.entries(CASE_STATUS), initial: c.status },
                 { name: "outcome", label: "Outcome (needed to close)", type: "textarea", initial: c.outcome ?? "",
-                  showIf: (v) => !["open", "waiting_seller", "waiting_buyer"].includes(String(v.status)) },
-                { name: "assign_me", label: c.assigned_id === s.user.id ? "Assigned to you" : "Assign to me", type: "checkbox", initial: c.assigned_id === s.user.id },
+                  showWhen: { field: "status", notIn: ["open", "waiting_seller", "waiting_buyer"] } },
+                { name: "assign_me", key: "assigned_to", label: c.assigned_id === s.user.id ? "Assigned to you" : "Assign to me", type: "checkbox",
+                  initial: c.assigned_id === s.user.id, checked: "me", unchecked: c.assigned_id === s.user.id ? "" : undefined },
               ]}
-              transform={(v) => ({
-                status: v.status, ...(v.outcome !== undefined ? { outcome: v.outcome } : {}),
-                ...(v.assign_me ? { assigned_to: "me" } : c.assigned_id === s.user.id ? { assigned_to: "" } : {}),
-              })}
               submit={open ? "Update case" : "Save"} compact />
           </section>
           <p className="text-[12px] text-muted">

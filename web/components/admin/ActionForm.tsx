@@ -12,8 +12,45 @@ export type FieldDef = {
   placeholder?: string;
   initial?: string | boolean;
   hint?: string;
+  // Plain-data options, so server pages can describe a form (functions
+  // can't be passed from a server page to this client component):
+  /** Convert the value before sending. */
+  as?: "number" | "cents" | "list" | "bps" | "iso";
+  /** Send under this key instead of name. */
+  key?: string;
+  /** Leave the field out when it's blank. */
+  omitEmpty?: boolean;
+  /** Checkbox: what to send when ticked / not ticked (undefined = leave out). */
+  checked?: unknown;
+  unchecked?: unknown;
+  /** Show only when another field's value is (or isn't) one of these. */
+  showWhen?: { field: string; in?: string[]; notIn?: string[] };
+  /** Client components only. */
   showIf?: (v: Record<string, string | boolean>) => boolean;
 };
+
+function visible(f: FieldDef, v: Record<string, string | boolean>): boolean {
+  if (f.showIf && !f.showIf(v)) return false;
+  if (f.showWhen) {
+    const cur = String(v[f.showWhen.field] ?? "");
+    if (f.showWhen.in && !f.showWhen.in.includes(cur)) return false;
+    if (f.showWhen.notIn && f.showWhen.notIn.includes(cur)) return false;
+  }
+  return true;
+}
+
+function convert(f: FieldDef, raw: string | boolean): unknown {
+  if (f.type === "checkbox" && ("checked" in f || "unchecked" in f)) return raw ? f.checked : f.unchecked;
+  const s = String(raw ?? "").trim();
+  switch (f.as) {
+    case "number": return Number(s) || 0;
+    case "cents": return Math.round(Number(s.replace(/[$,]/g, "")) * 100);
+    case "bps": return Math.round(Number(s) * 100);
+    case "list": return s.split(",").map((a) => a.trim()).filter(Boolean);
+    case "iso": return s ? new Date(s).toISOString() : undefined;
+  }
+  return raw;
+}
 
 /**
  * A small staff action form: posts the fields as JSON, shows the API's
@@ -47,11 +84,16 @@ export default function ActionForm({
     setError("");
     setFieldErr({});
     setOk("");
-    const visible = Object.fromEntries(Object.entries(v).filter(([k]) => {
-      const f = fields.find((x) => x.name === k);
-      return !f?.showIf || f.showIf(v);
-    }));
-    const body = { ...(transform ? transform(visible) : visible), ...extra };
+    const shown: Record<string, string | boolean> = {};
+    const out: Record<string, unknown> = {};
+    for (const f of fields) {
+      if (!visible(f, v)) continue;
+      shown[f.name] = v[f.name];
+      if (f.omitEmpty && String(v[f.name] ?? "").trim() === "") continue;
+      const val = convert(f, v[f.name]);
+      if (val !== undefined) out[f.key ?? f.name] = val;
+    }
+    const body = { ...(transform ? transform(shown) : out), ...extra };
     const r = await send(method, endpoint, body);
     setBusy(false);
     if (!r.ok) {
@@ -66,7 +108,7 @@ export default function ActionForm({
   const input = "mt-1 w-full rounded-md border border-line px-3 py-2 text-[14px]";
   return (
     <form onSubmit={go} className={compact ? "space-y-2" : "space-y-3"}>
-      {fields.filter((f) => !f.showIf || f.showIf(v)).map((f) => (
+      {fields.filter((f) => visible(f, v)).map((f) => (
         <div key={f.name}>
           {f.type === "checkbox" ? (
             <label className="flex items-center gap-2 text-[14px]">

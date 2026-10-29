@@ -148,9 +148,8 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
                   <p className="mt-1 text-[13px] text-muted">Lowering it hides fixed-price listings above the new limit. Hold it to stop the nightly check moving it back.</p>
                   <div className="mt-2">
                     <ActionForm endpoint={`/v1/admin/users/${m.id}/tier`} submit="Change level" done="Seller level changed." compact
-                      transform={(v) => ({ tier: Number(v.tier), lock: Boolean(v.lock), reason: v.reason })}
                       fields={[
-                        { name: "tier", label: "Level", type: "select", initial: String(m.seller.tier),
+                        { name: "tier", label: "Level", type: "select", as: "number", initial: String(m.seller.tier),
                           options: [["1", "1 · New ($20 limit)"], ["2", "2 · Standard ($250)"], ["3", "3 · Trusted ($1,000)"]] },
                         { name: "lock", label: "Hold at this level", type: "checkbox", initial: r.data.tier_locked },
                         { name: "reason", label: "Reason (shown to the seller)", type: "textarea" },

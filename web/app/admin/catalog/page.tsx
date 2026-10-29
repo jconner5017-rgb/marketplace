@@ -10,7 +10,6 @@ export const metadata = { title: "Categories and features" };
 type Category = { id: number; kind: string; value: string; label: string; short_label: string; aliases: string[]; active: boolean; sort: number; listings: number };
 type Feature = { key: string; label: string; active: boolean; sort: number; listings: number };
 
-const aliases = (v: unknown) => String(v ?? "").split(",").map((a) => a.trim()).filter(Boolean);
 
 export default async function CatalogPage() {
   const s = await requireStaff("/admin/catalog", "users.view");
@@ -48,11 +47,10 @@ export default async function CatalogPage() {
                         fields={[
                           { name: "label", label: "Name buyers see", initial: c.label },
                           { name: "short_label", label: "Short name (menus and tiles)", initial: c.short_label },
-                          { name: "aliases", label: "Alternate names sellers might type (comma separated)", initial: c.aliases.join(", ") },
-                          { name: "sort", label: "Order (lower comes first)", initial: String(c.sort) },
+                          { name: "aliases", label: "Alternate names sellers might type (comma separated)", initial: c.aliases.join(", "), as: "list" },
+                          { name: "sort", label: "Order (lower comes first)", initial: String(c.sort), as: "number" },
                           { name: "active", label: "Shown and available for new listings", type: "checkbox", initial: c.active },
                         ]}
-                        transform={(v) => ({ ...v, aliases: aliases(v.aliases), sort: Number(v.sort) || 0 })}
                         submit="Save"
                         compact
                       />
@@ -73,10 +71,9 @@ export default async function CatalogPage() {
                     { name: "value", label: "Stored name (can't change later)", placeholder: kind === "sports" ? "Lacrosse" : "Altered" },
                     { name: "label", label: "Name buyers see", placeholder: kind === "sports" ? "Lacrosse" : "Altered TCG" },
                     { name: "short_label", label: "Short name" },
-                    { name: "aliases", label: "Alternate names (comma separated)" },
+                    { name: "aliases", label: "Alternate names (comma separated)", as: "list" },
                   ]}
                   extra={{ kind }}
-                  transform={(v) => ({ ...v, aliases: aliases(v.aliases) })}
                   submit="Add"
                   done="Added."
                 />
@@ -104,10 +101,9 @@ export default async function CatalogPage() {
                       method="PUT"
                       fields={[
                         { name: "label", label: "Label", initial: f.label },
-                        { name: "sort", label: "Order", initial: String(f.sort) },
+                        { name: "sort", label: "Order", initial: String(f.sort), as: "number" },
                         { name: "active", label: "Available", type: "checkbox", initial: f.active },
                       ]}
-                      transform={(v) => ({ ...v, sort: Number(v.sort) || 0 })}
                       submit="Save"
                       compact
                     />

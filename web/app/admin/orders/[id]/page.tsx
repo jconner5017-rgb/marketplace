@@ -156,11 +156,10 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
               <ActionForm endpoint="/v1/admin/refunds" extra={{ order: o.id }} done="Recorded."
                 fields={[
                   { name: "kind", label: "What", type: "select", options: Object.entries(REFUND_KIND) },
-                  { name: "amount", label: "Amount ($)", initial: (o.total_cents / 100).toFixed(2) },
+                  { name: "amount", key: "amount_cents", as: "cents", label: "Amount ($)", initial: (o.total_cents / 100).toFixed(2) },
                   { name: "stripe_ref", label: "Stripe refund or dispute ID (optional)", placeholder: "re_… or dp_…" },
                   { name: "note", label: "Note", placeholder: "Seller refunded after case 5003" },
                 ]}
-                transform={(v) => ({ kind: v.kind, amount_cents: Math.round(Number(String(v.amount).replace(/[$,]/g, "")) * 100), stripe_ref: v.stripe_ref, note: v.note })}
                 submit="Record" compact />
             </section>
           )}

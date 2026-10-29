@@ -79,7 +79,9 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
                   fields={[
                     { name: "status", label: "Outcome", type: "select", options: [["actioned", "Actioned (we did something)"], ["dismissed", "Dismissed (nothing wrong)"]] },
                     { name: "note", label: "Note for the record", type: "text", placeholder: "Removed listing; warned seller" },
-                    { name: "all", label: `Close all ${x.open_on_target} open reports on this`, type: "checkbox", initial: x.open_on_target > 1, showIf: () => x.open_on_target > 1 },
+                    ...(x.open_on_target > 1
+                      ? [{ name: "all", label: `Close all ${x.open_on_target} open reports on this`, type: "checkbox" as const, initial: true }]
+                      : []),
                   ]}
                   submit="Close report"
                   done="Closed."
