@@ -149,6 +149,9 @@ export const ARTICLES: Article[] = [
       ] },
       { h: "What can lower your level" },
       { p: "Chargebacks, repeated reports from buyers, late shipping, cards that sold elsewhere and couldn't ship, or envelopes that never get a postal scan. If your level drops, listings above the new limit are hidden, not deleted, and come back when your level does." },
+      { h: "How sales are counted" },
+      { p: "We check every seller once a day, and again after new feedback or a chargeback. A sale counts once per buyer, for a card of $2 or more, once the order has shipped, and only if it wasn't refunded or lost to a chargeback. Sales to buyers who share an internet connection with you don't count. Feedback from the last 12 months sets your positive percentage." },
+      { p: "If you think a change was wrong, appeal it once from Account standing." },
     ],
   },
   {

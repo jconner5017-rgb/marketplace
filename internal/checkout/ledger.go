@@ -243,7 +243,13 @@ func (s *Service) recordDispute(ctx context.Context, account string, opened bool
 		"/sell/orders/"+o.id); err != nil {
 		return err
 	}
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	if outcome == "lost" && s.Rep != nil {
+		_, _, err = s.Rep.Review(ctx, o.seller)
+	}
+	return err
 }
 
 // Ledger lists an order's money events, oldest first.

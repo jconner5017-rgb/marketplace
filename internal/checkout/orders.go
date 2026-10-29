@@ -73,11 +73,14 @@ type Order struct {
 	TheirFeedback *Feedback       `json:"their_feedback"`
 	Cases         []CaseRef       `json:"cases"`
 	Side          string          `json:"side"` // buying or selling, from the viewer's side
+	TaxCents      int             `json:"tax_cents"`
+	// StripeRefundURL opens the payment in the seller's own Stripe dashboard (seller only).
+	StripeRefundURL string `json:"stripe_payment_url,omitempty"`
 }
 
 const orderCols = `o.id, o.number, o.status, bu.username, su.username, o.subtotal_cents, o.discount_cents,
 	o.total_cents, o.fee_cents, o.refunded_cents, o.ship_method, o.ship_to, o.ship_by, o.created_at, o.paid_at,
-	o.shipped_at, o.delivered_at, o.buyer_id = $1`
+	o.shipped_at, o.delivered_at, o.buyer_id = $1, coalesce(o.stripe_payment_intent, ''), o.tax_cents`
 
 const orderFrom = ` FROM orders o JOIN users bu ON bu.id = o.buyer_id JOIN users su ON su.id = o.seller_id `
 
@@ -86,9 +89,10 @@ func scanOrder(row interface{ Scan(...any) error }) (Order, error) {
 	var fee int
 	var shipBy, paid, shipped, deliv sql.NullTime
 	var buying bool
+	var pi string
 	if err := row.Scan(&o.ID, &o.Number, &o.Status, &o.Buyer, &o.Seller, &o.SubtotalCents, &o.DiscountCents,
 		&o.TotalCents, &fee, &o.RefundedCents, &o.ShipMethod, &o.ShipTo, &shipBy, &o.CreatedAt, &paid,
-		&shipped, &deliv, &buying); err != nil {
+		&shipped, &deliv, &buying, &pi, &o.TaxCents); err != nil {
 		return o, err
 	}
 	o.ShipBy, o.PaidAt, o.ShippedAt, o.DeliveredAt = nt(shipBy), nt(paid), nt(shipped), nt(deliv)
@@ -97,6 +101,9 @@ func scanOrder(row interface{ Scan(...any) error }) (Order, error) {
 		o.Side = "buying"
 	} else {
 		o.FeeCents = &fee
+		if strings.HasPrefix(pi, "pi_") {
+			o.StripeRefundURL = "https://dashboard.stripe.com/payments/" + pi
+		}
 	}
 	o.Lines, o.Cases = []Line{}, []CaseRef{}
 	return o, nil
@@ -350,9 +357,16 @@ func (s *Service) LeaveFeedback(ctx context.Context, userID, orderID string, rat
 	if msg, ok := inboxScreen(comment); !ok {
 		return &FieldError{"comment", msg}
 	}
-	_, err = s.DB.ExecContext(ctx, `INSERT INTO feedback (order_id, from_user, to_user, role, rating, comment)
-		VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (order_id, from_user) DO NOTHING`, id, userID, to, role, rating, comment)
-	return err
+	if _, err := s.DB.ExecContext(ctx, `INSERT INTO feedback (order_id, from_user, to_user, role, rating, comment)
+		VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (order_id, from_user) DO NOTHING`, id, userID, to, role, rating, comment); err != nil {
+		return err
+	}
+	if role == "buyer_to_seller" && s.Rep != nil {
+		if _, _, err := s.Rep.Review(ctx, seller); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // ReportProblem opens a case for staff on a paid order.

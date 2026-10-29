@@ -84,6 +84,7 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
               {o.shipments.length === 0 && <li className="text-muted">No shipment yet.</li>}
             </ul>
           </section>
+          <p className="text-[14px]"><a href={`/api/v1/admin/orders/${o.id}/evidence`} className="font-semibold text-link underline">Download evidence packet</a></p>
           <section>
             <h2 className="text-[18px] font-bold">Money ledger</h2>
             <p className="text-[13px] text-muted">Every money event from Stripe, in order. Entries are never changed; corrections are new rows.</p>

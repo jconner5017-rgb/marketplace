@@ -31,6 +31,7 @@ type Profile struct {
 	FCMConnected       bool      `json:"fcm_connected"`
 	CreatedAt          time.Time `json:"created_at"`
 	ReviewStatus       string    `json:"review_status"` // pending, approved, rejected (staff review)
+	CollectTax         bool      `json:"collect_tax"`   // Stripe Tax adds sales tax at checkout
 }
 
 // CanSell reports whether the seller may publish listings.
@@ -42,14 +43,14 @@ type Service struct {
 }
 
 const profileCols = `user_id, stripe_account_id, charges_enabled, details_submitted, tier,
-	bundle_discount_type, bundle_discount_val, fcm_connected, created_at, review_status`
+	bundle_discount_type, bundle_discount_val, fcm_connected, created_at, review_status, collect_tax`
 
 func scanProfile(row interface{ Scan(...any) error }) (Profile, error) {
 	var p Profile
 	var bt sql.NullString
 	var bv sql.NullInt64
 	err := row.Scan(&p.UserID, &p.StripeAccountID, &p.ChargesEnabled, &p.DetailsSubmitted, &p.Tier,
-		&bt, &bv, &p.FCMConnected, &p.CreatedAt, &p.ReviewStatus)
+		&bt, &bv, &p.FCMConnected, &p.CreatedAt, &p.ReviewStatus, &p.CollectTax)
 	if bt.Valid {
 		p.BundleDiscountType = &bt.String
 	}
@@ -198,6 +199,19 @@ func (s *Service) UpdateBundleDiscount(ctx context.Context, userID string, typ *
 	if _, err := s.DB.ExecContext(ctx, `
 		UPDATE seller_profiles SET bundle_discount_type = $2, bundle_discount_val = $3, updated_at = now()
 		WHERE user_id = $1`, userID, typ, val); err != nil {
+		return Profile{}, err
+	}
+	return s.Get(ctx, userID)
+}
+
+// SetCollectTax turns Stripe Tax on or off for the seller's checkouts. The
+// seller must have Stripe Tax set up on their own Stripe account first.
+func (s *Service) SetCollectTax(ctx context.Context, userID string, on bool) (Profile, error) {
+	if _, err := s.Get(ctx, userID); err != nil {
+		return Profile{}, err
+	}
+	if _, err := s.DB.ExecContext(ctx, `UPDATE seller_profiles SET collect_tax = $2, updated_at = now() WHERE user_id = $1`,
+		userID, on); err != nil {
 		return Profile{}, err
 	}
 	return s.Get(ctx, userID)

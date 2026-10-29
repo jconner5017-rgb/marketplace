@@ -140,6 +140,7 @@ export type Seller = {
   fcm_connected: boolean;
   created_at: string;
   review_status: "pending" | "approved" | "rejected";
+  collect_tax: boolean;
 };
 
 export type ApiError = {
@@ -243,4 +244,6 @@ export interface Order {
   their_feedback: OrderFeedback | null;
   cases: { number: number; kind: string; status: string }[];
   side: "buying" | "selling";
+  tax_cents: number;
+  stripe_payment_url?: string;
 }

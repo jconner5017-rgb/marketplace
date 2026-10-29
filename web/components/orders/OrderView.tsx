@@ -56,12 +56,13 @@ export default function OrderView({ o }: { o: Order }) {
           <div className="flex justify-between"><dt>Cards</dt><dd>{money(o.subtotal_cents)}</dd></div>
           {o.discount_cents > 0 && <div className="flex justify-between text-ship"><dt>Multi-card discount</dt><dd>−{money(o.discount_cents)}</dd></div>}
           <div className="flex justify-between"><dt>Shipping</dt><dd className="text-ship">Free</dd></div>
-          <div className="flex justify-between border-t border-line pt-2 font-bold"><dt>{selling ? "Buyer paid" : "Total paid"}</dt><dd>{money(o.total_cents)}</dd></div>
+          {o.tax_cents > 0 && <div className="flex justify-between"><dt>Sales tax</dt><dd>{money(o.tax_cents)}</dd></div>}
+          <div className="flex justify-between border-t border-line pt-2 font-bold"><dt>{selling ? "Buyer paid" : "Total paid"}</dt><dd>{money(o.total_cents + o.tax_cents)}</dd></div>
           {o.refunded_cents > 0 && <div className="flex justify-between text-slab"><dt>Refunded</dt><dd>−{money(o.refunded_cents)}</dd></div>}
           {selling && o.fee_cents != null && (
             <>
               <div className="flex justify-between text-muted"><dt>Marketplace fee</dt><dd>−{money(o.fee_cents)}</dd></div>
-              <div className="flex justify-between font-semibold"><dt>You receive (before Stripe&apos;s processing fee)</dt><dd>{money(o.total_cents - o.fee_cents - o.refunded_cents)}</dd></div>
+              <div className="flex justify-between font-semibold"><dt>You receive (before Stripe&apos;s processing fee{o.tax_cents > 0 ? " and sales tax you remit" : ""})</dt><dd>{money(o.total_cents - o.fee_cents - o.refunded_cents)}</dd></div>
             </>
           )}
         </dl>

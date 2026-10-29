@@ -1,9 +1,12 @@
 package httpapi
 
 import (
+	"bytes"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/jconner5017-rgb/marketplace/internal/checkout"
 )
@@ -217,4 +220,88 @@ func (s *Server) handleOrderProblem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]int64{"case_number": n})
+}
+
+func parseDay(s string, loc *time.Location) (time.Time, bool) {
+	t, err := time.ParseInLocation("2006-01-02", s, loc)
+	return t, err == nil
+}
+
+// GET /v1/seller/reports/sales.csv?from=2026-01-01&to=2026-01-31 (to is inclusive)
+func (s *Server) handleSalesCSV(w http.ResponseWriter, r *http.Request) {
+	u, _ := currentUser(r)
+	loc, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		loc = time.UTC
+	}
+	now := time.Now().In(loc)
+	to := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
+	from := to.AddDate(0, 0, -29)
+	q := r.URL.Query()
+	if v := q.Get("from"); v != "" {
+		t, ok := parseDay(v, loc)
+		if !ok {
+			writeError(w, http.StatusUnprocessableEntity, "invalid_input", "dates look like 2026-01-31", map[string]string{"from": "use YYYY-MM-DD"})
+			return
+		}
+		from = t
+	}
+	if v := q.Get("to"); v != "" {
+		t, ok := parseDay(v, loc)
+		if !ok {
+			writeError(w, http.StatusUnprocessableEntity, "invalid_input", "dates look like 2026-01-31", map[string]string{"to": "use YYYY-MM-DD"})
+			return
+		}
+		to = t
+	}
+	if to.Before(from) || to.Sub(from) > 400*24*time.Hour {
+		writeError(w, http.StatusUnprocessableEntity, "invalid_input", "choose a range of up to 400 days", map[string]string{"to": "up to 400 days after the start"})
+		return
+	}
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="sales-%s-to-%s.csv"`, from.Format("2006-01-02"), to.Format("2006-01-02")))
+	if err := s.checkout.SalesCSV(r.Context(), w, u.ID, from, to.AddDate(0, 0, 1)); err != nil {
+		s.log.Error("sales csv", "err", err)
+	}
+}
+
+// GET /v1/seller/reports/summary?year=2026
+func (s *Server) handleSalesSummary(w http.ResponseWriter, r *http.Request) {
+	u, _ := currentUser(r)
+	year := time.Now().Year()
+	if v, err := strconv.Atoi(r.URL.Query().Get("year")); err == nil && v >= 2025 && v <= year {
+		year = v
+	}
+	months, total, err := s.checkout.Summary(r.Context(), u.ID, year)
+	if err != nil {
+		s.internalError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"year": year, "months": months, "total": total})
+}
+
+// GET /v1/orders/{id}/evidence — the seller's chargeback evidence packet (HTML download).
+func (s *Server) handleEvidence(w http.ResponseWriter, r *http.Request) {
+	u, _ := currentUser(r)
+	s.evidence(w, r, u.ID, false)
+}
+
+// GET /v1/admin/orders/{id}/evidence
+func (s *Server) handleAdminEvidence(w http.ResponseWriter, r *http.Request) {
+	s.evidence(w, r, "", true)
+}
+
+func (s *Server) evidence(w http.ResponseWriter, r *http.Request, userID string, staff bool) {
+	id, ok := orderParam(w, r)
+	if !ok {
+		return
+	}
+	var buf bytes.Buffer
+	if err := s.checkout.Evidence(r.Context(), &buf, userID, id, staff); err != nil {
+		s.checkoutError(w, r, err)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Content-Disposition", `attachment; filename="order-`+id+`-evidence.html"`)
+	w.Write(buf.Bytes())
 }

@@ -227,6 +227,7 @@ type CheckoutParams struct {
 	SuccessURL    string // may contain {CHECKOUT_SESSION_ID}
 	CancelURL     string
 	ExpiresAt     time.Time // 30 minutes to 24 hours from now
+	AutomaticTax  bool      // Stripe Tax on the seller's account adds sales tax
 }
 
 type Address struct {
@@ -268,6 +269,9 @@ func (c *Client) CreateCheckoutSession(ctx context.Context, account string, p Ch
 	}
 	if p.CustomerEmail != "" {
 		f.Set("customer_email", p.CustomerEmail)
+	}
+	if p.AutomaticTax {
+		f.Set("automatic_tax[enabled]", "true")
 	}
 	for i, l := range p.Lines {
 		k := fmt.Sprintf("line_items[%d]", i)

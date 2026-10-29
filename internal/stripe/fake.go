@@ -36,6 +36,9 @@ func (f *FakePayments) CreateCheckoutSession(_ context.Context, account string, 
 	for _, l := range p.Lines {
 		total += l.UnitCents * l.Quantity
 	}
+	if p.AutomaticTax {
+		total += total * 825 / 10000 // a stand-in 8.25% sales tax
+	}
 	s := &CheckoutSession{ID: id, URL: "https://checkout.stripe.test/" + id, Status: "open", PaymentStatus: "unpaid",
 		AmountTotal: total, ClientReference: p.OrderID}
 	f.sessions[id], f.accounts[id], f.params[id] = s, account, p

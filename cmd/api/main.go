@@ -103,7 +103,8 @@ func run(log *slog.Logger) error {
 		log.Warn("MFA_ENCRYPTION_KEY not set: the staff back office can't be used")
 	}
 	feeSvc := &fees.Service{DB: database}
-	checkoutSvc := &checkout.Service{DB: database, Sellers: sellerSvc, Fees: feeSvc,
+	reputation := &sellers.Reputation{DB: database}
+	checkoutSvc := &checkout.Service{DB: database, Sellers: sellerSvc, Fees: feeSvc, Rep: reputation,
 		Enabled: cfg.CheckoutEnabled, WebURL: cfg.WebURL}
 	if cfg.StripeSecretKey != "" {
 		checkoutSvc.Pay = stripe.NewClient(cfg.StripeSecretKey)
@@ -170,6 +171,24 @@ func run(log *slog.Logger) error {
 				}
 				if err := catalog.Load(ctx); err != nil {
 					log.Error("reload catalog", "err", err)
+				}
+			}
+		}
+	}()
+
+	// Seller tiers: each seller is re-checked about once a day.
+	go func() {
+		t := time.NewTicker(time.Hour)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+				if n, err := reputation.RunNightly(ctx); err != nil {
+					log.Error("reputation job", "err", err)
+				} else if n > 0 {
+					log.Info("seller tiers changed", "count", n)
 				}
 			}
 		}

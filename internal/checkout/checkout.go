@@ -43,9 +43,10 @@ type Service struct {
 	DB      *sql.DB
 	Sellers *sellers.Service
 	Fees    *fees.Service
-	Pay     stripe.Payments // nil when Stripe isn't configured
-	Enabled bool            // CHECKOUT_ENABLED
-	WebURL  string          // where Stripe sends the buyer back, e.g. https://slabsnsingles.com
+	Pay     stripe.Payments     // nil when Stripe isn't configured
+	Rep     *sellers.Reputation // re-checks a seller's tier after feedback or a chargeback
+	Enabled bool                // CHECKOUT_ENABLED
+	WebURL  string              // where Stripe sends the buyer back, e.g. https://slabsnsingles.com
 	Now     func() time.Time
 }
 
@@ -110,10 +111,10 @@ func (s *Service) Start(ctx context.Context, buyerID, buyerEmail string, req Req
 	}
 
 	var acct string
-	var ok bool
+	var ok, collectTax bool
 	err = tx.QueryRowContext(ctx, `
-		SELECT sp.stripe_account_id, u.status = 'active' AND sp.charges_enabled AND sp.review_status <> 'rejected'
-		FROM seller_profiles sp JOIN users u ON u.id = sp.user_id WHERE sp.user_id = $1`, sellerID).Scan(&acct, &ok)
+		SELECT sp.stripe_account_id, u.status = 'active' AND sp.charges_enabled AND sp.review_status <> 'rejected', sp.collect_tax
+		FROM seller_profiles sp JOIN users u ON u.id = sp.user_id WHERE sp.user_id = $1`, sellerID).Scan(&acct, &ok, &collectTax)
 	if errors.Is(err, sql.ErrNoRows) || (err == nil && (!ok || acct == "")) {
 		return "", "", ErrSellerClosed
 	}
@@ -193,6 +194,7 @@ func (s *Service) Start(ctx context.Context, buyerID, buyerEmail string, req Req
 		SuccessURL:    fmt.Sprintf("%s/checkout/done?order=%s&session_id={CHECKOUT_SESSION_ID}", s.WebURL, orderID),
 		CancelURL:     fmt.Sprintf("%s/checkout/done?order=%s&cancelled=1", s.WebURL, orderID),
 		ExpiresAt:     s.now().Add(SessionTTL + time.Minute),
+		AutomaticTax:  collectTax,
 	}
 	if discount > 0 {
 		params.Lines = []stripe.LineItem{{
@@ -465,10 +467,10 @@ func (s *Service) markPaid(ctx context.Context, orderID string, sess stripe.Chec
 	var total, fee, discount int
 	err = tx.QueryRowContext(ctx, `
 		UPDATE orders SET status = 'paid', paid_at = $2, ship_by = $3, ship_to = $4,
-			stripe_payment_intent = nullif($5, ''), updated_at = now()
+			stripe_payment_intent = nullif($5, ''), tax_cents = greatest($6 - total_cents, 0), updated_at = now()
 		WHERE id = $1 AND status = 'pending_payment'
 		RETURNING buyer_id, seller_id, number, total_cents, fee_cents, discount_cents`,
-		orderID, now, ShipBy(now), string(shipTo), sess.PaymentIntent).Scan(&buyer, &seller, &number, &total, &fee, &discount)
+		orderID, now, ShipBy(now), string(shipTo), sess.PaymentIntent, sess.AmountTotal).Scan(&buyer, &seller, &number, &total, &fee, &discount)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil // already recorded
 	}
@@ -479,7 +481,13 @@ func (s *Service) markPaid(ctx context.Context, orderID string, sess stripe.Chec
 	if ref == "" {
 		ref = sess.ID
 	}
-	if err := ledger(ctx, tx, orderID, seller, "charge", total, ref, "Paid through Stripe Checkout"); err != nil {
+	note := "Paid through Stripe Checkout"
+	paid := total
+	if tax := sess.AmountTotal - total; tax > 0 {
+		paid += tax
+		note += fmt.Sprintf(" (includes %s sales tax)", money(tax))
+	}
+	if err := ledger(ctx, tx, orderID, seller, "charge", paid, ref, note); err != nil {
 		return err
 	}
 	if err := ledger(ctx, tx, orderID, seller, "application_fee", fee, ref, "Marketplace fee"); err != nil {

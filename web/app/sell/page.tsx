@@ -7,6 +7,7 @@ import OnboardButton from "@/components/OnboardButton";
 import { GradeBadge, Photo } from "@/components/CardBits";
 import ListingActions from "@/components/ListingActions";
 import BundleDiscountForm from "@/components/BundleDiscountForm";
+import TaxToggle from "@/components/TaxToggle";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Seller hub" };
@@ -76,6 +77,7 @@ export default async function SellPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <Link href="/sell/orders" className="rounded-full border border-link px-5 py-2 font-semibold text-link hover:bg-wash">Orders</Link>
+          <Link href="/sell/reports" className="rounded-full border border-link px-5 py-2 font-semibold text-link hover:bg-wash">Reports</Link>
           <Link href="/sell/import" className="rounded-full border border-link px-5 py-2 font-semibold text-link hover:bg-wash">Upload a CSV</Link>
           <Link href="/sell/new" className="rounded-full bg-link px-5 py-2 font-semibold text-white hover:bg-link-dark">List a card</Link>
         </div>
@@ -101,6 +103,15 @@ export default async function SellPage() {
           <h2 className="font-bold">Multi-card discount</h2>
           <p className="mt-1 text-[14px] text-muted">Buyers who order several cards from you ship in one package, so pass the savings on.</p>
           <BundleDiscountForm type={seller.bundle_discount_type} value={seller.bundle_discount_val} />
+        </div>
+        <div className="rounded-lg border border-line p-4 md:col-span-2">
+          <h2 className="font-bold">Sales tax</h2>
+          <p className="mt-1 text-[14px] text-muted">
+            You&apos;re responsible for collecting and paying sales tax where your state or the buyer&apos;s state requires it.
+            Stripe Tax can work it out on each sale and add it at checkout; it runs on your own Stripe account and
+            Stripe charges for it. <a href="https://dashboard.stripe.com/tax" target="_blank" rel="noopener noreferrer" className="text-link underline">Set up Stripe Tax</a>
+          </p>
+          <TaxToggle on={seller.collect_tax} />
         </div>
       </div>
 

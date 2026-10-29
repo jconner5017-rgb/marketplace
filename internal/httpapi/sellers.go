@@ -97,6 +97,23 @@ func (s *Server) handleSellerSettings(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"seller": p})
 }
 
+// PATCH /v1/seller/tax {"collect_tax": true}
+func (s *Server) handleSellerTax(w http.ResponseWriter, r *http.Request) {
+	u, _ := currentUser(r)
+	var req struct {
+		CollectTax bool `json:"collect_tax"`
+	}
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	p, err := s.sellers.SetCollectTax(r.Context(), u.ID, req.CollectTax)
+	if err != nil {
+		s.sellerError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"seller": p})
+}
+
 var onboardingPage = template.Must(template.New("p").Parse(`<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{{.Title}}</title>
