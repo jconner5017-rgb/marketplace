@@ -204,6 +204,16 @@ func seedAuctions(ctx context.Context, db *sql.DB, svc *listings.Service, seller
 		if err != nil && err != sql.ErrNoRows {
 			return n, err
 		}
+		// A sample auction someone won (or that has a hold or order on it)
+		// is kept so the winner's purchase survives; it's just retired from
+		// its SKU. Deleting it would cascade the buyer's hold away.
+		if _, err := db.ExecContext(ctx, `
+			UPDATE listings l SET external_id = external_id || '-done-' || left(l.id::text, 8), updated_at = now()
+			WHERE seller_id = $1 AND external_id = $2
+			  AND (auction_state = 'won' OR winner_id IS NOT NULL
+			       OR EXISTS (SELECT 1 FROM holds h WHERE h.listing_id = l.id))`, sellerID, sku); err != nil {
+			return n, err
+		}
 		if _, err := db.ExecContext(ctx, `DELETE FROM listings WHERE seller_id = $1 AND external_id = $2`, sellerID, sku); err != nil {
 			return n, err
 		}

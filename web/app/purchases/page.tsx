@@ -27,7 +27,14 @@ export default async function PurchasesPage() {
     <div className="pt-6">
       <h1 className="text-[26px] font-bold">Purchases</h1>
 
-      {holds.length === 0 && orders.length === 0 && (
+      {(!hr.data || !or.data) && (
+        <div role="alert" className="mt-5 rounded-lg border border-line bg-wash p-4 text-[14px]">
+          <p className="font-semibold">We couldn&apos;t load all of your purchases.</p>
+          <p className="mt-1 text-muted">This is usually a brief hiccup. <Link href="/purchases" className="text-link underline">Try again</Link> in a moment.</p>
+        </div>
+      )}
+
+      {hr.data && or.data && holds.length === 0 && orders.length === 0 && (
         <div className="py-14 text-center">
           <p className="text-[17px] font-semibold">Nothing here yet.</p>
           <p className="mt-1 text-muted">Orders, auction wins and accepted offers show up here.</p>
