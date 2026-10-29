@@ -9,7 +9,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Where Stripe sends the buyer back. Confirms the payment with Stripe. */
 export default async function CheckoutDone({ searchParams }: {
-  searchParams: Promise<{ order?: string; session_id?: string; cancelled?: string; try?: string }>;
+  searchParams: Promise<{ order?: string; session_id?: string; cancelled?: string; try?: string; test?: string }>;
 }) {
   const sp = await searchParams;
   const order = sp.order && UUID.test(sp.order) ? sp.order : "";
@@ -40,8 +40,12 @@ export default async function CheckoutDone({ searchParams }: {
     return (
       <div className="mx-auto max-w-[560px] py-16 text-center">
         <p className="text-[40px]" aria-hidden>✓</p>
-        <h1 className="text-[26px] font-bold">Thanks, you&apos;re all set</h1>
-        <p className="mt-2 text-muted">Payment received. The seller has been told to ship, and you&apos;ll get a notification with tracking.</p>
+        <h1 className="text-[26px] font-bold">{sp.test ? "Test order placed" : "Thanks, you\u2019re all set"}</h1>
+        <p className="mt-2 text-muted">
+          {sp.test
+            ? "No payment was taken. The order is marked paid so you can test shipping, delivery and feedback. It's labeled TEST everywhere."
+            : "Payment received. The seller has been told to ship, and you\u2019ll get a notification with tracking."}
+        </p>
         <div className="mt-6 flex justify-center gap-3">
           <Link href={`/purchases/${order}`} className="rounded-full bg-link px-5 py-2 font-semibold text-white">View order</Link>
           <Link href="/cart" className="rounded-full border border-link px-5 py-2 font-semibold text-link">Back to cart</Link>

@@ -94,11 +94,13 @@ type Order struct {
 	TaxCents            int       `json:"tax_cents"`
 	// StripeRefundURL opens the payment in the seller's own Stripe dashboard (seller only).
 	StripeRefundURL string `json:"stripe_payment_url,omitempty"`
+	// Test: placed by an admin with no payment taken (before checkout opened).
+	Test bool `json:"test"`
 }
 
 const orderCols = `o.id, o.number, o.status, bu.username, su.username, o.subtotal_cents, o.discount_cents,
 	o.total_cents, o.fee_cents, o.refunded_cents, o.ship_method, o.ship_to, o.ship_by, o.created_at, o.paid_at,
-	o.shipped_at, o.delivered_at, o.buyer_id = $1, coalesce(o.stripe_payment_intent, ''), o.tax_cents`
+	o.shipped_at, o.delivered_at, o.buyer_id = $1, coalesce(o.stripe_payment_intent, ''), o.tax_cents, o.test`
 
 const orderFrom = ` FROM orders o JOIN users bu ON bu.id = o.buyer_id JOIN users su ON su.id = o.seller_id `
 
@@ -110,7 +112,7 @@ func scanOrder(row interface{ Scan(...any) error }) (Order, error) {
 	var pi string
 	if err := row.Scan(&o.ID, &o.Number, &o.Status, &o.Buyer, &o.Seller, &o.SubtotalCents, &o.DiscountCents,
 		&o.TotalCents, &fee, &o.RefundedCents, &o.ShipMethod, &o.ShipTo, &shipBy, &o.CreatedAt, &paid,
-		&shipped, &deliv, &buying, &pi, &o.TaxCents); err != nil {
+		&shipped, &deliv, &buying, &pi, &o.TaxCents, &o.Test); err != nil {
 		return o, err
 	}
 	o.ShipBy, o.PaidAt, o.ShippedAt, o.DeliveredAt = nt(shipBy), nt(paid), nt(shipped), nt(deliv)

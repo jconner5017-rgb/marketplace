@@ -36,7 +36,10 @@ func (s *Server) checkoutError(w http.ResponseWriter, r *http.Request, err error
 
 // GET /v1/checkout/status — whether buyers can pay yet.
 func (s *Server) handleCheckoutStatus(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]bool{"enabled": s.checkout != nil && s.checkout.Ready()})
+	u, signedIn := currentUser(r)
+	ready := s.checkout != nil && s.checkout.Ready()
+	test := !ready && signedIn && u.IsAdmin() && s.checkout != nil
+	writeJSON(w, http.StatusOK, map[string]bool{"enabled": ready, "test": test})
 }
 
 // POST /v1/checkout {"seller": "username"} or {"hold_ids": [...]}
@@ -56,7 +59,11 @@ func (s *Server) handleStartCheckout(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	orderID, url, err := s.checkout.Start(r.Context(), u.ID, u.Email, req)
+	start := s.checkout.Start
+	if u.IsAdmin() && s.checkout.TestMode() {
+		start = s.checkout.StartTest // no payment; flagged as a test order
+	}
+	orderID, url, err := start(r.Context(), u.ID, u.Email, req)
 	if err != nil {
 		s.checkoutError(w, r, err)
 		return

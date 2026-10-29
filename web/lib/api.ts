@@ -54,6 +54,16 @@ export async function apiPost<T>(path: string, body: unknown = {}): Promise<{ st
   }
 }
 
+/**
+ * How this visitor can pay: "live" (Stripe Checkout), "test" (an admin
+ * placing test orders with no payment, before checkout opens) or "off".
+ */
+export async function checkoutMode(): Promise<"live" | "test" | "off"> {
+  const r = await apiGet<{ enabled: boolean; test?: boolean }>("/v1/checkout/status");
+  if (r.data?.enabled) return "live";
+  return r.data?.test ? "test" : "off";
+}
+
 /** Whether buyers can pay yet (CHECKOUT_ENABLED on the API). */
 export async function checkoutEnabled(): Promise<boolean> {
   try {

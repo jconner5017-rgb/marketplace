@@ -259,6 +259,7 @@ export interface Order {
   cases: { number: number; kind: string; status: string }[];
   side: "buying" | "selling";
   tax_cents: number;
+  test?: boolean;
   stripe_payment_url?: string;
 }
 

@@ -4,8 +4,11 @@ package sellers
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
+	"encoding/hex"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/jconner5017-rgb/marketplace/internal/stripe"
@@ -85,6 +88,25 @@ func (s *Service) StartOnboarding(ctx context.Context, userID, email, refreshURL
 	return s.Stripe.CreateOnboardingLink(ctx, accountID, refreshURL, returnURL)
 }
 
+// TestAccountPrefix marks seller accounts set up without Stripe, for admin
+// testing before Stripe Connect is switched on.
+const TestAccountPrefix = "acct_test_"
+
+// StartTestSeller makes userID a seller who can list right away, with no
+// Stripe account. Only for admins while checkout is off (the caller checks).
+func (s *Service) StartTestSeller(ctx context.Context, userID string) error {
+	var b [8]byte
+	rand.Read(b[:])
+	acct := TestAccountPrefix + hex.EncodeToString(b[:])
+	_, err := s.DB.ExecContext(ctx, `
+		INSERT INTO seller_profiles (user_id, stripe_account_id, charges_enabled, details_submitted, review_status)
+		VALUES ($1, $2, true, true, 'approved')
+		ON CONFLICT (user_id) DO UPDATE SET stripe_account_id = EXCLUDED.stripe_account_id, charges_enabled = true,
+			details_submitted = true, review_status = 'approved', updated_at = now()
+		WHERE NOT seller_profiles.charges_enabled`, userID, acct)
+	return err
+}
+
 func (s *Service) ensureAccount(ctx context.Context, userID, email string) (string, error) {
 	tx, err := s.DB.BeginTx(ctx, nil)
 	if err != nil {
@@ -99,6 +121,20 @@ func (s *Service) ensureAccount(ctx context.Context, userID, email string) (stri
 	var existing string
 	err = tx.QueryRowContext(ctx,
 		`SELECT stripe_account_id FROM seller_profiles WHERE user_id = $1`, userID).Scan(&existing)
+	if err == nil && strings.HasPrefix(existing, TestAccountPrefix) {
+		// A test seller (set up before Stripe Connect was on) gets a real
+		// Stripe account now; listings stay, selling waits for onboarding.
+		acct, err := s.Stripe.CreateStandardAccount(ctx, email)
+		if err != nil {
+			return "", err
+		}
+		if _, err := tx.ExecContext(ctx, `
+			UPDATE seller_profiles SET stripe_account_id = $2, charges_enabled = $3, details_submitted = $4, updated_at = now()
+			WHERE user_id = $1`, userID, acct.ID, acct.ChargesEnabled, acct.DetailsSubmitted); err != nil {
+			return "", err
+		}
+		return acct.ID, tx.Commit()
+	}
 	if err == nil {
 		return existing, tx.Commit()
 	}
@@ -124,6 +160,9 @@ func (s *Service) Refresh(ctx context.Context, userID string) (Profile, error) {
 	p, err := s.Get(ctx, userID)
 	if err != nil {
 		return p, err
+	}
+	if strings.HasPrefix(p.StripeAccountID, TestAccountPrefix) {
+		return p, nil // no Stripe account behind it
 	}
 	if s.Stripe == nil {
 		return p, ErrStripeNotConfigured

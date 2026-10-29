@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { apiGet, checkoutEnabled } from "@/lib/api";
+import { apiGet, checkoutMode } from "@/lib/api";
 import { requireUser } from "@/lib/auth";
 import type { Hold, Order } from "@/lib/types";
 import { endTime, money } from "@/lib/format";
@@ -11,11 +11,12 @@ export const metadata = { title: "Purchases", robots: { index: false } };
 
 export default async function PurchasesPage() {
   await requireUser("/purchases");
-  const [hr, or, canPay] = await Promise.all([
+  const [hr, or, mode] = await Promise.all([
     apiGet<{ holds: Hold[] }>("/v1/holds?side=buying"),
     apiGet<{ orders: Order[] }>("/v1/orders?side=buying"),
-    checkoutEnabled(),
+    checkoutMode(),
   ]);
+  const canPay = mode !== "off";
   const holds = hr.data?.holds ?? [];
   const orders = or.data?.orders ?? [];
   const due = holds.filter((h) => h.status === "awaiting_payment");
@@ -71,7 +72,7 @@ export default async function PurchasesPage() {
                 </ul>
                 <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line bg-wash px-4 py-3 text-[14px]">
                   <span>Seller <strong>{seller}</strong> · Free shipping</span>
-                  {canPay && <PayButton holdIds={hs.map((h) => h.id)} label={`Pay ${money(total)}`} className="w-full sm:w-auto" />}
+                  {canPay && <PayButton holdIds={hs.map((h) => h.id)} label={mode === "test" ? `Test order ${money(total)}` : `Pay ${money(total)}`} test={mode === "test"} className="w-full sm:w-auto" />}
                 </div>
               </div>
             );

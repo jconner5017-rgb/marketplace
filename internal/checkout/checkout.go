@@ -89,6 +89,27 @@ func (s *Service) Start(ctx context.Context, buyerID, buyerEmail string, req Req
 	if !s.Ready() {
 		return "", "", ErrDisabled
 	}
+	return s.start(ctx, buyerID, buyerEmail, req, false)
+}
+
+// TestMode reports whether admins can place test orders: only while real
+// checkout is off, so it ends by itself when CHECKOUT_ENABLED goes on.
+func (s *Service) TestMode() bool { return !s.Ready() }
+
+// TestAddress is where test orders "ship".
+var TestAddress = map[string]string{"name": "TEST ORDER (no payment taken)", "line1": "1 Test Way", "line2": "",
+	"city": "New York", "state": "NY", "zip": "10001", "country": "US"}
+
+// StartTest places an order exactly like Start but skips Stripe and marks it
+// paid at once, flagged as a test. The caller must check the buyer is an admin.
+func (s *Service) StartTest(ctx context.Context, buyerID, buyerEmail string, req Request) (string, string, error) {
+	if !s.TestMode() {
+		return "", "", ErrDisabled
+	}
+	return s.start(ctx, buyerID, buyerEmail, req, true)
+}
+
+func (s *Service) start(ctx context.Context, buyerID, buyerEmail string, req Request, test bool) (string, string, error) {
 	// A buyer who comes back from Stripe without finishing and presses Pay
 	// again: close the earlier checkout first so its cards are free.
 	if err := s.closeEarlier(ctx, buyerID, req); err != nil {
@@ -162,9 +183,9 @@ func (s *Service) Start(ctx context.Context, buyerID, buyerEmail string, req Req
 	var number int64
 	if err := tx.QueryRowContext(ctx, `
 		INSERT INTO orders (buyer_id, seller_id, subtotal_cents, discount_cents, total_cents, fee_cents,
-			fee_schedule_id, ship_method, stripe_account)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id, number`,
-		buyerID, sellerID, subtotal, discount, total, fee, schedID, method, acct).Scan(&orderID, &number); err != nil {
+			fee_schedule_id, ship_method, stripe_account, test)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id, number`,
+		buyerID, sellerID, subtotal, discount, total, fee, schedID, method, acct, test).Scan(&orderID, &number); err != nil {
 		return "", "", err
 	}
 	for _, l := range lines {
@@ -190,6 +211,19 @@ func (s *Service) Start(ctx context.Context, buyerID, buyerEmail string, req Req
 	}
 	if err := tx.Commit(); err != nil {
 		return "", "", err
+	}
+
+	if test {
+		sess := stripe.CheckoutSession{ID: "test_" + orderID, Status: "complete", PaymentStatus: "paid", AmountTotal: total}
+		sess.ShippingDetails = &struct {
+			Name    string         `json:"name"`
+			Address stripe.Address `json:"address"`
+		}{Name: TestAddress["name"], Address: stripe.Address{Line1: TestAddress["line1"], City: TestAddress["city"],
+			State: TestAddress["state"], PostalCode: TestAddress["zip"], Country: TestAddress["country"]}}
+		if err := s.markPaid(ctx, orderID, sess); err != nil {
+			return "", "", err
+		}
+		return orderID, fmt.Sprintf("%s/checkout/done?order=%s&test=1", s.WebURL, orderID), nil
 	}
 
 	params := stripe.CheckoutParams{
@@ -487,6 +521,9 @@ func (s *Service) markPaid(ctx context.Context, orderID string, sess stripe.Chec
 		ref = sess.ID
 	}
 	note := "Paid through Stripe Checkout"
+	if strings.HasPrefix(ref, "test_") {
+		note = "TEST ORDER: no payment taken"
+	}
 	paid := total
 	if tax := sess.AmountTotal - total; tax > 0 {
 		paid += tax

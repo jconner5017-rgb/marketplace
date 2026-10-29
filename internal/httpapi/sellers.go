@@ -44,6 +44,15 @@ func (s *Server) sellerError(w http.ResponseWriter, r *http.Request, err error) 
 // The client sends the browser to that URL.
 func (s *Server) handleStartOnboarding(w http.ResponseWriter, r *http.Request) {
 	u, _ := currentUser(r)
+	// Admin test mode: no Stripe until checkout opens.
+	if u.IsAdmin() && s.checkout != nil && s.checkout.TestMode() {
+		if err := s.sellers.StartTestSeller(r.Context(), u.ID); err != nil {
+			s.internalError(w, r, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"url": "/sell?test_seller=1", "test": true})
+		return
+	}
 	base := s.baseURL(r)
 	link, err := s.sellers.StartOnboarding(r.Context(), u.ID, u.Email,
 		base+"/seller/onboarding/refresh", base+"/seller/onboarding/return")

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { apiGet, checkoutEnabled } from "@/lib/api";
+import { apiGet, checkoutMode } from "@/lib/api";
 import { requireUser } from "@/lib/auth";
 import type { Cart } from "@/lib/types";
 import { GradeBadge, Photo } from "@/components/CardBits";
@@ -12,7 +12,8 @@ export const metadata = { title: "Cart" };
 
 export default async function CartPage() {
   await requireUser("/cart");
-  const [r, canPay] = await Promise.all([apiGet<Cart>("/v1/cart"), checkoutEnabled()]);
+  const [r, mode] = await Promise.all([apiGet<Cart>("/v1/cart"), checkoutMode()]);
+  const canPay = mode !== "off";
   const cart = r.data ?? { groups: [], card_count: 0, total_cents: 0, problems: 0 };
   const sellers = cart.groups.filter((g) => g.card_count > 0).length;
 
@@ -61,7 +62,7 @@ export default async function CartPage() {
               {canPay && sellers > 1 && g.card_count > 0 && (
                 <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line px-4 py-3">
                   <span className="num text-[15px] font-semibold">{money(g.total_cents)} from {g.seller_username}</span>
-                  <PayButton seller={g.seller_username} label={`Pay ${g.seller_username}`} className="w-full sm:w-auto" />
+                  <PayButton seller={g.seller_username} label={mode === "test" ? `Test order from ${g.seller_username}` : `Pay ${g.seller_username}`} test={mode === "test"} className="w-full sm:w-auto" />
                 </div>
               )}
             </section>
@@ -79,8 +80,8 @@ export default async function CartPage() {
           </dl>
           {canPay && sellers === 1 && cart.problems === 0 ? (
             <>
-              <PayButton seller={cart.groups.find((g) => g.card_count > 0)!.seller_username} label="Go to checkout" className="mt-5" />
-              <p className="mt-2 text-center text-[13px] text-muted">Secure payment by Stripe. US addresses only.</p>
+              <PayButton seller={cart.groups.find((g) => g.card_count > 0)!.seller_username} label={mode === "test" ? "Complete test order" : "Go to checkout"} test={mode === "test"} className="mt-5" />
+              <p className="mt-2 text-center text-[13px] text-muted">{mode === "test" ? "Admin test mode: no payment is taken. Checkout opens to everyone once Stripe is set up." : "Secure payment by Stripe. US addresses only."}</p>
             </>
           ) : canPay && sellers > 1 ? (
             <p className="mt-4 text-center text-[13px] text-muted">

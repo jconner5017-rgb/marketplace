@@ -30,7 +30,12 @@ export function trackingUrl(carrier: string | null, n: string | null): string | 
 export function StatusPill({ o }: { o: Order }) {
   const late = o.status === "paid" && o.ship_by && new Date(o.ship_by).getTime() < Date.now();
   const tone = late ? "bg-slab/10 text-slab" : o.status === "paid" ? "bg-ink text-white" : o.status === "cancelled" || o.status.includes("refund") ? "bg-wash text-muted" : "bg-ship/10 text-ship";
-  return <span className={`rounded-full px-2.5 py-0.5 text-[12px] font-semibold ${tone}`}>{late ? "Late to ship" : STATUS_LABEL[o.status]}</span>;
+  return (
+    <>
+      <span className={`rounded-full px-2.5 py-0.5 text-[12px] font-semibold ${tone}`}>{late ? "Late to ship" : STATUS_LABEL[o.status]}</span>
+      {o.test && <span className="ml-1.5 rounded-full border border-slab px-2 py-0.5 text-[11px] font-bold text-slab" title="Admin test order: no payment was taken">TEST</span>}
+    </>
+  );
 }
 
 /** Cards, totals and shipping for one order, from either side. */
