@@ -317,3 +317,83 @@ func (c *Client) ExpireCheckoutSession(ctx context.Context, account, id string) 
 	err := c.doAs(ctx, account, http.MethodPost, "/v1/checkout/sessions/"+url.PathEscape(id)+"/expire", url.Values{}, &s)
 	return s, err
 }
+
+// Platform covers charges on the platform's own Stripe account: sellers'
+// saved cards for shipping labels. Separate from buyers' payments.
+type Platform interface {
+	CreateCustomer(ctx context.Context, email, userID string) (string, error)
+	// CreateSetupSession opens Stripe Checkout in setup mode to save a card.
+	CreateSetupSession(ctx context.Context, customer, successURL, cancelURL string) (CheckoutSession, error)
+	// SetupResult returns the saved payment method and its "Visa ending 4242" label.
+	SetupResult(ctx context.Context, sessionID string) (paymentMethod, label, customer string, err error)
+	// Charge charges a saved card off-session and returns the PaymentIntent id.
+	Charge(ctx context.Context, customer, paymentMethod string, cents int, description string, metadata map[string]string) (string, error)
+	RefundPlatform(ctx context.Context, paymentIntent string) error
+}
+
+func (c *Client) CreateCustomer(ctx context.Context, email, userID string) (string, error) {
+	var out struct {
+		ID string `json:"id"`
+	}
+	err := c.do(ctx, http.MethodPost, "/v1/customers", url.Values{"email": {email}, "metadata[user_id]": {userID}}, &out)
+	return out.ID, err
+}
+
+func (c *Client) CreateSetupSession(ctx context.Context, customer, successURL, cancelURL string) (CheckoutSession, error) {
+	var s CheckoutSession
+	err := c.do(ctx, http.MethodPost, "/v1/checkout/sessions", url.Values{
+		"mode": {"setup"}, "customer": {customer}, "currency": {"usd"}, "payment_method_types[0]": {"card"},
+		"success_url": {successURL}, "cancel_url": {cancelURL},
+	}, &s)
+	return s, err
+}
+
+func (c *Client) SetupResult(ctx context.Context, sessionID string) (string, string, string, error) {
+	var s struct {
+		Status      string `json:"status"`
+		Customer    string `json:"customer"`
+		SetupIntent struct {
+			PaymentMethod struct {
+				ID   string `json:"id"`
+				Card struct {
+					Brand string `json:"brand"`
+					Last4 string `json:"last4"`
+				} `json:"card"`
+			} `json:"payment_method"`
+		} `json:"setup_intent"`
+	}
+	path := "/v1/checkout/sessions/" + url.PathEscape(sessionID) + "?expand[]=setup_intent.payment_method"
+	if err := c.do(ctx, http.MethodGet, path, nil, &s); err != nil {
+		return "", "", "", err
+	}
+	pm := s.SetupIntent.PaymentMethod
+	if s.Status != "complete" || pm.ID == "" {
+		return "", "", "", errors.New("the card wasn't saved")
+	}
+	brand := strings.ToUpper(pm.Card.Brand[:min(1, len(pm.Card.Brand))]) + pm.Card.Brand[min(1, len(pm.Card.Brand)):]
+	return pm.ID, brand + " ending " + pm.Card.Last4, s.Customer, nil
+}
+
+func (c *Client) Charge(ctx context.Context, customer, pm string, cents int, desc string, md map[string]string) (string, error) {
+	f := url.Values{"amount": {strconv.Itoa(cents)}, "currency": {"usd"}, "customer": {customer}, "payment_method": {pm},
+		"off_session": {"true"}, "confirm": {"true"}, "description": {desc}}
+	for k, v := range md {
+		f.Set("metadata["+k+"]", v)
+	}
+	var out struct {
+		ID     string `json:"id"`
+		Status string `json:"status"`
+	}
+	if err := c.do(ctx, http.MethodPost, "/v1/payment_intents", f, &out); err != nil {
+		return "", err
+	}
+	if out.Status != "succeeded" {
+		return out.ID, fmt.Errorf("card payment %s", out.Status)
+	}
+	return out.ID, nil
+}
+
+func (c *Client) RefundPlatform(ctx context.Context, pi string) error {
+	var out struct{}
+	return c.do(ctx, http.MethodPost, "/v1/refunds", url.Values{"payment_intent": {pi}}, &out)
+}

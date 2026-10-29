@@ -32,10 +32,17 @@ type Line struct {
 }
 
 type Shipment struct {
-	Method    string    `json:"method"`
-	Carrier   *string   `json:"carrier"`
-	Tracking  *string   `json:"tracking_number"`
-	CreatedAt time.Time `json:"created_at"`
+	Method      string    `json:"method"`
+	Carrier     *string   `json:"carrier"`
+	Service     *string   `json:"service"`
+	Tracking    *string   `json:"tracking_number"`
+	TrackingURL *string   `json:"tracking_url"`
+	Status      string    `json:"status"`
+	LastEvent   *string   `json:"last_event"`
+	LabelURL    *string   `json:"label_url,omitempty"` // seller only
+	Bought      bool      `json:"label_bought"`        // bought through the platform (can be voided)
+	ChargeCents *int      `json:"charge_cents,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 type Feedback struct {
@@ -204,9 +211,18 @@ func (s *Service) fill(ctx context.Context, userID string, o *Order) error {
 	rows.Close()
 
 	var sh Shipment
-	err = s.DB.QueryRowContext(ctx, `SELECT method, carrier, tracking_number, created_at FROM shipments
-		WHERE order_id = $1 ORDER BY created_at DESC LIMIT 1`, o.ID).Scan(&sh.Method, &sh.Carrier, &sh.Tracking, &sh.CreatedAt)
+	var label sql.NullString
+	err = s.DB.QueryRowContext(ctx, `SELECT method, carrier, service, tracking_number, tracking_url, status, last_event, label_url,
+		provider IS NOT NULL, charge_cents, created_at FROM shipments
+		WHERE order_id = $1 AND voided_at IS NULL ORDER BY created_at DESC LIMIT 1`, o.ID).Scan(&sh.Method, &sh.Carrier, &sh.Service,
+		&sh.Tracking, &sh.TrackingURL, &sh.Status, &sh.LastEvent, &label, &sh.Bought, &sh.ChargeCents, &sh.CreatedAt)
 	if err == nil {
+		if o.Side == "selling" && label.Valid {
+			sh.LabelURL = &label.String
+		}
+		if o.Side != "selling" {
+			sh.ChargeCents = nil
+		}
 		o.Shipment = &sh
 	} else if !errors.Is(err, sql.ErrNoRows) {
 		return err

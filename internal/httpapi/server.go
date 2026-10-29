@@ -58,6 +58,8 @@ type Server struct {
 	ipRules    *admin.IPRules
 	standing   *admin.Standing
 	fcm        *fcm.Service
+	// shippingToken guards the carrier tracking webhook URL.
+	shippingToken string
 }
 
 type Options struct {
@@ -82,6 +84,8 @@ type Options struct {
 	Fees     *fees.Service
 	Checkout *checkout.Service
 	FCM      *fcm.Service
+	// ShippingWebhookToken must be in the tracking webhook URL (?token=).
+	ShippingWebhookToken string
 	// AdminIPAllowlistOff turns off the admin IP allowlist (break-glass).
 	AdminIPAllowlistOff bool
 }
@@ -112,6 +116,7 @@ func New(o Options) *Server {
 		fees:          o.Fees,
 		checkout:      o.Checkout,
 		fcm:           o.FCM,
+		shippingToken: o.ShippingWebhookToken,
 		ipRules:       &admin.IPRules{DB: o.DB, Audit: o.Audit, Disabled: o.AdminIPAllowlistOff},
 		// 30 bids or offers per user per minute.
 		bidLimiter: newRateLimiter(30, time.Minute),
@@ -235,6 +240,14 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/listings/bulk", s.sellerAPI(s.handleAPIBulk))
 	mux.HandleFunc("PATCH /v1/listings/{externalID}", s.sellerAPI(s.handleAPIPatchListing))
 	mux.HandleFunc("DELETE /v1/listings/{externalID}", s.sellerAPI(s.handleAPIDeleteListing))
+	mux.HandleFunc("GET /v1/seller/shipping", requireUser(s.handleShippingSettings))
+	mux.HandleFunc("PUT /v1/seller/shipping/from", requireUser(s.handleShipFrom))
+	mux.HandleFunc("POST /v1/seller/shipping/card", requireUser(s.handleLabelCard))
+	mux.HandleFunc("POST /v1/seller/shipping/card/finish", requireUser(s.handleLabelCardFinish))
+	mux.HandleFunc("POST /v1/orders/{id}/label/rates", requireUser(s.handleLabelRates))
+	mux.HandleFunc("POST /v1/orders/{id}/label", requireUser(s.handleBuyLabel))
+	mux.HandleFunc("POST /v1/orders/{id}/label/void", requireUser(s.handleVoidLabel))
+	mux.HandleFunc("POST /v1/webhooks/shipping/{provider}", s.handleShippingWebhook)
 	mux.HandleFunc("GET /v1/seller/connect", requireUser(s.handleConnect))
 	mux.HandleFunc("PUT /v1/seller/connect", requireUser(s.handleSetConnect))
 	mux.HandleFunc("POST /v1/seller/connect/test", requireUser(s.handleTestWebhook))

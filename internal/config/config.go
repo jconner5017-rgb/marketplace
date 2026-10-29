@@ -31,6 +31,11 @@ type Config struct {
 	CheckoutEnabled bool
 	// AdminIPAllowlistOff (ADMIN_IP_ALLOWLIST=off) ignores the admin IP allowlist.
 	AdminIPAllowlistOff bool
+	// Shipping labels: SHIPPING_PROVIDER (shippo), its key, and the token
+	// that must appear in the tracking webhook URL.
+	ShippingProvider     string
+	ShippoAPIKey         string
+	ShippingWebhookToken string
 	// WebURL is the public website, where Stripe sends buyers back.
 	WebURL string
 	// MFAKey encrypts staff authenticator secrets (MFA_ENCRYPTION_KEY, 32 bytes).
@@ -77,6 +82,12 @@ func Load() (Config, error) {
 		c.CheckoutEnabled = b
 	}
 	c.AdminIPAllowlistOff = strings.EqualFold(strings.TrimSpace(os.Getenv("ADMIN_IP_ALLOWLIST")), "off")
+	c.ShippingProvider = strings.ToLower(strings.TrimSpace(os.Getenv("SHIPPING_PROVIDER")))
+	c.ShippoAPIKey = strings.TrimSpace(os.Getenv("SHIPPO_API_KEY"))
+	c.ShippingWebhookToken = strings.TrimSpace(os.Getenv("SHIPPING_WEBHOOK_TOKEN"))
+	if c.Env == "prod" && c.ShippingProvider == "fake" {
+		return c, errors.New("SHIPPING_PROVIDER=fake is for development only")
+	}
 	c.WebURL = strings.TrimRight(getenv("WEB_URL", "https://slabsnsingles.com"), "/")
 	for _, e := range strings.Split(os.Getenv("ADMIN_EMAILS"), ",") {
 		if e = strings.TrimSpace(e); e != "" {

@@ -74,6 +74,9 @@ Set these in the service's **Environment** tab (never commit them):
 | `STRIPE_SECRET_KEY` | `sk_test_…` from Stripe → Developers → API keys |
 | `STRIPE_WEBHOOK_SECRET` | `whsec_…` from the Stripe webhook endpoint (below) |
 | `CHECKOUT_ENABLED` | `true` lets buyers pay (needs `STRIPE_SECRET_KEY`); off by default |
+| `SHIPPING_PROVIDER` | `shippo` turns on label buying (needs `STRIPE_SECRET_KEY` for sellers' saved cards) |
+| `SHIPPO_API_KEY` | `shippo_test_…` or `shippo_live_…` |
+| `SHIPPING_WEBHOOK_TOKEN` | a long random string; in Shippo, add a `track_updated` webhook to `<PUBLIC_URL>/v1/webhooks/shipping/shippo?token=<this>` |
 | `ADMIN_IP_ALLOWLIST` | `off` ignores the admin network allowlist (break-glass if staff are locked out) |
 | `WEB_URL` | the public website Stripe sends buyers back to (default `https://slabsnsingles.com`) |
 

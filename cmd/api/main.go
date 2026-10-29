@@ -26,6 +26,7 @@ import (
 	"github.com/jconner5017-rgb/marketplace/internal/listings"
 	"github.com/jconner5017-rgb/marketplace/internal/sales"
 	"github.com/jconner5017-rgb/marketplace/internal/sellers"
+	"github.com/jconner5017-rgb/marketplace/internal/shipping"
 	"github.com/jconner5017-rgb/marketplace/internal/shopping"
 	"github.com/jconner5017-rgb/marketplace/internal/stripe"
 )
@@ -108,7 +109,17 @@ func run(log *slog.Logger) error {
 	checkoutSvc := &checkout.Service{DB: database, Sellers: sellerSvc, Fees: feeSvc, Rep: reputation,
 		Enabled: cfg.CheckoutEnabled, WebURL: cfg.WebURL}
 	if cfg.StripeSecretKey != "" {
-		checkoutSvc.Pay = stripe.NewClient(cfg.StripeSecretKey)
+		sc := stripe.NewClient(cfg.StripeSecretKey)
+		checkoutSvc.Pay, checkoutSvc.Platform = sc, sc
+	}
+	ship, err := shipping.Pick(cfg.ShippingProvider, map[string]string{"SHIPPO_API_KEY": cfg.ShippoAPIKey})
+	if err != nil {
+		return err
+	}
+	if ship != nil {
+		checkoutSvc.Ship = ship
+		log.Info("shipping labels", "provider", ship.Name(), "card_payments", checkoutSvc.Platform != nil,
+			"tracking_webhook", cfg.ShippingWebhookToken != "")
 	}
 	log.Info("checkout", "enabled", checkoutSvc.Ready(), "return_to", cfg.WebURL)
 	fcmSvc := &fcm.Service{DB: database}
@@ -134,6 +145,8 @@ func run(log *slog.Logger) error {
 		Fees:     feeSvc,
 		Checkout: checkoutSvc,
 		FCM:      fcmSvc,
+
+		ShippingWebhookToken: cfg.ShippingWebhookToken,
 
 		AdminIPAllowlistOff: cfg.AdminIPAllowlistOff,
 	})

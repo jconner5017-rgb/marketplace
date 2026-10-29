@@ -17,7 +17,8 @@ export const day = (iso: string | null) => (iso ? dateFmt.format(new Date(iso)) 
 export function trackingUrl(carrier: string | null, n: string | null): string | null {
   if (!n) return null;
   const t = encodeURIComponent(n);
-  switch (carrier) {
+  const c = (carrier ?? "").toUpperCase();
+  switch (c === "FEDEX" ? "FedEx" : c) {
     case "USPS": return `https://tools.usps.com/go/TrackConfirmAction?tLabels=${t}`;
     case "UPS": return `https://www.ups.com/track?tracknum=${t}`;
     case "FedEx": return `https://www.fedex.com/fedextrack/?trknbr=${t}`;
@@ -35,7 +36,7 @@ export function StatusPill({ o }: { o: Order }) {
 /** Cards, totals and shipping for one order, from either side. */
 export default function OrderView({ o }: { o: Order }) {
   const selling = o.side === "selling";
-  const track = o.shipment && trackingUrl(o.shipment.carrier, o.shipment.tracking_number);
+  const track = o.shipment && (o.shipment.tracking_url || trackingUrl(o.shipment.carrier, o.shipment.tracking_number));
   return (
     <div className="grid gap-6 md:grid-cols-[1fr_300px]">
       <div>
@@ -88,6 +89,7 @@ export default function OrderView({ o }: { o: Order }) {
               track ? <a href={track} target="_blank" rel="noopener noreferrer" className="num mt-1 inline-block break-all text-link underline">{o.shipment.tracking_number}</a>
                 : <p className="num mt-1 break-all">{o.shipment.tracking_number}</p>
             ) : <p className="mt-1 text-muted">No tracking (stamped envelope)</p>}
+            {o.shipment.last_event && !o.delivered_at && <p className="mt-1 text-muted">Latest: {o.shipment.last_event}</p>}
             {o.delivered_at && <p className="mt-1 text-ship">Delivered {day(o.delivered_at)}</p>}
           </div>
         )}

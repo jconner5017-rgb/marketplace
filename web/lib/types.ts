@@ -239,7 +239,10 @@ export interface Order {
   shipped_at: string | null;
   delivered_at: string | null;
   lines: OrderLine[];
-  shipment: { method: string; carrier: string | null; tracking_number: string | null; created_at: string } | null;
+  shipment: {
+    method: string; carrier: string | null; service: string | null; tracking_number: string | null; tracking_url: string | null;
+    status: string; last_event: string | null; label_url?: string; label_bought: boolean; charge_cents?: number; created_at: string;
+  } | null;
   my_feedback: OrderFeedback | null;
   their_feedback: OrderFeedback | null;
   cases: { number: number; kind: string; status: string }[];

@@ -140,7 +140,13 @@ func (s *Service) recordRefund(ctx context.Context, account string, c stripeChar
 		"/purchases/"+o.id); err != nil {
 		return err
 	}
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	if status == "refunded" {
+		s.voidUnusedLabel(ctx, o.id, o.seller)
+	}
+	return nil
 }
 
 func (s *Service) recordFeeRefund(ctx context.Context, f stripeAppFee) error {

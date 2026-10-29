@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"bytes"
+	"crypto/subtle"
 	"errors"
 	"fmt"
 	"net/http"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/jconner5017-rgb/marketplace/internal/checkout"
+	"github.com/jconner5017-rgb/marketplace/internal/shipping"
 )
 
 func (s *Server) checkoutError(w http.ResponseWriter, r *http.Request, err error) {
@@ -307,4 +309,157 @@ func (s *Server) evidence(w http.ResponseWriter, r *http.Request, userID string,
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Content-Disposition", `attachment; filename="order-`+id+`-evidence.html"`)
 	w.Write(buf.Bytes())
+}
+
+func (s *Server) labelError(w http.ResponseWriter, r *http.Request, err error) {
+	switch {
+	case errors.Is(err, checkout.ErrNoLabels):
+		writeError(w, http.StatusServiceUnavailable, "labels_off", err.Error(), nil)
+	case errors.Is(err, checkout.ErrNoShipFrom), errors.Is(err, checkout.ErrNoCard), errors.Is(err, checkout.ErrHasLabel),
+		errors.Is(err, checkout.ErrRateExpired), errors.Is(err, checkout.ErrLabelUsed), errors.Is(err, shipping.ErrNoRates),
+		errors.Is(err, shipping.ErrBadAddress):
+		writeError(w, http.StatusConflict, "label_problem", err.Error(), nil)
+	default:
+		var fe *checkout.FieldError
+		if errors.As(err, &fe) {
+			writeError(w, http.StatusUnprocessableEntity, "invalid", fe.Msg, map[string]string{fe.Field: fe.Msg})
+			return
+		}
+		if errors.Is(err, checkout.ErrNotFound) || errors.Is(err, checkout.ErrState) {
+			s.checkoutError(w, r, err)
+			return
+		}
+		s.log.Error("label", "err", err)
+		writeError(w, http.StatusBadGateway, "carrier_error", err.Error(), nil)
+	}
+}
+
+// GET /v1/seller/shipping — ship-from address and label card.
+func (s *Server) handleShippingSettings(w http.ResponseWriter, r *http.Request) {
+	u, _ := currentUser(r)
+	st, err := s.checkout.LabelSettings(r.Context(), u.ID)
+	if err != nil {
+		s.checkoutError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, st)
+}
+
+// PUT /v1/seller/shipping/from {name, line1, line2, city, state, zip, phone}
+func (s *Server) handleShipFrom(w http.ResponseWriter, r *http.Request) {
+	u, _ := currentUser(r)
+	var a shipping.Address
+	if !decodeJSON(w, r, &a) {
+		return
+	}
+	a.Email = u.Email
+	v, err := s.checkout.SetShipFrom(r.Context(), u.ID, a)
+	if err != nil {
+		s.labelError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ship_from": v})
+}
+
+// POST /v1/seller/shipping/card — Stripe page for saving a card for labels.
+func (s *Server) handleLabelCard(w http.ResponseWriter, r *http.Request) {
+	u, _ := currentUser(r)
+	url, err := s.checkout.StartCardSetup(r.Context(), u.ID, u.Email)
+	if err != nil {
+		s.labelError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"url": url})
+}
+
+// POST /v1/seller/shipping/card/finish {"session_id"}
+func (s *Server) handleLabelCardFinish(w http.ResponseWriter, r *http.Request) {
+	u, _ := currentUser(r)
+	var req struct {
+		SessionID string `json:"session_id"`
+	}
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	card, err := s.checkout.FinishCardSetup(r.Context(), u.ID, req.SessionID)
+	if err != nil {
+		s.labelError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"card": card})
+}
+
+// POST /v1/orders/{id}/label/rates
+func (s *Server) handleLabelRates(w http.ResponseWriter, r *http.Request) {
+	u, _ := currentUser(r)
+	id, ok := orderParam(w, r)
+	if !ok {
+		return
+	}
+	rates, err := s.checkout.LabelRates(r.Context(), u.ID, id)
+	if err != nil {
+		s.labelError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"rates": rates})
+}
+
+// POST /v1/orders/{id}/label {"rate_id"}
+func (s *Server) handleBuyLabel(w http.ResponseWriter, r *http.Request) {
+	u, _ := currentUser(r)
+	id, ok := orderParam(w, r)
+	if !ok {
+		return
+	}
+	var req struct {
+		RateID string `json:"rate_id"`
+	}
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	l, err := s.checkout.BuyLabel(r.Context(), u.ID, id, req.RateID)
+	if err != nil {
+		s.labelError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{"label": l})
+}
+
+// POST /v1/orders/{id}/label/void
+func (s *Server) handleVoidLabel(w http.ResponseWriter, r *http.Request) {
+	u, _ := currentUser(r)
+	id, ok := orderParam(w, r)
+	if !ok {
+		return
+	}
+	if err := s.checkout.VoidLabel(r.Context(), u.ID, id); err != nil {
+		s.labelError(w, r, err)
+		return
+	}
+	s.handleOrder(w, r)
+}
+
+// POST /v1/webhooks/shipping/{provider}?token=... — carrier tracking updates.
+func (s *Server) handleShippingWebhook(w http.ResponseWriter, r *http.Request) {
+	p := s.checkout.Ship
+	if p == nil || r.PathValue("provider") != p.Name() || s.shippingToken == "" ||
+		subtle.ConstantTimeCompare([]byte(r.URL.Query().Get("token")), []byte(s.shippingToken)) != 1 {
+		writeError(w, http.StatusNotFound, "not_found", "not found", nil)
+		return
+	}
+	events, err := p.ParseTrackingWebhook(r)
+	if errors.Is(err, shipping.ErrBadWebhook) {
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ignored"})
+		return
+	}
+	if err != nil {
+		s.internalError(w, r, err)
+		return
+	}
+	n, err := s.checkout.ApplyTracking(r.Context(), events)
+	if err != nil {
+		s.internalError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]int{"updated": n})
 }

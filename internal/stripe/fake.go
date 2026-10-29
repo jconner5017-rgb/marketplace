@@ -109,3 +109,64 @@ func (f *FakePayments) Expire(id string) {
 	defer f.mu.Unlock()
 	f.sessions[id].Status = "expired"
 }
+
+// FakePlatform stands in for the platform account (sellers' label cards).
+type FakePlatform struct {
+	mu       sync.Mutex
+	n        int
+	Decline  bool
+	Charges  map[string]int // payment intent → cents
+	Refunded []string
+	setups   map[string]string // session → customer
+}
+
+func NewFakePlatform() *FakePlatform {
+	return &FakePlatform{Charges: map[string]int{}, setups: map[string]string{}}
+}
+
+func (f *FakePlatform) CreateCustomer(_ context.Context, email, userID string) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.n++
+	return fmt.Sprintf("cus_fake%d", f.n), nil
+}
+
+func (f *FakePlatform) CreateSetupSession(_ context.Context, customer, success, cancel string) (CheckoutSession, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.n++
+	id := fmt.Sprintf("cs_setup_fake%d", f.n)
+	f.setups[id] = customer
+	return CheckoutSession{ID: id, URL: "https://checkout.stripe.test/" + id}, nil
+}
+
+func (f *FakePlatform) SetupResult(_ context.Context, id string) (string, string, string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	cus, ok := f.setups[id]
+	if !ok {
+		return "", "", "", errors.New("no such session")
+	}
+	return "pm_fake_" + id, "Visa ending 4242", cus, nil
+}
+
+func (f *FakePlatform) Charge(_ context.Context, customer, pm string, cents int, desc string, md map[string]string) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.Decline {
+		return "", errors.New("Your card was declined.")
+	}
+	f.n++
+	id := fmt.Sprintf("pi_label_fake%d", f.n)
+	f.Charges[id] = cents
+	return id, nil
+}
+
+func (f *FakePlatform) RefundPlatform(_ context.Context, pi string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.Refunded = append(f.Refunds(), pi)
+	return nil
+}
+
+func (f *FakePlatform) Refunds() []string { return f.Refunded }

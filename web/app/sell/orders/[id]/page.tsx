@@ -6,6 +6,7 @@ import type { Order } from "@/lib/types";
 import OrderView, { StatusPill, day } from "@/components/orders/OrderView";
 import ShipForm from "@/components/orders/ShipForm";
 import BuyerActions from "@/components/orders/BuyerActions";
+import { BuyLabel, VoidLabel } from "@/components/orders/LabelBuyer";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Order", robots: { index: false } };
@@ -28,12 +29,23 @@ export default async function SellerOrder({ params }: { params: Promise<{ id: st
       {o.status === "paid" && (
         <div className="mt-4 max-w-[560px] rounded-lg border border-ink p-4">
           <h2 className="font-semibold">Ship by {day(o.ship_by)}</h2>
-          <p className="text-[14px] text-muted">
-            {o.ship_method === "envelope"
-              ? "One raw card: a stamped envelope is fine. Add tracking if you have it."
-              : "Ship in one package with tracking, then enter the tracking number."}
-          </p>
+          {o.ship_method === "envelope" ? (
+            <p className="text-[14px] text-muted">One raw card: a stamped envelope is fine. Add tracking if you have it.</p>
+          ) : (
+            <>
+              <p className="text-[14px] text-muted">Ship in one package with tracking. Buy the label here, or enter tracking from a label you bought elsewhere.</p>
+              <BuyLabel orderId={o.id} />
+              <p className="mt-4 text-[13px] font-semibold">Already have a label?</p>
+            </>
+          )}
           <ShipForm orderId={o.id} method={o.ship_method} />
+        </div>
+      )}
+      {o.shipment?.label_url && (
+        <div className="mt-4 flex max-w-[560px] flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-line p-4 text-[14px]">
+          <a href={o.shipment.label_url} target="_blank" rel="noopener noreferrer" className="rounded-full bg-link px-4 py-2 font-semibold text-white hover:bg-link-dark">Print label</a>
+          <span>{o.shipment.carrier} {o.shipment.service} · <span className="num">{o.shipment.tracking_number}</span></span>
+          {o.shipment.status === "label_created" && <VoidLabel orderId={o.id} />}
         </div>
       )}
       <BuyerActions o={o} />

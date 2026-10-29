@@ -156,6 +156,7 @@ func (s *Service) Oversold(ctx context.Context, sellerID, orderID, externalID st
 		if err := tx.Commit(); err != nil {
 			return "", err
 		}
+		s.voidUnusedLabel(ctx, oid, sellerID)
 		if s.Rep != nil {
 			if _, _, err := s.Rep.Review(ctx, sellerID); err != nil {
 				return outcome, err

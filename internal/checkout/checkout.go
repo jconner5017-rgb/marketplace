@@ -21,6 +21,7 @@ import (
 	"github.com/jconner5017-rgb/marketplace/internal/fees"
 	"github.com/jconner5017-rgb/marketplace/internal/inbox"
 	"github.com/jconner5017-rgb/marketplace/internal/sellers"
+	"github.com/jconner5017-rgb/marketplace/internal/shipping"
 	"github.com/jconner5017-rgb/marketplace/internal/shopping"
 	"github.com/jconner5017-rgb/marketplace/internal/stripe"
 )
@@ -45,9 +46,13 @@ type Service struct {
 	Fees    *fees.Service
 	Pay     stripe.Payments     // nil when Stripe isn't configured
 	Rep     *sellers.Reputation // re-checks a seller's tier after feedback or a chargeback
-	Enabled bool                // CHECKOUT_ENABLED
-	WebURL  string              // where Stripe sends the buyer back, e.g. https://slabsnsingles.com
-	Now     func() time.Time
+	// Labels: the shipping provider and the platform's own Stripe account
+	// (sellers' saved cards). Either nil = label buying is off.
+	Ship     shipping.Provider
+	Platform stripe.Platform
+	Enabled  bool   // CHECKOUT_ENABLED
+	WebURL   string // where Stripe sends the buyer back, e.g. https://slabsnsingles.com
+	Now      func() time.Time
 }
 
 func (s *Service) now() time.Time {
