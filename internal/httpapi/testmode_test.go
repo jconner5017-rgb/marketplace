@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"github.com/jconner5017-rgb/marketplace/internal/demo"
 	"strings"
 	"testing"
 )
@@ -64,6 +65,21 @@ func TestAdminTestMode(t *testing.T) {
 	e.db.QueryRow(`SELECT note FROM ledger_entries WHERE order_id = $1 AND kind = 'charge'`, oid).Scan(&note)
 	if !strings.HasPrefix(note, "TEST ORDER") {
 		t.Fatalf("ledger note %q", note)
+	}
+
+	// The admin can't ship a normal seller's order, but can play the sample
+	// shop on their own test order.
+	if code, _ := do(t, boss.c, "POST", e.ts.URL+"/v1/orders/"+oid+"/ship", map[string]string{"carrier": "", "tracking_number": ""}); code != 404 {
+		t.Fatalf("admin shipping someone else's order: %d", code)
+	}
+	e.db.Exec(`DELETE FROM users WHERE lower(email) = lower($1)`, demo.SellerEmail)
+	e.db.Exec(`UPDATE users SET email = $1 WHERE username = 'tm_shop'`, demo.SellerEmail)
+	defer e.db.Exec(`UPDATE users SET email = 'tm_shop@example.com' WHERE username = 'tm_shop'`)
+	if code, body := do(t, boss.c, "POST", e.ts.URL+"/v1/orders/"+oid+"/ship", map[string]string{"carrier": "", "tracking_number": ""}); code != 200 {
+		t.Fatalf("admin ships as sample shop: %d %v", code, body)
+	}
+	if code, body := do(t, boss.c, "POST", e.ts.URL+"/v1/orders/"+oid+"/delivered", map[string]string{}); code != 200 {
+		t.Fatalf("delivered: %d %v", code, body)
 	}
 
 	// Once real checkout is on, test mode ends.

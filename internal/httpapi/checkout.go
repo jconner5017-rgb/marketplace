@@ -5,6 +5,8 @@ import (
 	"crypto/subtle"
 	"errors"
 	"fmt"
+	"github.com/jconner5017-rgb/marketplace/internal/auth"
+	"github.com/jconner5017-rgb/marketplace/internal/demo"
 	"net/http"
 	"strconv"
 	"time"
@@ -170,7 +172,11 @@ func (s *Server) handleShipOrder(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	if err := s.checkout.MarkShipped(r.Context(), u.ID, id, req.Carrier, req.Tracking); err != nil {
+	sellerID := u.ID
+	if sid, ok := s.sampleSellerForTest(r, u, id); ok {
+		sellerID = sid // admin shipping their own test order from the sample shop
+	}
+	if err := s.checkout.MarkShipped(r.Context(), sellerID, id, req.Carrier, req.Tracking); err != nil {
 		s.checkoutError(w, r, err)
 		return
 	}
@@ -448,4 +454,19 @@ func (s *Server) handleShippingWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]int{"updated": n})
+}
+
+// sampleSellerForTest lets an admin play the sample shop on their own test
+// orders (nobody can sign in as the sample shop), so the whole order flow
+// can be tried before checkout opens.
+func (s *Server) sampleSellerForTest(r *http.Request, u auth.User, orderID string) (string, bool) {
+	if !u.IsAdmin() {
+		return "", false
+	}
+	var sellerID string
+	err := s.db.QueryRowContext(r.Context(), `
+		SELECT o.seller_id FROM orders o JOIN users su ON su.id = o.seller_id
+		WHERE (o.id::text = $1 OR o.number::text = $1) AND o.test AND o.buyer_id = $2 AND lower(su.email) = lower($3)`,
+		orderID, u.ID, demo.SellerEmail).Scan(&sellerID)
+	return sellerID, err == nil
 }
