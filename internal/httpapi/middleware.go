@@ -68,9 +68,11 @@ func requireJSONForWrites(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
-			// text/csv (bulk import) also forces a preflight; form posts don't.
+			// text/csv (bulk import) and image/* (photo uploads) also force a
+			// preflight; form posts and text/plain don't.
 			mt, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type"))
-			if mt != "application/json" && mt != "text/csv" {
+			photo := r.URL.Path == "/v1/photos" && (mt == "image/jpeg" || mt == "image/png" || mt == "image/gif")
+			if mt != "application/json" && mt != "text/csv" && !photo {
 				writeError(w, http.StatusUnsupportedMediaType, "json_required",
 					"Content-Type must be application/json", nil)
 				return

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { send } from "@/lib/client";
@@ -27,9 +28,11 @@ export default function ListingActions({ id, status, auction }: {
     router.refresh();
   }
 
+  const edit = <Link href={`/sell/listings/${id}/edit`} className="text-link underline">Edit</Link>;
   if (auction) {
-    if (auction.state !== "live" || auction.bid_count > 0) {
-      return <span className="text-[12px] text-muted">{auction.state === "live" ? "Has bids" : ""}</span>;
+    if (auction.state !== "live") return null;
+    if (auction.bid_count > 0) {
+      return <span className="inline-flex gap-3 text-[13px]">{edit}<span className="text-[12px] text-muted">Has bids</span></span>;
     }
     return confirming ? (
       <span className="inline-flex gap-2 text-[13px]">
@@ -37,7 +40,8 @@ export default function ListingActions({ id, status, auction }: {
         <button type="button" onClick={() => setConfirming(false)} className="text-muted underline">Keep</button>
       </span>
     ) : (
-      <span className="text-[13px]">
+      <span className="inline-flex gap-3 text-[13px]">
+        {edit}
         <button type="button" onClick={() => setConfirming(true)} className="text-muted underline">End early</button>
         {error && <span role="alert" className="block text-slab">{error}</span>}
       </span>
@@ -54,6 +58,7 @@ export default function ListingActions({ id, status, auction }: {
   }
   return (
     <span className="inline-flex gap-3 text-[13px]">
+      {edit}
       {status === "hidden" ? (
         <button type="button" onClick={() => patch({ status: "active" })} disabled={busy} className="text-link underline">Show</button>
       ) : (

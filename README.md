@@ -140,7 +140,7 @@ All write requests must send `Content-Type: application/json` (the CSV import us
 | GET | `/v1/members/{username}/buyer-record` | buyer reliability, for sellers dealing with that buyer |
 | GET/PUT | `/v1/seller/feedback` · POST `/v1/seller/outside-feedback` | automatic buyer feedback; verified feedback from other sites |
 
-Sellers start at tier 1 (cards up to $20), then $250 and $1,000. Listings need at least one `https://` photo; raw cards need a `condition` (NM, LP, MP, HP, DMG); graded cards need `grader` and `grade`.
+Sellers start at tier 1 (cards up to $20), then $250 and $1,000. Listings need at least one `https://` photo (upload with `POST /v1/photos`, or link your own); raw cards need a `condition` (NM, LP, MP, HP, DMG); graded cards need `grader` and `grade`.
 
 **Buying**
 

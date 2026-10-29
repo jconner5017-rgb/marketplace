@@ -34,6 +34,7 @@ import (
 	"github.com/jconner5017-rgb/marketplace/internal/fees"
 	"github.com/jconner5017-rgb/marketplace/internal/inbox"
 	"github.com/jconner5017-rgb/marketplace/internal/listings"
+	"github.com/jconner5017-rgb/marketplace/internal/photos"
 	"github.com/jconner5017-rgb/marketplace/internal/sales"
 	"github.com/jconner5017-rgb/marketplace/internal/sellers"
 	"github.com/jconner5017-rgb/marketplace/internal/shipping"
@@ -156,6 +157,7 @@ func setupEnv(t *testing.T) *env {
 		Checkout:      co,
 		FCM:           fcmSvc,
 		Feedback:      fb,
+		Photos:        &photos.Service{DB: d, BaseURL: "https://api.market.test"},
 
 		ShippingWebhookToken: "shiptok",
 	})

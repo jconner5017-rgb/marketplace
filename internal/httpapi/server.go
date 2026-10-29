@@ -18,6 +18,7 @@ import (
 	"github.com/jconner5017-rgb/marketplace/internal/fees"
 	"github.com/jconner5017-rgb/marketplace/internal/inbox"
 	"github.com/jconner5017-rgb/marketplace/internal/listings"
+	"github.com/jconner5017-rgb/marketplace/internal/photos"
 	"github.com/jconner5017-rgb/marketplace/internal/sales"
 	"github.com/jconner5017-rgb/marketplace/internal/sellers"
 	"github.com/jconner5017-rgb/marketplace/internal/shopping"
@@ -60,6 +61,7 @@ type Server struct {
 	standing   *admin.Standing
 	fcm        *fcm.Service
 	feedback   *feedback.Service
+	photos     *photos.Service
 	// shippingToken guards the carrier tracking webhook URL.
 	shippingToken string
 }
@@ -87,6 +89,7 @@ type Options struct {
 	Checkout *checkout.Service
 	FCM      *fcm.Service
 	Feedback *feedback.Service
+	Photos   *photos.Service
 	// ShippingWebhookToken must be in the tracking webhook URL (?token=).
 	ShippingWebhookToken string
 	// AdminIPAllowlistOff turns off the admin IP allowlist (break-glass).
@@ -120,6 +123,7 @@ func New(o Options) *Server {
 		checkout:      o.Checkout,
 		fcm:           o.FCM,
 		feedback:      o.Feedback,
+		photos:        o.Photos,
 		shippingToken: o.ShippingWebhookToken,
 		ipRules:       &admin.IPRules{DB: o.DB, Audit: o.Audit, Disabled: o.AdminIPAllowlistOff},
 		// 30 bids or offers per user per minute.
@@ -301,6 +305,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/listings/facets", s.handleFacets)
 	mux.HandleFunc("GET /v1/catalog", handleCatalog)
 	mux.HandleFunc("GET /demo/card/{name}", handleDemoCard)
+	mux.HandleFunc("POST /v1/photos", s.sellerAPI(s.handleUploadPhoto))
+	mux.HandleFunc("GET /photos/{file}", s.handlePhoto)
 	mux.HandleFunc("GET /v1/listings/{id}", s.handleGetListing)
 
 	var h http.Handler = mux

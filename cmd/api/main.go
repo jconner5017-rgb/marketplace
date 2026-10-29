@@ -25,6 +25,7 @@ import (
 	"github.com/jconner5017-rgb/marketplace/internal/httpapi"
 	"github.com/jconner5017-rgb/marketplace/internal/inbox"
 	"github.com/jconner5017-rgb/marketplace/internal/listings"
+	"github.com/jconner5017-rgb/marketplace/internal/photos"
 	"github.com/jconner5017-rgb/marketplace/internal/sales"
 	"github.com/jconner5017-rgb/marketplace/internal/sellers"
 	"github.com/jconner5017-rgb/marketplace/internal/shipping"
@@ -125,6 +126,12 @@ func run(log *slog.Logger) error {
 	log.Info("checkout", "enabled", checkoutSvc.Ready(), "return_to", cfg.WebURL)
 	fcmSvc := &fcm.Service{DB: database}
 	feedbackSvc := &feedback.Service{DB: database, Rep: reputation}
+	photoSvc := &photos.Service{DB: database, BaseURL: cfg.ImageBaseURL}
+	if cfg.PhotoStore == "s3" {
+		photoSvc.S3 = &photos.S3{Endpoint: cfg.S3Endpoint, Bucket: cfg.S3Bucket, Region: cfg.S3Region,
+			AccessKey: cfg.S3AccessKey, SecretKey: cfg.S3SecretKey, PublicURL: cfg.PhotoPublicURL}
+	}
+	log.Info("photo storage", "store", photoSvc.Store())
 	api := httpapi.New(httpapi.Options{
 		DB:           database,
 		Auth:         authSvc,
@@ -148,6 +155,7 @@ func run(log *slog.Logger) error {
 		Checkout: checkoutSvc,
 		FCM:      fcmSvc,
 		Feedback: feedbackSvc,
+		Photos:   photoSvc,
 
 		ShippingWebhookToken: cfg.ShippingWebhookToken,
 
@@ -212,6 +220,11 @@ func run(log *slog.Logger) error {
 			case <-t.C:
 				if err := fcmSvc.RunReconcile(ctx, checkoutSvc.ReleaseListing, func(m string, kv ...any) { log.Info(m, kv...) }); err != nil {
 					log.Error("inventory reconcile", "err", err)
+				}
+				if n, err := photoSvc.Sweep(ctx); err != nil {
+					log.Error("sweep unused photos", "err", err)
+				} else if n > 0 {
+					log.Info("unused photos removed", "count", n)
 				}
 				if err := fcmSvc.PurgeIdempotency(ctx); err != nil {
 					log.Error("purge idempotency keys", "err", err)

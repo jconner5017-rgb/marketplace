@@ -7,6 +7,7 @@ import { CONDITIONS, money, toCents } from "@/lib/format";
 import type { FeeSchedule, SiteCatalog } from "@/lib/catalog";
 import type { Listing } from "@/lib/types";
 import Field from "./Field";
+import PhotoUploader from "./sell/PhotoUploader";
 
 const GRADERS = ["PSA", "BGS", "SGC", "CGC", "TAG", "OTHER"];
 const LABEL_ESTIMATE: Record<string, number> = { envelope: 0, bubble: 480, box: 650 };
@@ -23,27 +24,39 @@ function threshold(kind: Kind, v: string): number | null {
   return toCents(v);
 }
 
-export default function NewListingForm({ capCents, catalog, fees }: { capCents: number; catalog: SiteCatalog; fees: FeeSchedule }) {
+const dollars = (c: number | null | undefined) => (c == null ? "" : (c / 100).toFixed(2));
+const ruleText = (kind: Kind | null | undefined, v: number | null | undefined) => (v == null ? "" : kind === "amount" ? dollars(v) : String(v));
+
+/** The listing form, for a new card or (with `initial`) editing one. */
+export default function NewListingForm({ capCents, catalog, fees, initial }: {
+  capCents: number; catalog: SiteCatalog; fees: FeeSchedule; initial?: Listing;
+}) {
+  const editing = !!initial;
+  const a = initial?.auction;
+  const os = initial?.offer_settings;
+  // Once an auction has bids, only the description and photos can change.
+  const locked = !!a && a.bid_count > 0;
   const FEE = (cents: number) =>
     cents <= fees.threshold_cents
       ? Math.min(fees.flat_cents, cents)
       : Math.min(fees.cap_cents, cents, Math.max(fees.flat_cents, Math.floor((cents * fees.percent_bps) / 10000)));
   const router = useRouter();
-  const [graded, setGraded] = useState(false);
-  const [category, setCategory] = useState("tcg");
-  const [price, setPrice] = useState("");
-  const [preset, setPreset] = useState("envelope");
-  const [format, setFormat] = useState<"fixed" | "auction">("fixed");
-  const [start, setStart] = useState("");
-  const [reserve, setReserve] = useState("");
-  const [binPrice, setBinPrice] = useState("");
-  const [days, setDays] = useState(7);
-  const [relist, setRelist] = useState(false);
-  const [offersOn, setOffersOn] = useState(false);
-  const [acceptKind, setAcceptKind] = useState<Kind>("percent");
-  const [acceptVal, setAcceptVal] = useState("");
-  const [declineKind, setDeclineKind] = useState<Kind>("percent");
-  const [declineVal, setDeclineVal] = useState("");
+  const [graded, setGraded] = useState(initial ? initial.grader != null : false);
+  const [category, setCategory] = useState<string>(initial?.category ?? "tcg");
+  const [price, setPrice] = useState(initial && initial.format === "fixed" ? dollars(initial.price_cents) : "");
+  const [preset, setPreset] = useState(initial?.package_preset ?? "envelope");
+  const [format, setFormat] = useState<"fixed" | "auction">(initial?.format ?? "fixed");
+  const [start, setStart] = useState(dollars(a?.start_cents));
+  const [reserve, setReserve] = useState(dollars(a?.reserve_cents));
+  const [binPrice, setBinPrice] = useState(dollars(a?.buy_now_cents));
+  const [days, setDays] = useState(a?.duration_days ?? 7);
+  const [relist, setRelist] = useState(a?.auto_relist ?? false);
+  const [offersOn, setOffersOn] = useState(os?.enabled ?? false);
+  const [acceptKind, setAcceptKind] = useState<Kind>(os?.accept_kind ?? "percent");
+  const [acceptVal, setAcceptVal] = useState(ruleText(os?.accept_kind, os?.accept_value));
+  const [declineKind, setDeclineKind] = useState<Kind>(os?.decline_kind ?? "percent");
+  const [declineVal, setDeclineVal] = useState(ruleText(os?.decline_kind, os?.decline_value));
+  const [photos, setPhotos] = useState<string[]>(initial?.photo_urls ?? []);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [fields, setFields] = useState<Record<string, string>>({});
@@ -59,6 +72,19 @@ export default function NewListingForm({ capCents, catalog, fees }: { capCents: 
     const opt = (k: string) => s(k) || null;
     setMessage("");
     setFields({});
+    if (locked && initial) {
+      setBusy(true);
+      const res = await send<{ listing: Listing }>("PATCH", `/v1/seller/listings/${initial.id}`, { description: s("description"), photo_urls: photos });
+      setBusy(false);
+      if (!res.ok) {
+        setMessage(res.status === 422 ? "Some details need fixing." : res.message);
+        setFields(res.fields);
+        return;
+      }
+      router.push(`/item/${initial.id}`);
+      router.refresh();
+      return;
+    }
     if (cents == null) {
       setFields(format === "auction" ? { "auction.start_cents": "Enter a starting bid like 0.99" } : { price_cents: "Enter a price like 12.50" });
       return;
@@ -82,15 +108,16 @@ export default function NewListingForm({ capCents, catalog, fees }: { capCents: 
       game_or_sport: s("game_or_sport"),
       set_name: s("set_name"),
       year: s("year") ? Number(s("year")) : null,
-      card_number: opt("card_number"),
+      card_number: editing ? s("card_number") : opt("card_number"),
       title: s("title"),
       description: s("description"),
       condition: graded ? opt("condition") : s("condition"),
       grader: graded ? s("grader") : null,
       grade: graded && s("grade") ? Number(s("grade")) : null,
-      cert_number: graded ? opt("cert_number") : null,
+      cert_number: graded ? (editing ? s("cert_number") : opt("cert_number")) : null,
+      ...(editing && !graded && initial?.grader ? { clear_grading: true } : {}),
       attributes: f.getAll("attributes").map(String),
-      photo_urls: s("photo_urls").split(/\s+/).filter(Boolean),
+      photo_urls: photos,
       price_cents: cents,
       quantity: format === "auction" ? 1 : Number(s("quantity") || "1"),
       format,
@@ -98,10 +125,12 @@ export default function NewListingForm({ capCents, catalog, fees }: { capCents: 
       offers,
       package_preset: preset,
       weight_oz: Number(s("weight_oz") || "1"),
-      external_id: opt("external_id"),
+      ...(editing ? {} : { external_id: opt("external_id") }),
     };
     setBusy(true);
-    const res = await send<{ listing: Listing }>("POST", "/v1/seller/listings", body);
+    const res = initial
+      ? await send<{ listing: Listing }>("PATCH", `/v1/seller/listings/${initial.id}`, body)
+      : await send<{ listing: Listing }>("POST", "/v1/seller/listings", body);
     setBusy(false);
     if (!res.ok) {
       setMessage(res.status === 422 ? "Some details need fixing." : res.message);
@@ -110,6 +139,7 @@ export default function NewListingForm({ capCents, catalog, fees }: { capCents: 
       return;
     }
     router.push(`/item/${res.data.listing.id}`);
+    router.refresh();
   }
 
   const select = "mt-1 w-full rounded-md border border-line px-3 py-2";
@@ -119,6 +149,12 @@ export default function NewListingForm({ capCents, catalog, fees }: { capCents: 
         <p role="alert" className="rounded-md border border-slab/40 bg-slab/5 px-3 py-2 text-[14px] text-slab">{message}</p>
       )}
 
+      {locked && (
+        <p className="rounded-lg bg-wash p-4 text-[14px]">
+          This auction has bids, so you can only add to the description and change the photos. Everything else stays as bidders saw it.
+        </p>
+      )}
+      {!locked && <>
       <fieldset className="grid gap-4 sm:grid-cols-2">
         <legend className="mb-2 text-[18px] font-bold">The card</legend>
         <Field label="Category" name="category" error={fields.category}>
@@ -128,17 +164,17 @@ export default function NewListingForm({ capCents, catalog, fees }: { capCents: 
           </select>
         </Field>
         <Field label={category === "sports" ? "Sport" : "Game"} name="game_or_sport" error={fields.game_or_sport}>
-          <select id="game_or_sport" name="game_or_sport" key={category} className={select} defaultValue="">
+          <select id="game_or_sport" name="game_or_sport" key={category} className={select} defaultValue={initial?.category === category ? initial.game_or_sport : ""}>
             <option value="" disabled>Choose…</option>
             {(category === "sports" ? catalog.sports : catalog.games).map((o) => (
               <option key={o.value} value={o.value}>{o.label}</option>
             ))}
           </select>
         </Field>
-        <Field label="Set" name="set_name" placeholder="Base Set, Topps Chrome…" error={fields.set_name} />
+        <Field label="Set" name="set_name" placeholder="Base Set, Topps Chrome…" defaultValue={initial?.set_name} error={fields.set_name} />
         <div className="grid grid-cols-2 gap-4">
-          <Field label="Year" name="year" inputMode="numeric" placeholder="1999" error={fields.year} />
-          <Field label="Card number" name="card_number" placeholder="4/102" error={fields.card_number} />
+          <Field label="Year" name="year" inputMode="numeric" placeholder="1999" defaultValue={initial?.year ?? ""} error={fields.year} />
+          <Field label="Card number" name="card_number" placeholder="4/102" defaultValue={initial?.card_number ?? ""} error={fields.card_number} />
         </div>
         <Field
           className="sm:col-span-2"
@@ -146,6 +182,7 @@ export default function NewListingForm({ capCents, catalog, fees }: { capCents: 
           name="title"
           maxLength={200}
           placeholder="Charizard Holo Base Set"
+          defaultValue={initial?.title}
           hint="Buyers search by title. Include the player or card name and anything notable."
           error={fields.title}
         />
@@ -171,16 +208,16 @@ export default function NewListingForm({ capCents, catalog, fees }: { capCents: 
           {graded ? (
             <>
               <Field label="Grader" name="grader" error={fields.grader}>
-                <select id="grader" name="grader" className={select} defaultValue="PSA">
+                <select id="grader" name="grader" className={select} defaultValue={initial?.grader ?? "PSA"}>
                   {GRADERS.map((g) => <option key={g} value={g}>{g === "OTHER" ? "Other" : g}</option>)}
                 </select>
               </Field>
-              <Field label="Grade" name="grade" inputMode="decimal" placeholder="9.5" error={fields.grade} hint="1 to 10, in steps of 0.5" />
-              <Field label="Cert number" name="cert_number" placeholder="12345678" error={fields.cert_number} />
+              <Field label="Grade" name="grade" inputMode="decimal" placeholder="9.5" defaultValue={initial?.grade ?? ""} error={fields.grade} hint="1 to 10, in steps of 0.5" />
+              <Field label="Cert number" name="cert_number" placeholder="12345678" defaultValue={initial?.cert_number ?? ""} error={fields.cert_number} />
             </>
           ) : (
             <Field label="Condition" name="condition" error={fields.condition}>
-              <select id="condition" name="condition" className={select} defaultValue="NM">
+              <select id="condition" name="condition" className={select} defaultValue={initial?.condition ?? "NM"}>
                 {Object.entries(CONDITIONS).map(([k, v]) => <option key={k} value={k}>{v} ({k})</option>)}
               </select>
             </Field>
@@ -191,47 +228,37 @@ export default function NewListingForm({ capCents, catalog, fees }: { capCents: 
           <div className="mt-2 flex flex-wrap gap-x-5 gap-y-2">
             {Object.entries(catalog.features).map(([k, v]) => (
               <label key={k} className="flex items-center gap-1.5 text-[14px]">
-                <input type="checkbox" name="attributes" value={k} /> {v}
+                <input type="checkbox" name="attributes" value={k} defaultChecked={initial?.attributes.includes(k)} /> {v}
               </label>
             ))}
           </div>
           {fields.attributes && <p className="mt-1 text-[13px] text-slab">{fields.attributes}</p>}
         </div>
       </fieldset>
+      </>}
 
       <fieldset className="space-y-4">
         <legend className="mb-2 text-[18px] font-bold">Photos and description</legend>
-        <Field label="Photo links" name="photo_urls" error={fields.photo_urls}>
-          <textarea
-            id="photo_urls"
-            name="photo_urls"
-            rows={3}
-            placeholder={"https://…/front.jpg\nhttps://…/back.jpg"}
-            aria-describedby="photo_urls-hint"
-            className={`mt-1 w-full rounded-md border px-3 py-2 font-mono text-[13px] ${fields.photo_urls ? "border-slab" : "border-line"}`}
-          />
-          <p id="photo_urls-hint" className="mt-1 text-[12px] text-muted">
-            One https link per line, front first. Up to 12. Photo uploads are coming soon.
-          </p>
-          {fields.photo_urls && <p className="mt-1 text-[13px] text-slab">{fields.photo_urls}</p>}
-        </Field>
+        <PhotoUploader value={photos} onChange={setPhotos} error={fields.photo_urls} />
         <Field label="Description (optional)" name="description" error={fields.description}>
-          <textarea id="description" name="description" rows={4} maxLength={5000} className="mt-1 w-full rounded-md border border-line px-3 py-2" />
+          <textarea id="description" name="description" rows={4} maxLength={5000} defaultValue={initial?.description ?? ""} className="mt-1 w-full rounded-md border border-line px-3 py-2" />
         </Field>
       </fieldset>
 
+      {!locked && (
       <fieldset className="grid gap-4 sm:grid-cols-2">
         <legend className="mb-2 text-[18px] font-bold">Format, price and shipping</legend>
         <div className="sm:col-span-2">
           <div className="flex gap-2" role="radiogroup" aria-label="Selling format">
             {([["fixed", "Buy It Now"], ["auction", "Auction"]] as const).map(([v, l]) => (
-              <button key={v} type="button" role="radio" aria-checked={format === v} onClick={() => setFormat(v)}
+              <button key={v} type="button" role="radio" aria-checked={format === v} onClick={() => setFormat(v)} disabled={editing && format !== v}
                 className={`rounded-full border px-4 py-1.5 text-[14px] font-semibold ${format === v ? "border-ink bg-ink text-white" : "border-line hover:border-ink"}`}>
                 {l}
               </button>
             ))}
           </div>
           <p className="mt-1 text-[12px] text-muted">
+            {editing ? "The format can't change. To switch, remove this listing and list the card again. " : ""}
             {format === "auction"
               ? "Bidders compete for one card over 5, 7 or 10 days. Once someone bids, you can only add to the description and photos."
               : "A fixed price. Turn on offers to let buyers suggest a lower price."}
@@ -249,7 +276,7 @@ export default function NewListingForm({ capCents, catalog, fees }: { capCents: 
               hint={`Free shipping is included. Your limit is ${money(capCents)}.`}
               error={fields.price_cents}
             />
-            <Field label="Quantity" name="quantity" inputMode="numeric" defaultValue="1" error={fields.quantity} />
+            <Field label="Quantity" name="quantity" inputMode="numeric" defaultValue={String(initial?.quantity ?? 1)} error={fields.quantity} />
             <div className="rounded-lg border border-line p-4 sm:col-span-2">
               <label className="flex items-center gap-2 text-[14px] font-semibold">
                 <input type="checkbox" checked={offersOn} onChange={(e) => setOffersOn(e.target.checked)} /> Accept offers
@@ -297,8 +324,8 @@ export default function NewListingForm({ capCents, catalog, fees }: { capCents: 
             <option value="box">Small box</option>
           </select>
         </Field>
-        <Field label="Weight (oz)" name="weight_oz" inputMode="decimal" defaultValue="1" error={fields.weight_oz} />
-        <Field label="Your SKU (optional)" name="external_id" hint="Your own ID, used by CSV uploads and FireCardManager." error={fields.external_id} />
+        <Field label="Weight (oz)" name="weight_oz" inputMode="decimal" defaultValue={String(initial?.weight_oz ?? 1)} error={fields.weight_oz} />
+        {!editing && <Field label="Your SKU (optional)" name="external_id" hint="Your own ID, used by CSV uploads and FireCardManager." error={fields.external_id} />}
 
         <div className="rounded-lg bg-wash p-4 text-[14px] sm:col-span-2" aria-live="polite">
           <p className="font-semibold">Estimated payout</p>
@@ -315,10 +342,11 @@ export default function NewListingForm({ capCents, catalog, fees }: { capCents: 
           <p className="mt-2 text-[12px] text-muted">Before Stripe&apos;s card processing fee, which comes out of your Stripe balance.</p>
         </div>
       </fieldset>
+      )}
 
       <div className="flex gap-3">
         <button type="submit" disabled={busy} className="rounded-full bg-link px-8 py-2.5 font-semibold text-white hover:bg-link-dark disabled:opacity-60">
-          {busy ? "Publishing…" : "Publish listing"}
+          {busy ? (editing ? "Saving…" : "Publishing…") : editing ? "Save changes" : "Publish listing"}
         </button>
         <button type="button" onClick={() => router.push("/sell")} className="rounded-full px-5 py-2.5 font-semibold text-link hover:bg-wash">
           Cancel

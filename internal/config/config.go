@@ -40,6 +40,15 @@ type Config struct {
 	WebURL string
 	// MFAKey encrypts staff authenticator secrets (MFA_ENCRYPTION_KEY, 32 bytes).
 	MFAKey string
+	// Photo storage: PHOTO_STORE=db (default) keeps uploads in Postgres;
+	// PHOTO_STORE=s3 uses S3-compatible storage such as Cloudflare R2.
+	PhotoStore     string
+	S3Endpoint     string // S3_ENDPOINT, e.g. https://<account>.r2.cloudflarestorage.com
+	S3Bucket       string // S3_BUCKET
+	S3Region       string // S3_REGION ("auto" for R2)
+	S3AccessKey    string // S3_ACCESS_KEY_ID
+	S3SecretKey    string // S3_SECRET_ACCESS_KEY
+	PhotoPublicURL string // PHOTO_PUBLIC_URL: the bucket's public address
 }
 
 func Load() (Config, error) {
@@ -95,6 +104,25 @@ func Load() (Config, error) {
 		}
 	}
 	c.ImageBaseURL = strings.TrimRight(getenv("IMAGE_BASE_URL", c.PublicURL), "/")
+	c.PhotoStore = strings.ToLower(strings.TrimSpace(getenv("PHOTO_STORE", "db")))
+	c.S3Endpoint = strings.TrimRight(strings.TrimSpace(os.Getenv("S3_ENDPOINT")), "/")
+	c.S3Bucket = strings.TrimSpace(os.Getenv("S3_BUCKET"))
+	c.S3Region = strings.TrimSpace(getenv("S3_REGION", "auto"))
+	c.S3AccessKey = strings.TrimSpace(os.Getenv("S3_ACCESS_KEY_ID"))
+	c.S3SecretKey = strings.TrimSpace(os.Getenv("S3_SECRET_ACCESS_KEY"))
+	c.PhotoPublicURL = strings.TrimRight(strings.TrimSpace(os.Getenv("PHOTO_PUBLIC_URL")), "/")
+	switch c.PhotoStore {
+	case "db":
+	case "s3":
+		if c.S3Endpoint == "" || c.S3Bucket == "" || c.S3AccessKey == "" || c.S3SecretKey == "" || c.PhotoPublicURL == "" {
+			return c, errors.New("PHOTO_STORE=s3 needs S3_ENDPOINT, S3_BUCKET, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY and PHOTO_PUBLIC_URL")
+		}
+		if !strings.HasPrefix(c.S3Endpoint, "https://") || !strings.HasPrefix(c.PhotoPublicURL, "https://") {
+			return c, errors.New("S3_ENDPOINT and PHOTO_PUBLIC_URL must be https:// addresses")
+		}
+	default:
+		return c, errors.New("PHOTO_STORE must be db or s3")
+	}
 	if k := c.StripeSecretKey; k != "" && !strings.HasPrefix(k, "sk_") && !strings.HasPrefix(k, "rk_") {
 		return c, errors.New("STRIPE_SECRET_KEY should start with sk_ or rk_")
 	}

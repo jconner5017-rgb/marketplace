@@ -327,8 +327,9 @@ export const ARTICLES: Article[] = [
         "PUT /v1/seller/listings/external/{sku} creates or replaces a listing.",
         "DELETE /v1/seller/listings/{id} removes one.",
         "GET /v1/catalog returns the sports, games, conditions and graders the site accepts.",
+        "POST /v1/photos with a JPEG, PNG or GIF as the body (Content-Type image/jpeg, image/png or image/gif) returns a photo URL to use in photo_urls. Photos are resized to 1600 pixels and their metadata, including location, is removed.",
       ] },
-      { p: "API keys for third-party tools are on the way. Contact us if you build a card inventory tool." },
+      { p: "Sellers create API keys at Seller hub › Connect FCM and send them as Authorization: Bearer <key>. Contact us if you build a card inventory tool." },
     ],
   },
   {
