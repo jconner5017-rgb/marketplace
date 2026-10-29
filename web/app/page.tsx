@@ -76,7 +76,12 @@ export default async function Home() {
       <Shelf title="Graded slabs" href="/search?min_grade=1" items={graded.listings} />
       <Shelf title="Singles under $20" href="/search?max_price=20&sort=price_asc" items={cheap.listings} />
 
-      {fresh.total === 0 && (
+      {fresh.failed && (
+        <p role="alert" className="mt-10 rounded-lg border border-line p-6 text-center text-muted">
+          We couldn&apos;t load cards just now. <Link href="/" className="text-link underline">Try again</Link> in a moment.
+        </p>
+      )}
+      {!fresh.failed && fresh.total === 0 && (
         <p className="mt-10 rounded-lg border border-line p-6 text-center text-muted">
           No cards are listed yet. <Link href="/sell" className="text-link underline">List the first one</Link>.
         </p>

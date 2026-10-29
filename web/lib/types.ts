@@ -106,6 +106,8 @@ export type SearchResult = {
   total: number;
   limit: number;
   offset: number;
+  /** Set when the API couldn't be reached, so pages don't claim "no cards". */
+  failed?: boolean;
 };
 
 export type Facet = { value: string; count: number };

@@ -12,21 +12,28 @@ export async function apiGet<T>(path: string): Promise<{ status: number; data: T
   const h = await headers();
   const fwd = h.get("x-forwarded-for");
   const ua = h.get("user-agent");
-  try {
-    const res = await fetch(API_URL + path, {
-      headers: {
-        ...(session ? { cookie: `mp_session=${session.value}` } : {}),
-        ...(fwd ? { "x-forwarded-for": fwd } : {}),
-        ...(ua ? { "user-agent": ua.slice(0, 200) } : {}),
-      },
-      cache: "no-store",
-    });
-    const json = await res.json().catch(() => null);
-    if (!res.ok) return { status: res.status, data: null, code: json?.error?.code };
-    return { status: res.status, data: json as T };
-  } catch {
-    return { status: 503, data: null };
-  }
+  const once = async (): Promise<{ status: number; data: T | null; code?: string }> => {
+    try {
+      const res = await fetch(API_URL + path, {
+        headers: {
+          ...(session ? { cookie: `mp_session=${session.value}` } : {}),
+          ...(fwd ? { "x-forwarded-for": fwd } : {}),
+          ...(ua ? { "user-agent": ua.slice(0, 200) } : {}),
+        },
+        cache: "no-store",
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) return { status: res.status, data: null, code: json?.error?.code };
+      return { status: res.status, data: json as T };
+    } catch {
+      return { status: 503, data: null };
+    }
+  };
+  // Reads are safe to repeat: one retry rides out an API restart.
+  const r = await once();
+  if (r.status < 502) return r;
+  await new Promise((ok) => setTimeout(ok, 1500));
+  return once();
 }
 
 /** Server-side POST to the API with the visitor's session. */
@@ -75,7 +82,7 @@ export async function getSeller(): Promise<{ status: number; seller: Seller | nu
 
 export async function search(qs: string): Promise<SearchResult> {
   const r = await apiGet<SearchResult>("/v1/listings?" + qs);
-  return r.data ?? { listings: [], total: 0, limit: 48, offset: 0 };
+  return r.data ?? { listings: [], total: 0, limit: 48, offset: 0, failed: true };
 }
 
 export async function facets(qs: string): Promise<Facets | null> {

@@ -124,7 +124,12 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
           </div>
         </div>
 
-        {res.total === 0 ? (
+        {res.failed ? (
+          <div role="alert" className="py-12 text-center">
+            <p className="text-[17px] font-semibold">We couldn&apos;t load cards just now.</p>
+            <p className="mt-1 text-muted">This is usually a brief hiccup. Reload the page in a moment.</p>
+          </div>
+        ) : res.total === 0 ? (
           <div className="py-12 text-center">
             <p className="text-[17px] font-semibold">No cards match these filters.</p>
             <p className="mt-1 text-muted">Remove a filter or try a shorter search.</p>
