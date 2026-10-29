@@ -11,6 +11,7 @@ export const ADMIN_NAV: { group: string; items: { href: string; label: string; p
     { href: "/admin/users", label: "Members", perm: "users.view" },
     { href: "/admin/sellers", label: "Seller review", perm: "sellers.review" },
     { href: "/admin/staff", label: "Staff and roles", perm: "staff.manage" },
+    { href: "/admin/appeals", label: "Appeals", perm: "users.restrict" },
   ] },
   { group: "Listings", items: [
     { href: "/admin/listings", label: "Listings", perm: "users.view" },
@@ -31,6 +32,7 @@ export const ADMIN_NAV: { group: string; items: { href: string; label: string; p
     { href: "/admin/fraud", label: "Fraud alerts", perm: "reports.manage" },
     { href: "/admin/feedback", label: "Feedback", perm: "feedback.moderate" },
     { href: "/admin/audit", label: "Audit log", perm: "audit.view" },
+    { href: "/admin/security", label: "Network allowlist", perm: "staff.manage" },
   ] },
   { group: "Site", items: [{ href: "/admin/announce", label: "Announcements", perm: "announce" }] },
 ];

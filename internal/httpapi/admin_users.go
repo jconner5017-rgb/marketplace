@@ -71,7 +71,14 @@ func (s *Server) handleAdminUser(w http.ResponseWriter, r *http.Request) {
 		s.adminError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"member": m})
+	warnings, err := s.standing.Warnings(r.Context(), id, true)
+	if err != nil {
+		s.internalError(w, r, err)
+		return
+	}
+	var tierLocked bool
+	s.db.QueryRowContext(r.Context(), `SELECT tier_locked FROM seller_profiles WHERE user_id = $1`, id).Scan(&tierLocked)
+	writeJSON(w, http.StatusOK, map[string]any{"member": m, "warnings": warnings, "tier_locked": tierLocked})
 }
 
 // PATCH /v1/admin/users/{id} {"email","username","email_verified","reason"}

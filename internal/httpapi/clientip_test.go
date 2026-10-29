@@ -16,7 +16,9 @@ func TestClientIP(t *testing.T) {
 		{"direct", "203.0.113.5:4321", "", false, "203.0.113.5"},
 		{"header ignored when not trusted", "203.0.113.5:4321", "198.51.100.7", false, "203.0.113.5"},
 		{"behind proxy", "10.0.0.2:5000", "198.51.100.7", true, "198.51.100.7"},
-		{"chain uses first hop", "10.0.0.2:5000", "198.51.100.7, 10.1.1.1", true, "198.51.100.7"},
+		{"chain skips our own hops", "10.0.0.2:5000", "198.51.100.7, 10.1.1.1", true, "198.51.100.7"},
+		{"spoofed left entry ignored", "10.0.0.2:5000", "203.0.113.77,209.118.251.16, 104.22.56.152", true, "209.118.251.16"},
+		{"cloudflare v6 edge skipped", "10.0.0.2:5000", "198.51.100.7, 2606:4700::1", true, "198.51.100.7"},
 		{"garbage header falls back", "10.0.0.2:5000", "not-an-ip", true, "10.0.0.2"},
 		{"no header falls back", "10.0.0.2:5000", "", true, "10.0.0.2"},
 	}

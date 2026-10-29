@@ -11,6 +11,7 @@ import (
 
 	"github.com/jconner5017-rgb/marketplace/internal/admin"
 	"github.com/jconner5017-rgb/marketplace/internal/auth"
+	"github.com/jconner5017-rgb/marketplace/internal/blocklist"
 	"github.com/jconner5017-rgb/marketplace/internal/checkout"
 	"github.com/jconner5017-rgb/marketplace/internal/fees"
 	"github.com/jconner5017-rgb/marketplace/internal/inbox"
@@ -53,6 +54,8 @@ type Server struct {
 	catalog    *listings.Catalog
 	fees       *fees.Service
 	checkout   *checkout.Service
+	ipRules    *admin.IPRules
+	standing   *admin.Standing
 }
 
 type Options struct {
@@ -76,10 +79,12 @@ type Options struct {
 	Catalog  *listings.Catalog
 	Fees     *fees.Service
 	Checkout *checkout.Service
+	// AdminIPAllowlistOff turns off the admin IP allowlist (break-glass).
+	AdminIPAllowlistOff bool
 }
 
 func New(o Options) *Server {
-	return &Server{
+	s := &Server{
 		db:            o.DB,
 		auth:          o.Auth,
 		log:           o.Log,
@@ -103,6 +108,7 @@ func New(o Options) *Server {
 		catalog:       o.Catalog,
 		fees:          o.Fees,
 		checkout:      o.Checkout,
+		ipRules:       &admin.IPRules{DB: o.DB, Audit: o.Audit, Disabled: o.AdminIPAllowlistOff},
 		// 30 bids or offers per user per minute.
 		bidLimiter: newRateLimiter(30, time.Minute),
 		// 20 messages per user per 10 minutes.
@@ -110,6 +116,8 @@ func New(o Options) *Server {
 		// 10 login/signup attempts per IP per 5 minutes.
 		authLimiter: newRateLimiter(10, 5*time.Minute),
 	}
+	s.standing = &admin.Standing{DB: o.DB, Audit: o.Audit, Users: s.users, Mod: s.moderation}
+	return s
 }
 
 // Handler returns the full HTTP handler with routes and middleware.
@@ -139,6 +147,13 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/admin/users/{id}/sign-out", s.requireStaff(admin.UsersRestrict, s.handleAdminSignOut))
 	mux.HandleFunc("POST /v1/admin/users/{id}/notes", s.requireStaff(admin.UsersView, s.handleAdminNote))
 	mux.HandleFunc("POST /v1/admin/users/{id}/mfa-reset", s.requireStaff(admin.StaffManage, s.handleAdminMFAReset))
+	mux.HandleFunc("GET /v1/admin/ip-rules", s.requireStaff(admin.StaffManage, s.handleIPRules))
+	mux.HandleFunc("POST /v1/admin/ip-rules", s.requireStaff(admin.StaffManage, s.handleAddIPRule))
+	mux.HandleFunc("DELETE /v1/admin/ip-rules/{id}", s.requireStaff(admin.StaffManage, s.handleRemoveIPRule))
+	mux.HandleFunc("POST /v1/admin/users/{id}/warn", s.requireStaff(admin.UsersRestrict, s.handleAdminWarn))
+	mux.HandleFunc("POST /v1/admin/users/{id}/tier", s.requireStaff(admin.SellersReview, s.handleAdminTier))
+	mux.HandleFunc("GET /v1/admin/appeals", s.requireStaff(admin.UsersRestrict, s.handleAdminAppeals))
+	mux.HandleFunc("POST /v1/admin/appeals/{id}", s.requireStaff(admin.UsersRestrict, s.handleAdminDecideAppeal))
 	mux.HandleFunc("GET /v1/admin/staff", s.requireStaff(admin.StaffManage, s.handleAdminStaff))
 	mux.HandleFunc("POST /v1/admin/staff", s.requireStaff(admin.StaffManage, s.handleAdminSetStaff))
 	mux.HandleFunc("GET /v1/admin/sellers", s.requireStaff(admin.SellersReview, s.handleAdminSellers))
@@ -181,6 +196,9 @@ func (s *Server) Handler() http.Handler {
 
 	// Signed-in buyer features: header summary, watchlist, cart, messages, bell.
 	mux.HandleFunc("GET /v1/me/summary", requireUser(s.handleSummary))
+	mux.HandleFunc("GET /v1/me/standing", requireUser(s.handleMyStanding))
+	mux.HandleFunc("POST /v1/me/appeals", requireUser(s.handleMyAppeal))
+	mux.HandleFunc("POST /v1/appeals/account", s.handleAccountAppeal)
 	mux.HandleFunc("GET /v1/watchlist", requireUser(s.handleWatchlist))
 	mux.HandleFunc("PUT /v1/watchlist/{id}", requireUser(s.handleWatch))
 	mux.HandleFunc("DELETE /v1/watchlist/{id}", requireUser(s.handleUnwatch))
@@ -306,6 +324,9 @@ func (s *Server) handleSignup(w http.ResponseWriter, r *http.Request) {
 	case errors.Is(err, auth.ErrEmailTaken):
 		writeError(w, http.StatusConflict, "email_taken", "that email is already registered", map[string]string{"email": "already registered"})
 		return
+	case errors.Is(err, blocklist.ErrBlocked):
+		writeError(w, http.StatusForbidden, "email_blocked", err.Error(), map[string]string{"email": err.Error()})
+		return
 	case errors.Is(err, auth.ErrUsernameTaken):
 		writeError(w, http.StatusConflict, "username_taken", "that username is taken", map[string]string{"username": "already taken"})
 		return
@@ -314,7 +335,13 @@ func (s *Server) handleSignup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := s.auth.StartSession(r.Context(), u.ID, clientIP(r, s.trustProxy), r.UserAgent())
+	ip := clientIP(r, s.trustProxy)
+	if hit, banned, err := blocklist.Has(r.Context(), s.db, "ip", ip); err == nil && hit {
+		if err := blocklist.Alert(r.Context(), s.db, u.ID, "sign-up address", banned, "IP "+ip); err != nil {
+			s.log.Error("banned ip alert", "err", err)
+		}
+	}
+	token, err := s.auth.StartSession(r.Context(), u.ID, ip, r.UserAgent())
 	if err != nil {
 		s.internalError(w, r, err)
 		return
@@ -343,7 +370,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "invalid_credentials", "email or password is incorrect", nil)
 		return
 	case errors.Is(err, auth.ErrAccountDisabled):
-		writeError(w, http.StatusForbidden, "account_disabled", "this account is suspended or banned", nil)
+		writeError(w, http.StatusForbidden, "account_disabled", "this account is suspended or banned; you can appeal once from the sign-in page", nil)
 		return
 	case err != nil:
 		s.internalError(w, r, err)

@@ -6,7 +6,7 @@ import type { BidHistory, Facets, Listing, SearchResult, Seller, Summary, User }
 export const API_URL = (process.env.API_URL || "http://localhost:8080").replace(/\/$/, "");
 
 /** Server-side GET to the API, forwarding the visitor's session cookie. */
-export async function apiGet<T>(path: string): Promise<{ status: number; data: T | null }> {
+export async function apiGet<T>(path: string): Promise<{ status: number; data: T | null; code?: string }> {
   const jar = await cookies();
   const session = jar.get("mp_session");
   const h = await headers();
@@ -21,8 +21,9 @@ export async function apiGet<T>(path: string): Promise<{ status: number; data: T
       },
       cache: "no-store",
     });
-    const data = res.ok ? ((await res.json()) as T) : null;
-    return { status: res.status, data };
+    const json = await res.json().catch(() => null);
+    if (!res.ok) return { status: res.status, data: null, code: json?.error?.code };
+    return { status: res.status, data: json as T };
   } catch {
     return { status: 503, data: null };
   }

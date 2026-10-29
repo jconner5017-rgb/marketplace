@@ -15,6 +15,8 @@ import (
 	"unicode/utf8"
 
 	"github.com/lib/pq"
+
+	"github.com/jconner5017-rgb/marketplace/internal/blocklist"
 )
 
 var (
@@ -148,6 +150,11 @@ func (s *Service) Signup(ctx context.Context, email, username, password string) 
 	username = strings.TrimSpace(username)
 	if err := validateSignup(email, username, password); err != nil {
 		return User{}, err
+	}
+	if hit, _, err := blocklist.Has(ctx, s.DB, "email", email); err != nil {
+		return User{}, err
+	} else if hit {
+		return User{}, blocklist.ErrBlocked
 	}
 	hash, err := HashPassword(password)
 	if err != nil {
@@ -357,4 +364,28 @@ func (s *Service) SessionMFA(ctx context.Context, token string) (time.Time, bool
 func (s *Service) MarkSessionMFA(ctx context.Context, token string) error {
 	_, err := s.DB.ExecContext(ctx, `UPDATE sessions SET mfa_verified_at = now() WHERE token_hash = $1`, hashToken(token))
 	return err
+}
+
+// DisabledAccount returns a suspended or banned account whose password is
+// right, so the member can appeal without signing in.
+func (s *Service) DisabledAccount(ctx context.Context, email, password string) (User, error) {
+	var hash string
+	var u User
+	var staff sql.NullString
+	var canSignIn bool
+	err := s.DB.QueryRowContext(ctx, `
+		SELECT `+prefixed("u.", userCols)+`, u.password_hash, `+signInStatus+` FROM users u WHERE lower(u.email) = lower($1)`,
+		strings.TrimSpace(email),
+	).Scan(&u.ID, &u.Email, &u.Username, &u.Role, &u.Status, &u.EmailVerified, &u.CreatedAt, &staff, &hash, &canSignIn)
+	if errors.Is(err, sql.ErrNoRows) {
+		VerifyPassword(password, dummyHash)
+		return User{}, ErrInvalidCredentials
+	}
+	if err != nil {
+		return User{}, err
+	}
+	if !VerifyPassword(password, hash) || canSignIn {
+		return User{}, ErrInvalidCredentials
+	}
+	return u, nil
 }

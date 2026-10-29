@@ -86,6 +86,7 @@ type env struct {
 	sales  *sales.Service
 	pay    *stripe.FakePayments
 	co     *checkout.Service
+	srv    *Server
 }
 
 const testWebhookSecret = "whsec_test_secret"
@@ -107,7 +108,7 @@ func setupEnv(t *testing.T) *env {
 	if err := db.Migrate(ctx, d); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := d.Exec(`TRUNCATE users, stripe_events, announcements CASCADE`); err != nil {
+	if _, err := d.Exec(`TRUNCATE users, stripe_events, announcements, admin_ip_rules, blocked_identifiers CASCADE`); err != nil {
 		t.Fatal(err)
 	}
 
@@ -145,7 +146,7 @@ func setupEnv(t *testing.T) *env {
 	})
 	ts := httptest.NewServer(s.Handler())
 	t.Cleanup(ts.Close)
-	return &env{ts: ts, auth: authSvc, stripe: fs, db: d, sales: salesSvc, pay: pay, co: co}
+	return &env{ts: ts, auth: authSvc, stripe: fs, db: d, sales: salesSvc, pay: pay, co: co, srv: s}
 }
 
 func setup(t *testing.T) (*httptest.Server, *auth.Service) {

@@ -74,9 +74,10 @@ Set these in the service's **Environment** tab (never commit them):
 | `STRIPE_SECRET_KEY` | `sk_test_…` from Stripe → Developers → API keys |
 | `STRIPE_WEBHOOK_SECRET` | `whsec_…` from the Stripe webhook endpoint (below) |
 | `CHECKOUT_ENABLED` | `true` lets buyers pay (needs `STRIPE_SECRET_KEY`); off by default |
+| `ADMIN_IP_ALLOWLIST` | `off` ignores the admin network allowlist (break-glass if staff are locked out) |
 | `WEB_URL` | the public website Stripe sends buyers back to (default `https://slabsnsingles.com`) |
 
-**Stripe webhook:** in Stripe → Developers → Webhooks, add an endpoint at `<PUBLIC_URL>/v1/webhooks/stripe`, choose **Events on Connected accounts**, and select `account.updated`, `account.application.deauthorized`, `checkout.session.completed`, `checkout.session.async_payment_succeeded` and `checkout.session.expired`. Copy its signing secret into `STRIPE_WEBHOOK_SECRET`.
+**Stripe webhook:** in Stripe → Developers → Webhooks, add an endpoint at `<PUBLIC_URL>/v1/webhooks/stripe`, choose **Events on Connected accounts**, and select `account.updated`, `account.application.deauthorized`, `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.expired`, `charge.refunded`, `charge.dispute.created` and `charge.dispute.closed`. Optionally add a second endpoint at the same URL for **Events on your account** with `application_fee.refunded` (fee refunds in the ledger); put both signing secrets in `STRIPE_WEBHOOK_SECRET`, comma-separated. Copy its signing secret into `STRIPE_WEBHOOK_SECRET`.
 
 To make yourself an admin on Render, sign up through the API, then open the database in Render → **Connect** → copy the **PSQL Command**, run it on your computer, and enter:
 

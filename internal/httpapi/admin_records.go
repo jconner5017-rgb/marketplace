@@ -28,7 +28,16 @@ func (s *Server) handleAdminOrder(w http.ResponseWriter, r *http.Request) {
 		s.adminError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"order": o})
+	var ledger any = []any{}
+	if s.checkout != nil {
+		l, err := s.checkout.Ledger(r.Context(), o.ID)
+		if err != nil {
+			s.internalError(w, r, err)
+			return
+		}
+		ledger = l
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"order": o, "ledger": ledger})
 }
 
 // GET /v1/admin/cases?status=open|...&mine=1

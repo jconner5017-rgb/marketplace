@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/jconner5017-rgb/marketplace/internal/blocklist"
 	"net/mail"
 	"regexp"
 	"strconv"
@@ -463,6 +464,11 @@ func (u *Users) SetStatus(ctx context.Context, a Actor, id string, c StatusChang
 	}
 	if c.Status == "suspended" || c.Status == "banned" {
 		if _, err := tx.ExecContext(ctx, `DELETE FROM sessions WHERE user_id = $1`, id); err != nil {
+			return err
+		}
+	}
+	if c.Status == "banned" {
+		if err := blocklist.BlockMember(ctx, tx, id); err != nil {
 			return err
 		}
 	}

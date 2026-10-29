@@ -121,11 +121,17 @@ func requireAdmin(next http.HandlerFunc) http.HandlerFunc {
 // access decisions.
 func clientIP(r *http.Request, trustProxy bool) string {
 	if trustProxy {
-		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-			first, _, _ := strings.Cut(xff, ",")
-			if ip := net.ParseIP(strings.TrimSpace(first)); ip != nil {
-				return ip.String()
+		// Proxies append to X-Forwarded-For, so anything a visitor sends
+		// sits at the left. Read from the right, skipping our own hops
+		// (Render's private network and its Cloudflare edge): the first
+		// other address is the one that connected to the edge.
+		hops := strings.Split(r.Header.Get("X-Forwarded-For"), ",")
+		for i := len(hops) - 1; i >= 0; i-- {
+			ip := net.ParseIP(strings.TrimSpace(hops[i]))
+			if ip == nil || trustedHop(ip) {
+				continue
 			}
+			return ip.String()
 		}
 	}
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
@@ -133,6 +139,34 @@ func clientIP(r *http.Request, trustProxy bool) string {
 		return r.RemoteAddr
 	}
 	return host
+}
+
+// Cloudflare's published edge ranges (cloudflare.com/ips), which front Render.
+var edgeNets = func() []*net.IPNet {
+	var out []*net.IPNet
+	for _, c := range []string{
+		"103.21.244.0/22", "103.22.200.0/22", "103.31.4.0/22", "104.16.0.0/13", "104.24.0.0/14",
+		"108.162.192.0/18", "131.0.72.0/22", "141.101.64.0/18", "162.158.0.0/15", "172.64.0.0/13",
+		"173.245.48.0/20", "188.114.96.0/20", "190.93.240.0/20", "197.234.240.0/22", "198.41.128.0/17",
+		"2400:cb00::/32", "2606:4700::/32", "2803:f800::/32", "2405:b500::/32", "2405:8100::/32",
+		"2a06:98c0::/29", "2c0f:f248::/32",
+	} {
+		_, n, _ := net.ParseCIDR(c)
+		out = append(out, n)
+	}
+	return out
+}()
+
+func trustedHop(ip net.IP) bool {
+	if ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsUnspecified() {
+		return true
+	}
+	for _, n := range edgeNets {
+		if n.Contains(ip) {
+			return true
+		}
+	}
+	return false
 }
 
 // rateLimiter allows `limit` events per key per window (fixed window).

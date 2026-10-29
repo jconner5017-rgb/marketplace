@@ -27,6 +27,22 @@ func (s *Server) staffOnly(next http.HandlerFunc) http.HandlerFunc {
 			writeError(w, http.StatusForbidden, "forbidden", "staff only", nil)
 			return
 		}
+		if s.ipRules != nil {
+			ip := clientIP(r, s.trustProxy)
+			ok, err := s.ipRules.Allowed(r.Context(), ip)
+			if err != nil {
+				s.internalError(w, r, err)
+				return
+			}
+			if !ok {
+				if err := s.ipRules.Blocked(r.Context(), u.ID, u.Email, ip); err != nil {
+					s.log.Error("record blocked admin ip", "err", err)
+				}
+				writeError(w, http.StatusForbidden, "ip_not_allowed",
+					"the back office can't be reached from this network ("+ip+")", nil)
+				return
+			}
+		}
 		next(w, r)
 	})
 }
@@ -65,7 +81,7 @@ func frozenGuard(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if u, ok := currentUser(r); ok && u.Frozen() && r.Method != http.MethodGet && r.Method != http.MethodHead {
 			switch r.URL.Path {
-			case "/v1/auth/logout", "/v1/notifications/read-all":
+			case "/v1/auth/logout", "/v1/notifications/read-all", "/v1/me/appeals":
 			default:
 				writeError(w, http.StatusForbidden, "account_frozen",
 					"your account is frozen while we review it; you can browse but not buy, sell, bid or message", nil)

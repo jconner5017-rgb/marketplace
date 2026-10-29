@@ -18,6 +18,7 @@ const KIND: Record<string, string> = {
   high_value_spike: "High-value spike", takeover_ips: "Possible account takeover", failed_logins: "Password guessing",
   off_platform: "Off-site payment attempts", repeat_reports: "Repeated reports", staff_mfa_locked: "Staff code lockout",
   shill_shared_ip: "Shill bidding: shared network", shill_pattern: "Shill bidding: pattern", bid_burst: "Bid burst", unpaid_items: "Unpaid items",
+  admin_ip_blocked: "Back office from an unapproved network", banned_identifier: "Matches a banned member",
 };
 const SEV: Record<string, string> = { high: "bg-slab text-white", medium: "bg-[#fff4e0] text-[#8a5300]", low: "bg-wash text-muted" };
 

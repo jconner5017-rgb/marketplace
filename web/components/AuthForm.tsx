@@ -13,6 +13,7 @@ export default function AuthForm({ mode }: { mode: "signin" | "register" }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [fields, setFields] = useState<Record<string, string>>({});
+  const [disabled, setDisabled] = useState(false);
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -29,6 +30,7 @@ export default function AuthForm({ mode }: { mode: "signin" | "register" }) {
     if (!res.ok) {
       setMessage(res.message);
       setFields(res.fields);
+      setDisabled(!register && res.status === 403);
       return;
     }
     router.push(next);
@@ -41,6 +43,7 @@ export default function AuthForm({ mode }: { mode: "signin" | "register" }) {
       {message && (
         <p role="alert" className="rounded-md border border-slab/40 bg-slab/5 px-3 py-2 text-[14px] text-slab">
           {message.charAt(0).toUpperCase() + message.slice(1)}.
+          {disabled && <> <Link href="/appeal" className="font-semibold underline">Appeal this decision</Link></>}
         </p>
       )}
       <Field label="Email" name="email" type="email" autoComplete="email" required error={fields.email} />

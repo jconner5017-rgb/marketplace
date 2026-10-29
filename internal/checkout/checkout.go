@@ -17,6 +17,7 @@ import (
 
 	"github.com/lib/pq"
 
+	"github.com/jconner5017-rgb/marketplace/internal/blocklist"
 	"github.com/jconner5017-rgb/marketplace/internal/fees"
 	"github.com/jconner5017-rgb/marketplace/internal/inbox"
 	"github.com/jconner5017-rgb/marketplace/internal/sellers"
@@ -461,17 +462,35 @@ func (s *Service) markPaid(ctx context.Context, orderID string, sess stripe.Chec
 	now := s.now()
 	var buyer, seller string
 	var number int64
-	var total int
+	var total, fee, discount int
 	err = tx.QueryRowContext(ctx, `
 		UPDATE orders SET status = 'paid', paid_at = $2, ship_by = $3, ship_to = $4,
 			stripe_payment_intent = nullif($5, ''), updated_at = now()
 		WHERE id = $1 AND status = 'pending_payment'
-		RETURNING buyer_id, seller_id, number, total_cents`,
-		orderID, now, ShipBy(now), string(shipTo), sess.PaymentIntent).Scan(&buyer, &seller, &number, &total)
+		RETURNING buyer_id, seller_id, number, total_cents, fee_cents, discount_cents`,
+		orderID, now, ShipBy(now), string(shipTo), sess.PaymentIntent).Scan(&buyer, &seller, &number, &total, &fee, &discount)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil // already recorded
 	}
 	if err != nil {
+		return err
+	}
+	ref := sess.PaymentIntent
+	if ref == "" {
+		ref = sess.ID
+	}
+	if err := ledger(ctx, tx, orderID, seller, "charge", total, ref, "Paid through Stripe Checkout"); err != nil {
+		return err
+	}
+	if err := ledger(ctx, tx, orderID, seller, "application_fee", fee, ref, "Marketplace fee"); err != nil {
+		return err
+	}
+	if discount > 0 {
+		if err := ledger(ctx, tx, orderID, seller, "discount", discount, ref, "Multi-card discount"); err != nil {
+			return err
+		}
+	}
+	if err := s.flagBlockedAddress(ctx, tx, buyer, orderID, shipTo); err != nil {
 		return err
 	}
 	if _, err := tx.ExecContext(ctx, `
@@ -498,6 +517,17 @@ func (s *Service) markPaid(ctx context.Context, orderID string, sess stripe.Chec
 
 // cancel ends an unpaid order and gives cart cards back to the listing.
 // Held cards stay held for the buyer until their pay-by time.
+// flagBlockedAddress raises a fraud alert when an order ships to a banned member's address.
+func (s *Service) flagBlockedAddress(ctx context.Context, tx *sql.Tx, buyerID, orderID string, shipTo []byte) error {
+	var a struct{ Line1, Zip string }
+	_ = json.Unmarshal(shipTo, &a)
+	hit, banned, err := blocklist.Has(ctx, tx, "address", blocklist.NormalizeAddress(a.Line1, a.Zip))
+	if err != nil || !hit || banned == buyerID {
+		return err
+	}
+	return blocklist.Alert(ctx, tx, buyerID, "ship-to address", banned, "order "+orderID)
+}
+
 func (s *Service) cancel(ctx context.Context, orderID, reason string) error {
 	tx, err := s.DB.BeginTx(ctx, nil)
 	if err != nil {

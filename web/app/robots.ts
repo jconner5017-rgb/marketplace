@@ -23,6 +23,8 @@ export default function robots(): MetadataRoute.Robots {
           "/watchlist",
           "/messages",
           "/offers",
+          "/account/",
+          "/appeal",
           "/purchases",
           "/checkout/",
           "/sell",

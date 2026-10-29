@@ -29,6 +29,8 @@ type Config struct {
 	AdminEmails []string
 	// CheckoutEnabled lets buyers pay (CHECKOUT_ENABLED=true); needs Stripe.
 	CheckoutEnabled bool
+	// AdminIPAllowlistOff (ADMIN_IP_ALLOWLIST=off) ignores the admin IP allowlist.
+	AdminIPAllowlistOff bool
 	// WebURL is the public website, where Stripe sends buyers back.
 	WebURL string
 	// MFAKey encrypts staff authenticator secrets (MFA_ENCRYPTION_KEY, 32 bytes).
@@ -74,6 +76,7 @@ func Load() (Config, error) {
 		}
 		c.CheckoutEnabled = b
 	}
+	c.AdminIPAllowlistOff = strings.EqualFold(strings.TrimSpace(os.Getenv("ADMIN_IP_ALLOWLIST")), "off")
 	c.WebURL = strings.TrimRight(getenv("WEB_URL", "https://slabsnsingles.com"), "/")
 	for _, e := range strings.Split(os.Getenv("ADMIN_EMAILS"), ",") {
 		if e = strings.TrimSpace(e); e != "" {

@@ -8,15 +8,23 @@ import { ORDER_STATUS } from "@/components/admin/OrderBits";
 import ActionForm from "@/components/admin/ActionForm";
 import { CASE_KIND, CASE_STATUS, REFUND_KIND, type OrderDetail } from "@/lib/admin-types";
 
+type LedgerRow = { kind: string; amount_cents: number; stripe_object: string; note: string; created_at: string };
+const LEDGER_KIND: Record<string, string> = {
+  charge: "Buyer paid", application_fee: "Marketplace fee", discount: "Multi-card discount", label_cost: "Shipping label",
+  refund: "Refund", fee_refund: "Fee returned", chargeback_opened: "Chargeback opened", chargeback_won: "Chargeback won",
+  chargeback_lost: "Chargeback lost", adjustment: "Adjustment",
+};
+
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Order" };
 
 export default async function OrderPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const s = await requireStaff(`/admin/orders/${id}`, "orders.view");
-  const r = await apiGet<{ order: OrderDetail }>(`/v1/admin/orders/${id}`);
+  const r = await apiGet<{ order: OrderDetail; ledger: LedgerRow[] }>(`/v1/admin/orders/${id}`);
   if (!r.data) notFound();
   const o = r.data.order;
+  const ledger = r.data.ledger ?? [];
   const cases = s.permissions.includes("cases.manage");
   const dl = "grid grid-cols-[150px_1fr] gap-y-1 text-[14px]";
   return (
@@ -75,6 +83,26 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
               ))}
               {o.shipments.length === 0 && <li className="text-muted">No shipment yet.</li>}
             </ul>
+          </section>
+          <section>
+            <h2 className="text-[18px] font-bold">Money ledger</h2>
+            <p className="text-[13px] text-muted">Every money event from Stripe, in order. Entries are never changed; corrections are new rows.</p>
+            <div className="mt-2 overflow-x-auto">
+              <table className="w-full min-w-[520px] text-[13px]">
+                <thead><tr className="border-b border-line text-left text-muted"><th className="py-1.5 pr-3">When</th><th className="py-1.5 pr-3">Event</th><th className="py-1.5 pr-3 text-right">Amount</th><th className="py-1.5">Stripe</th></tr></thead>
+                <tbody>
+                  {ledger.map((e, i) => (
+                    <tr key={i} className="border-b border-wash">
+                      <td className="py-1.5 pr-3 whitespace-nowrap" suppressHydrationWarning>{when(e.created_at)}</td>
+                      <td className="py-1.5 pr-3">{LEDGER_KIND[e.kind] ?? e.kind}{e.note ? <span className="text-muted"> · {e.note}</span> : null}</td>
+                      <td className="num py-1.5 pr-3 text-right">{money(e.amount_cents)}</td>
+                      <td className="max-w-[200px] truncate py-1.5 font-mono" title={e.stripe_object}>{e.stripe_object}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {ledger.length === 0 && <p className="py-2 text-[13px] text-muted">No money events yet.</p>}
+            </div>
           </section>
           <section>
             <h2 className="text-[18px] font-bold">Refunds and chargebacks</h2>

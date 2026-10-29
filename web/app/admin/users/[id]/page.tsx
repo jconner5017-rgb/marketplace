@@ -7,6 +7,8 @@ import { MemberActions } from "@/components/admin/MemberActions";
 import ActionForm from "@/components/admin/ActionForm";
 import type { MemberDetail } from "@/lib/admin-types";
 
+type Warning = { id: string; reason: string; created_at: string; rescinded_at: string | null; by?: string };
+
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Member" };
 
@@ -19,9 +21,10 @@ const COUNT_LABEL: Record<string, string> = {
 export default async function MemberPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const s = await requireStaff(`/admin/users/${id}`, "users.view");
-  const r = await apiGet<{ member: MemberDetail }>(`/v1/admin/users/${id}`);
+  const r = await apiGet<{ member: MemberDetail; warnings: Warning[]; tier_locked: boolean }>(`/v1/admin/users/${id}`);
   if (!r.data) notFound();
   const m = r.data.member;
+  const warnings = r.data.warnings ?? [];
   const self = s.user.id === m.id;
 
   return (
@@ -66,12 +69,25 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
                 <dt className="text-muted">Our review</dt><dd><StatusBadge status={m.seller.review_status} />{m.seller.review_note && <span className="ml-2">{m.seller.review_note}</span>}</dd>
                 <dt className="text-muted">Stripe account</dt><dd className="font-mono text-[13px]">{m.seller.stripe_account_id}</dd>
                 <dt className="text-muted">Stripe identity check</dt><dd>{m.seller.details_submitted ? "Submitted" : "Not finished"} · {m.seller.charges_enabled ? "can take payments" : "can't take payments yet"}</dd>
-                <dt className="text-muted">Seller level</dt><dd>{m.seller.tier} ({["", "$20", "$250", "$1,000"][m.seller.tier]} limit)</dd>
+                <dt className="text-muted">Seller level</dt><dd>{m.seller.tier} ({["", "$20", "$250", "$1,000"][m.seller.tier]} limit){r.data.tier_locked ? " · held by staff" : ""}</dd>
                 <dt className="text-muted">Seller since</dt><dd suppressHydrationWarning>{when(m.seller.since)}</dd>
               </dl>
               <p className="mt-1 text-[12px] text-muted">Identity, business and tax documents are collected and verified by Stripe; we don&apos;t store them.</p>
             </section>
           )}
+
+          <section>
+            <h2 className="text-[18px] font-bold">Warnings</h2>
+            <ul className="mt-2 space-y-2 text-[14px]">
+              {warnings.map((w) => (
+                <li key={w.id} className={`border-b border-wash pb-2 ${w.rescinded_at ? "text-muted line-through" : ""}`}>
+                  {w.reason} · <span className="text-muted" suppressHydrationWarning>{when(w.created_at)}</span>{w.by ? ` · ${w.by}` : ""}
+                  {w.rescinded_at && <span className="ml-1 no-underline">(withdrawn on appeal)</span>}
+                </li>
+              ))}
+              {warnings.length === 0 && <li className="text-muted">No warnings.</li>}
+            </ul>
+          </section>
 
           <section>
             <h2 className="text-[18px] font-bold">Sign-in history</h2>
@@ -114,7 +130,35 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
           {self ? (
             <p className="rounded-lg bg-wash p-3 text-[14px]">This is your account. Changes to it are made by another Super Admin.</p>
           ) : (
-            <MemberActions m={m} permissions={s.permissions} myRole={s.staff_role} />
+            <>
+              <MemberActions m={m} permissions={s.permissions} myRole={s.staff_role} />
+              {s.permissions.includes("users.restrict") && (
+                <section className="rounded-lg border border-line p-4">
+                  <h2 className="font-bold">Give a warning</h2>
+                  <p className="mt-1 text-[13px] text-muted">The member sees it on their account page and can appeal once.</p>
+                  <div className="mt-2">
+                    <ActionForm endpoint={`/v1/admin/users/${m.id}/warn`} submit="Warn member" done="Warning added." compact
+                      fields={[{ name: "reason", label: "Reason", type: "textarea" }]} />
+                  </div>
+                </section>
+              )}
+              {m.seller && s.permissions.includes("sellers.review") && (
+                <section className="rounded-lg border border-line p-4">
+                  <h2 className="font-bold">Seller level</h2>
+                  <p className="mt-1 text-[13px] text-muted">Lowering it hides fixed-price listings above the new limit. Hold it to stop the nightly check moving it back.</p>
+                  <div className="mt-2">
+                    <ActionForm endpoint={`/v1/admin/users/${m.id}/tier`} submit="Change level" done="Seller level changed." compact
+                      transform={(v) => ({ tier: Number(v.tier), lock: Boolean(v.lock), reason: v.reason })}
+                      fields={[
+                        { name: "tier", label: "Level", type: "select", initial: String(m.seller.tier),
+                          options: [["1", "1 · New ($20 limit)"], ["2", "2 · Standard ($250)"], ["3", "3 · Trusted ($1,000)"]] },
+                        { name: "lock", label: "Hold at this level", type: "checkbox", initial: r.data.tier_locked },
+                        { name: "reason", label: "Reason (shown to the seller)", type: "textarea" },
+                      ]} />
+                  </div>
+                </section>
+              )}
+            </>
           )}
           <section className="rounded-lg border border-line p-4">
             <h2 className="font-bold">Staff notes</h2>

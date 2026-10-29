@@ -162,7 +162,19 @@ func (s *Server) handleStripeWebhook(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusRequestEntityTooLarge, "body_too_large", "payload too large", nil)
 		return
 	}
-	ev, err := stripe.VerifyWebhook(payload, r.Header.Get("Stripe-Signature"), s.webhookSecret, 5*time.Minute, time.Now())
+	// Two Stripe endpoints can point here (connected-account events and our
+	// own account's events), each with its own secret: STRIPE_WEBHOOK_SECRET
+	// may hold both, comma-separated.
+	var ev stripe.Event
+	err = stripe.ErrBadSignature
+	for _, secret := range strings.Split(s.webhookSecret, ",") {
+		if secret = strings.TrimSpace(secret); secret == "" {
+			continue
+		}
+		if ev, err = stripe.VerifyWebhook(payload, r.Header.Get("Stripe-Signature"), secret, 5*time.Minute, time.Now()); err == nil {
+			break
+		}
+	}
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "bad_signature", "invalid signature", nil)
 		return
@@ -197,7 +209,11 @@ func (s *Server) handleStripeWebhook(w http.ResponseWriter, r *http.Request) {
 		}
 	default:
 		if s.checkout != nil {
-			if _, err := s.checkout.HandleEvent(r.Context(), ev); err != nil {
+			handled, err := s.checkout.HandleEvent(r.Context(), ev)
+			if err == nil && !handled {
+				_, err = s.checkout.HandleMoneyEvent(r.Context(), ev.Type, ev.Account, ev.Data.Object)
+			}
+			if err != nil {
 				s.internalError(w, r, err)
 				return
 			}

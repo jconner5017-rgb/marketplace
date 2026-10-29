@@ -130,6 +130,8 @@ func run(log *slog.Logger) error {
 		Catalog:  catalog,
 		Fees:     feeSvc,
 		Checkout: checkoutSvc,
+
+		AdminIPAllowlistOff: cfg.AdminIPAllowlistOff,
 	})
 
 	// Fraud checks every 10 minutes.
