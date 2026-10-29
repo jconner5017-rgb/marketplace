@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/lib/pq"
 )
@@ -34,8 +35,10 @@ type SearchParams struct {
 	Discount   bool   // seller offers a multi-card discount
 	Format     string // auction, fixed (Buy It Now) or offers (accepts offers)
 	Sort       string // newest (default), price_asc, price_desc, relevance
-	Limit      int
-	Offset     int
+	// ListedAfter keeps cards listed after this time (saved-search alerts).
+	ListedAfter time.Time
+	Limit       int
+	Offset      int
 }
 
 // tsQueryText turns keywords, mode and exclusions into websearch syntax.
@@ -242,6 +245,9 @@ func buildFilter(p SearchParams, skip ...string) filter {
 	}
 	if p.MaxCents > 0 {
 		where = append(where, "l.price_cents <= "+arg(p.MaxCents))
+	}
+	if !p.ListedAfter.IsZero() {
+		where = append(where, "l.created_at > "+arg(p.ListedAfter))
 	}
 	sql := ""
 	if len(where) > 0 {

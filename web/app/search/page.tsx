@@ -8,6 +8,7 @@ import { getCatalog, labelFor, type SiteCatalog } from "@/lib/catalog";
 import type { Facet, Facets } from "@/lib/types";
 import SortSelect from "@/components/SortSelect";
 import PriceFilter from "@/components/PriceFilter";
+import SaveSearchButton from "@/components/SaveSearchButton";
 
 export const dynamic = "force-dynamic";
 
@@ -63,7 +64,9 @@ export async function generateMetadata({ searchParams }: { searchParams: Promise
 }
 
 export default async function SearchPage({ searchParams }: { searchParams: Promise<SP> }) {
-  const params = pick(await searchParams);
+  const raw = await searchParams;
+  const params = pick(raw);
+  const savedId = typeof raw.saved === "string" && UUID.test(raw.saved) ? raw.saved : undefined;
   // An item number typed into search goes straight to that listing.
   const typed = params.get("q")?.trim() ?? "";
   if (!typed && params.get("sort") === "relevance") params.delete("sort");
@@ -103,6 +106,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
             {res.total === 0 ? "No results" : `${first}–${last} of ${res.total.toLocaleString()} results`}
           </span>
           <Link href={`/search/advanced?${params.toString()}`} className="text-link hover:underline">Advanced search</Link>
+          {Array.from(new URLSearchParams(facetQs).keys()).some((k) => k !== "sort") && <SaveSearchButton query={facetQs} savedId={savedId} />}
           <div className="ml-auto flex items-center gap-3">
             <SortSelect value={params.get("sort") || "newest"} hasQuery={!!q} />
             <div className="flex overflow-hidden rounded border border-line" role="group" aria-label="View">

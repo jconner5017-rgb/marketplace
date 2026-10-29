@@ -27,6 +27,7 @@ export default async function Header() {
                 <MenuLink href="/purchases">Purchases</MenuLink>
                 <MenuLink href="/offers">Offers</MenuLink>
                 <MenuLink href="/watchlist">Watchlist</MenuLink>
+                <MenuLink href="/saved-searches">Saved searches</MenuLink>
                 <MenuLink href={`/seller/${encodeURIComponent(me.user.username)}`}>My feedback</MenuLink>
                 <MenuLink href="/account/standing">Account standing</MenuLink>
                 <MenuLink href="/messages">Messages{me.unread_messages > 0 ? ` (${me.unread_messages})` : ""}</MenuLink>

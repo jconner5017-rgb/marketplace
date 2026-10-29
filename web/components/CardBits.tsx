@@ -1,4 +1,5 @@
 import Link from "next/link";
+import HeartButton from "./HeartButton";
 import type { Listing } from "@/lib/types";
 import { CONDITIONS, gradeLabel, money, timeLeft } from "@/lib/format";
 
@@ -69,6 +70,7 @@ function subtitle(l: Listing): string {
 /** Grid tile for browse rows and the grid view. */
 export function ListingTile({ l }: { l: Listing }) {
   return (
+    <div className="relative">
     <Link href={`/item/${l.id}`} className="group flex flex-col">
       <Photo l={l} className="aspect-[5/7] rounded-md" />
       <div className="mt-2 flex items-start gap-2">
@@ -80,6 +82,8 @@ export function ListingTile({ l }: { l: Listing }) {
       <SaleLine l={l} className="text-[12px] text-muted" />
       <p className="text-[12px] text-ship">Free shipping</p>
     </Link>
+    <HeartButton id={l.id} title={l.title} className="absolute right-2 top-2" />
+    </div>
   );
 }
 
@@ -87,9 +91,12 @@ export function ListingTile({ l }: { l: Listing }) {
 export function ListingRow({ l }: { l: Listing }) {
   return (
     <li className="flex gap-4 border-b border-line py-4">
-      <Link href={`/item/${l.id}`} className="shrink-0">
-        <Photo l={l} className="h-[168px] w-[120px] rounded-md sm:h-[196px] sm:w-[140px]" />
-      </Link>
+      <div className="relative shrink-0">
+        <Link href={`/item/${l.id}`}>
+          <Photo l={l} className="h-[168px] w-[120px] rounded-md sm:h-[196px] sm:w-[140px]" />
+        </Link>
+        <HeartButton id={l.id} title={l.title} className="absolute right-1.5 top-1.5" />
+      </div>
       <div className="min-w-0 flex-1">
         <Link href={`/item/${l.id}`} className="hover:underline">
           <h3 className="title-tight text-[17px] leading-snug">{l.title}</h3>

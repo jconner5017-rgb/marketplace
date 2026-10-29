@@ -126,6 +126,7 @@ func run(log *slog.Logger) error {
 	log.Info("checkout", "enabled", checkoutSvc.Ready(), "return_to", cfg.WebURL)
 	fcmSvc := &fcm.Service{DB: database}
 	feedbackSvc := &feedback.Service{DB: database, Rep: reputation}
+	shoppingSvc := &shopping.Service{DB: database, Listings: listingSvc, Sellers: sellerSvc}
 	photoSvc := &photos.Service{DB: database, BaseURL: cfg.ImageBaseURL}
 	if cfg.PhotoStore == "s3" {
 		photoSvc.S3 = &photos.S3{Endpoint: cfg.S3Endpoint, Bucket: cfg.S3Bucket, Region: cfg.S3Region,
@@ -145,7 +146,7 @@ func run(log *slog.Logger) error {
 		PublicURL:     cfg.PublicURL,
 		WebhookSecret: cfg.StripeWebhookSecret,
 
-		Shopping: &shopping.Service{DB: database, Listings: listingSvc, Sellers: sellerSvc},
+		Shopping: shoppingSvc,
 		Inbox:    &inbox.Service{DB: database, Listings: listingSvc},
 		Sales:    salesSvc,
 		MFA:      &admin.MFA{DB: database, Key: mfaKey},
@@ -162,7 +163,7 @@ func run(log *slog.Logger) error {
 		AdminIPAllowlistOff: cfg.AdminIPAllowlistOff,
 	})
 
-	// Fraud checks every 10 minutes.
+	// Fraud checks and saved-search alerts every 10 minutes.
 	fraud := &admin.Fraud{DB: database}
 	go func() {
 		t := time.NewTicker(10 * time.Minute)
@@ -176,6 +177,12 @@ func run(log *slog.Logger) error {
 					log.Error("fraud checks", "err", err)
 				} else if n > 0 {
 					log.Info("fraud alerts raised", "count", n)
+				}
+				// Saved-search alerts ride the same 10-minute tick.
+				if n, err := shoppingSvc.RunSavedAlerts(ctx); err != nil {
+					log.Error("saved search alerts", "err", err)
+				} else if n > 0 {
+					log.Info("saved search alerts sent", "count", n)
 				}
 			}
 		}
