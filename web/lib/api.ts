@@ -29,11 +29,15 @@ export async function apiGet<T>(path: string): Promise<{ status: number; data: T
       return { status: 503, data: null };
     }
   };
-  // Reads are safe to repeat: one retry rides out an API restart.
-  const r = await once();
-  if (r.status < 502) return r;
-  await new Promise((ok) => setTimeout(ok, 1500));
-  return once();
+  // Reads are safe to repeat: retrying rides out the switch to a new API
+  // instance during a deploy.
+  let r = await once();
+  for (const wait of [1000, 2500]) {
+    if (r.status < 502) return r;
+    await new Promise((ok) => setTimeout(ok, wait));
+    r = await once();
+  }
+  return r;
 }
 
 /** Server-side POST to the API with the visitor's session. */

@@ -21,15 +21,18 @@ async function proxy(req: NextRequest, ctx: { params: Promise<{ path: string[] }
   if (fwd) headers.set("x-forwarded-for", fwd);
 
   const hasBody = !["GET", "HEAD"].includes(req.method);
+  const body = hasBody ? await req.arrayBuffer() : undefined;
+  const call = () => fetch(target, { method: req.method, headers, body, redirect: "manual", cache: "no-store" });
   let res: Response;
   try {
-    res = await fetch(target, {
-      method: req.method,
-      headers,
-      body: hasBody ? await req.arrayBuffer() : undefined,
-      redirect: "manual",
-      cache: "no-store",
-    });
+    try {
+      res = await call();
+    } catch (e) {
+      // Reads can be repeated: one retry covers the moment a deploy swaps instances.
+      if (hasBody) throw e;
+      await new Promise((ok) => setTimeout(ok, 1000));
+      res = await call();
+    }
   } catch {
     return Response.json(
       { error: { code: "api_unreachable", message: "The marketplace service is not responding. Try again in a minute." } },
@@ -43,8 +46,8 @@ async function proxy(req: NextRequest, ctx: { params: Promise<{ path: string[] }
     if (v) out.set(h, v);
   }
   for (const c of res.headers.getSetCookie()) out.append("set-cookie", c);
-  const body = res.status === 204 ? null : await res.arrayBuffer();
-  return new Response(body, { status: res.status, headers: out });
+  const payload = res.status === 204 ? null : await res.arrayBuffer();
+  return new Response(payload, { status: res.status, headers: out });
 }
 
 export const GET = proxy;
