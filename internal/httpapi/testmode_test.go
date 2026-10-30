@@ -56,6 +56,12 @@ func TestAdminTestMode(t *testing.T) {
 	if o["status"] != "paid" || o["test"] != true {
 		t.Fatalf("test order: %v", o)
 	}
+	// Opening the order cleared its "confirmed" notification.
+	var unread int
+	e.db.QueryRow(`SELECT count(*) FROM notifications WHERE link = $1 AND read_at IS NULL`, "/purchases/"+oid).Scan(&unread)
+	if unread != 0 {
+		t.Fatalf("order notice still unread after viewing")
+	}
 	// The seller sees it as a test too, with no Stripe refund link.
 	_, body = do(t, sc, "GET", e.ts.URL+"/v1/orders/"+oid, nil)
 	if so := body["order"].(map[string]any); so["test"] != true || so["stripe_payment_url"] != nil {

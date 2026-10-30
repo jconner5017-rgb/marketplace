@@ -7,6 +7,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/lib/pq"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -310,6 +312,36 @@ func (s *Service) BellFor(ctx context.Context, userID string, limit int) (Bell, 
 		b.Notices = append(b.Notices, n)
 	}
 	return b, rows.Err()
+}
+
+// MarkRead marks one bell notice read. id is as BellFor returns it:
+// "n<id>" for a notification, "a<id>" for an announcement.
+func (s *Service) MarkRead(ctx context.Context, userID, id string) error {
+	if len(id) < 2 {
+		return ErrNotFound
+	}
+	n, err := strconv.ParseInt(id[1:], 10, 64)
+	if err != nil || n <= 0 {
+		return ErrNotFound
+	}
+	switch id[0] {
+	case 'n':
+		_, err = s.DB.ExecContext(ctx, `UPDATE notifications SET read_at = coalesce(read_at, now()) WHERE id = $1 AND user_id = $2`, n, userID)
+	case 'a':
+		_, err = s.DB.ExecContext(ctx, `INSERT INTO announcement_reads (announcement_id, user_id)
+			SELECT id, $2 FROM announcements WHERE id = $1 ON CONFLICT DO NOTHING`, n, userID)
+	default:
+		return ErrNotFound
+	}
+	return err
+}
+
+// MarkLinkRead marks read the user's notifications that point at a page,
+// so opening an order (however you got there) clears its alerts.
+func (s *Service) MarkLinkRead(ctx context.Context, userID string, links ...string) error {
+	_, err := s.DB.ExecContext(ctx, `UPDATE notifications SET read_at = now()
+		WHERE user_id = $1 AND read_at IS NULL AND link = ANY($2)`, userID, pq.Array(links))
+	return err
 }
 
 // MarkAllRead clears the bell.

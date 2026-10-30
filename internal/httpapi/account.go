@@ -304,6 +304,20 @@ func (s *Server) handleNotifications(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, b)
 }
 
+// POST /v1/notifications/{id}/read — one notice, when it's clicked.
+func (s *Server) handleReadOne(w http.ResponseWriter, r *http.Request) {
+	u, _ := currentUser(r)
+	if err := s.inbox.MarkRead(r.Context(), u.ID, r.PathValue("id")); err != nil {
+		if errors.Is(err, inbox.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "not_found", "notification not found", nil)
+			return
+		}
+		s.internalError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (s *Server) handleReadAll(w http.ResponseWriter, r *http.Request) {
 	u, _ := currentUser(r)
 	if err := s.inbox.MarkAllRead(r.Context(), u.ID); err != nil {

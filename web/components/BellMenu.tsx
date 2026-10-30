@@ -8,6 +8,17 @@ import { ago } from "@/lib/format";
 import type { Bell } from "@/lib/types";
 import { BellIcon } from "./Icons";
 
+const KIND: Record<string, string> = {
+  announcement: "From Slabs & Singles",
+  order: "Order",
+  auction: "Auction",
+  offer: "Offer",
+  saved_search: "Saved search",
+  feedback: "Feedback",
+  case: "Case",
+  message: "Message",
+};
+
 export default function BellMenu({ unread }: { unread: number }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -36,6 +47,18 @@ export default function BellMenu({ unread }: { unread: number }) {
       document.removeEventListener("keydown", esc);
     };
   }, [open]);
+
+  // Mark one notice read as it's opened. keepalive lets the request finish
+  // even though the page is navigating away.
+  function readOne(id: string) {
+    const was = bell?.notices.find((n) => n.id === id);
+    if (!was || was.read) return;
+    setCount((c) => Math.max(0, c - 1));
+    setBell((b) => (b ? { unread: Math.max(0, b.unread - 1), notices: b.notices.map((n) => (n.id === id ? { ...n, read: true } : n)) } : b));
+    fetch(`/api/v1/notifications/${encodeURIComponent(id)}/read`, {
+      method: "POST", headers: { "content-type": "application/json" }, body: "{}", keepalive: true,
+    }).then(() => router.refresh()).catch(() => {});
+  }
 
   async function readAll() {
     await send("POST", "/v1/notifications/read-all", {});
@@ -82,7 +105,7 @@ export default function BellMenu({ unread }: { unread: number }) {
                     <span className="flex items-start gap-2">
                       {!n.read && <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-link" aria-label="Unread" />}
                       <span className="min-w-0">
-                        <span className="block text-[12px] font-semibold text-muted">{n.kind === "announcement" ? "From Slabs & Singles" : "Message"}</span>
+                        <span className="block text-[12px] font-semibold text-muted">{KIND[n.kind] ?? "Notice"}</span>
                         <span className="block text-[14px] font-semibold leading-snug">{n.title}</span>
                         {n.body && <span className="mt-0.5 line-clamp-2 block text-[13px] text-muted">{n.body}</span>}
                         <span className="mt-0.5 block text-[12px] text-muted">{ago(n.created_at)}</span>
@@ -93,9 +116,9 @@ export default function BellMenu({ unread }: { unread: number }) {
                 return (
                   <li key={n.id} className={`border-b border-wash last:border-0 ${n.read ? "" : "bg-link/5"}`}>
                     {n.link ? (
-                      <Link href={n.link} onClick={() => setOpen(false)} className="block px-4 py-3 hover:bg-wash">{inner}</Link>
+                      <Link href={n.link} onClick={() => { readOne(n.id); setOpen(false); }} className="block px-4 py-3 hover:bg-wash">{inner}</Link>
                     ) : (
-                      <div className="px-4 py-3">{inner}</div>
+                      <button type="button" onClick={() => readOne(n.id)} className="block w-full px-4 py-3 text-left hover:bg-wash">{inner}</button>
                     )}
                   </li>
                 );

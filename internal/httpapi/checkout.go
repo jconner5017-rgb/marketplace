@@ -155,6 +155,12 @@ func (s *Server) handleOrder(w http.ResponseWriter, r *http.Request) {
 		s.checkoutError(w, r, err)
 		return
 	}
+	// Viewing an order clears its notifications from the bell.
+	if r.Method == http.MethodGet && s.inbox != nil {
+		if err := s.inbox.MarkLinkRead(r.Context(), u.ID, "/purchases/"+o.ID, "/sell/orders/"+o.ID); err != nil {
+			s.log.Warn("mark order notices read", "err", err)
+		}
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"order": o})
 }
 

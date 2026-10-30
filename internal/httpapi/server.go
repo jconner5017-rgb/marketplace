@@ -282,6 +282,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/orders/{id}/problem", requireUser(s.handleOrderProblem))
 	mux.HandleFunc("GET /v1/holds", requireUser(s.handleHolds))
 	mux.HandleFunc("POST /v1/notifications/read-all", requireUser(s.handleReadAll))
+	mux.HandleFunc("POST /v1/notifications/{id}/read", requireUser(s.handleReadOne))
 
 	// Selling: Stripe Connect onboarding and settings.
 	mux.HandleFunc("POST /v1/seller/onboarding", requireUser(s.handleStartOnboarding))
