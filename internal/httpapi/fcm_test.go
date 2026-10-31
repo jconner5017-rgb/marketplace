@@ -187,6 +187,20 @@ func TestFCMWebhooksReleaseOversellAndReconcile(t *testing.T) {
 		t.Fatalf("orders for FCM: %v", l)
 	}
 
+	// FCM marks a paid order shipped with the key.
+	api(t, e, key, "POST", "/v1/listings", rawCard("H-3", 600), "")
+	e.db.QueryRow(`SELECT id FROM listings WHERE external_id = 'H-3'`).Scan(&lid)
+	do(t, b.c, "PUT", e.ts.URL+"/v1/cart/"+lid, map[string]int{"quantity": 1})
+	_, body = do(t, b.c, "POST", e.ts.URL+"/v1/checkout", map[string]any{"seller": "hook_shop"})
+	shipOrder := body["order_id"].(string)
+	e.pay.Complete(sessionOf(t, e, shipOrder))
+	do(t, b.c, "POST", e.ts.URL+"/v1/orders/"+shipOrder+"/confirm", map[string]any{})
+	if code, r, _ := api(t, e, key, "POST", "/v1/orders/"+shipOrder+"/ship",
+		map[string]any{"carrier": "USPS", "tracking_number": "9400100000000000000001"}, ""); code != 200 ||
+		r["order"].(map[string]any)["status"] != "shipped" {
+		t.Fatalf("ship with key: %d %v", code, r)
+	}
+
 	// The other site sold it first: our order is refunded.
 	if code, r, _ := api(t, e, key, "POST", "/v1/orders/"+order+"/oversold",
 		map[string]any{"external_id": "H-1", "sold_elsewhere_at": time.Now().Add(-time.Hour)}, ""); code != 200 || r["outcome"] != "refunded" {

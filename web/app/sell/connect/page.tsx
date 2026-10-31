@@ -32,7 +32,11 @@ export default async function ConnectPage() {
 
       <section className="mt-6">
         <h2 className="border-b border-line pb-2 text-[18px] font-bold">1. API key</h2>
-        <p className="mt-2 text-[14px]">Paste this into FireCardManager&apos;s marketplace settings. Anyone with the key can manage your listings, so keep it private.</p>
+        <p className="mt-2 text-[14px]">
+          Create a key, then paste it into FireCardManager under <strong>Settings → Slabs &amp; Singles</strong>. That&apos;s all the
+          desktop app needs: it lists your cards, checks for sales every few minutes while it&apos;s open, ends the eBay listing when a
+          card sells here, and sends your tracking number back. Anyone with the key can manage your listings, so keep it private.
+        </p>
         {active.length > 0 && (
           <ul className="mt-3 text-[14px]">
             {active.map((k) => (
@@ -46,11 +50,14 @@ export default async function ConnectPage() {
         <div className="mt-3"><NewKeyForm /></div>
       </section>
 
-      <section className="mt-8">
-        <h2 className="border-b border-line pb-2 text-[18px] font-bold">2. Where to send sales</h2>
+      <details className="mt-8 rounded-lg border border-line p-4" open={!!(endpoint.webhook_url || endpoint.inventory_url)}>
+        <summary className="cursor-pointer text-[16px] font-bold">Web-based inventory tools (optional)</summary>
+        <p className="mt-2 text-[14px] text-muted">
+          Only for tools that run on a web server and can receive calls from us. FireCardManager doesn&apos;t need these; leave them blank.
+        </p>
         <div className="mt-3"><EndpointForm webhook={endpoint.webhook_url} inventory={endpoint.inventory_url} hasSecret={endpoint.has_secret} /></div>
         {endpoint.reconciled_at && <p className="mt-2 text-[13px] text-muted">Inventory last checked {when(endpoint.reconciled_at)}.</p>}
-      </section>
+      </details>
 
       {deliveries.length > 0 && (
         <section className="mt-8">
@@ -84,6 +91,8 @@ export default async function ConnectPage() {
           <li><code className={code}>PATCH /api/v1/listings/&#123;external_id&#125;</code> change price, quantity, photos</li>
           <li><code className={code}>DELETE /api/v1/listings/&#123;external_id&#125;</code> it sold elsewhere</li>
           <li><code className={code}>GET /api/v1/orders</code> your sales, with each card&apos;s <code className={code}>external_id</code></li>
+          <li><code className={code}>POST /api/v1/orders/&#123;id&#125;/ship</code> with <code className={code}>carrier</code> and <code className={code}>tracking_number</code></li>
+          <li><code className={code}>POST /api/v1/photos</code> with a JPEG/PNG as the body; returns a URL for <code className={code}>photo_urls</code></li>
           <li><code className={code}>POST /api/v1/orders/&#123;id&#125;/oversold</code> with <code className={code}>external_id</code> and <code className={code}>sold_elsewhere_at</code> when a card sold in both places; the later sale is refunded</li>
         </ul>
         <p className="mt-3">

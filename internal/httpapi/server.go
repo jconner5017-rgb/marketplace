@@ -276,7 +276,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/seller/api-keys", requireUser(s.handleCreateKey))
 	mux.HandleFunc("DELETE /v1/seller/api-keys/{id}", requireUser(s.handleRevokeKey))
 	mux.HandleFunc("GET /v1/orders/{id}", requireUser(s.handleOrder))
-	mux.HandleFunc("POST /v1/orders/{id}/ship", requireUser(s.handleShipOrder))
+	mux.HandleFunc("POST /v1/orders/{id}/ship", s.sellerAPI(s.handleShipOrder))
 	mux.HandleFunc("POST /v1/orders/{id}/delivered", requireUser(s.handleOrderDelivered))
 	mux.HandleFunc("POST /v1/orders/{id}/feedback", requireUser(s.handleOrderFeedback))
 	mux.HandleFunc("POST /v1/orders/{id}/problem", requireUser(s.handleOrderProblem))
