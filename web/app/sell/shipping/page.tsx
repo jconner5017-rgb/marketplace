@@ -34,7 +34,7 @@ export default async function ShippingSettingsPage({ searchParams }: { searchPar
       </section>
 
       <section className="mt-8">
-        <h2 className="border-b border-line pb-2 text-[18px] font-bold">Card for labels</h2>
+        <h2 className="border-b border-line pb-2 text-[18px] font-bold">Credit card for labels</h2>
         <p className="mt-2 text-[14px]">{s.card ? <>Labels are charged to <strong>{s.card}</strong>.</> : "No card saved yet."}</p>
         {sp.card_session ? <FinishCard session={sp.card_session} /> : s.enabled && <div className="mt-3"><CardButton hasCard={Boolean(s.card)} /></div>}
         <p className="mt-2 text-[13px] text-muted">Your card is stored by Stripe, not by us. A label voided before the carrier scans it is refunded to the card.</p>
