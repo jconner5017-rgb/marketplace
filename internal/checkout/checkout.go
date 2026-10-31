@@ -32,6 +32,9 @@ var (
 	ErrEmpty        = errors.New("there's nothing to pay for from this seller")
 	ErrChanged      = errors.New("some cards in your cart changed or sold; review your cart and try again")
 	ErrSellerClosed = errors.New("this seller can't take payments right now")
+	// ErrSample: the sample shop's listings show off the site and can't be
+	// paid for (its Stripe account isn't real). Admins get a test order.
+	ErrSample = errors.New("this is a sample listing for showing off the site; it can't be bought")
 	ErrOwn          = errors.New("you can't buy your own cards")
 	ErrNotPaid      = errors.New("payment hasn't gone through yet")
 	ErrAlreadyPaid  = errors.New("you've already paid for these cards; see Purchases")
@@ -111,6 +114,13 @@ func (s *Service) StartTest(ctx context.Context, buyerID, buyerEmail string, req
 	return s.start(ctx, buyerID, buyerEmail, req, true)
 }
 
+// StartSample is a test order from the sample shop, allowed even with real
+// checkout on (its Stripe account isn't real). Other sellers are refused.
+// The caller must check the buyer is an admin.
+func (s *Service) StartSample(ctx context.Context, buyerID, buyerEmail string, req Request) (string, string, error) {
+	return s.start(ctx, buyerID, buyerEmail, req, true)
+}
+
 func (s *Service) start(ctx context.Context, buyerID, buyerEmail string, req Request, test bool) (string, string, error) {
 	// A buyer who comes back from Stripe without finishing and presses Pay
 	// again: close the earlier checkout first so its cards are free.
@@ -145,6 +155,12 @@ func (s *Service) start(ctx context.Context, buyerID, buyerEmail string, req Req
 		FROM seller_profiles sp JOIN users u ON u.id = sp.user_id WHERE sp.user_id = $1`, sellerID).Scan(&acct, &ok, &collectTax)
 	if errors.Is(err, sql.ErrNoRows) || (err == nil && (!ok || acct == "")) {
 		return "", "", ErrSellerClosed
+	}
+	if err == nil && !test && strings.HasPrefix(acct, "acct_demo_") {
+		return "", "", ErrSample
+	}
+	if err == nil && test && !s.TestMode() && !strings.HasPrefix(acct, "acct_demo_") {
+		return "", "", ErrDisabled // with real checkout on, only the sample shop takes test orders
 	}
 	if err != nil {
 		return "", "", err

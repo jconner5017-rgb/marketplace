@@ -95,3 +95,30 @@ func TestTrackedEnvelope(t *testing.T) {
 		t.Fatalf("notices %d", notices)
 	}
 }
+
+// With real checkout on, the sample shop can't be paid for; admins get a
+// test order instead.
+func TestSampleShopCheckout(t *testing.T) {
+	e := setupEnv(t)
+	sc, _ := newSeller(t, e, "sample_like", true)
+	a := createListing(t, e, &httpClientT{sc}, rawCard("SS1", 900))["id"].(string)
+	e.db.Exec(`UPDATE seller_profiles sp SET stripe_account_id = 'acct_demo_sample_like' FROM users u WHERE u.id = sp.user_id AND u.username = 'sample_like'`)
+	b := buyer(t, e, "regular_rita")
+	do(t, b.c, "PUT", e.ts.URL+"/v1/cart/"+a, map[string]int{"quantity": 1})
+	if code, body := do(t, b.c, "POST", e.ts.URL+"/v1/checkout", map[string]any{"seller": "sample_like"}); code != 409 ||
+		!strings.Contains(body["error"].(map[string]any)["message"].(string), "sample listing") {
+		t.Fatalf("buyer: %d %v", code, body)
+	}
+	boss := buyer(t, e, "sample_boss")
+	e.db.Exec(`UPDATE users SET role = 'admin' WHERE username = 'sample_boss'`)
+	do(t, boss.c, "PUT", e.ts.URL+"/v1/cart/"+a, map[string]int{"quantity": 1})
+	code, body := do(t, boss.c, "POST", e.ts.URL+"/v1/checkout", map[string]any{"seller": "sample_like"})
+	if code != 201 {
+		t.Fatalf("admin: %d %v", code, body)
+	}
+	var test bool
+	e.db.QueryRow(`SELECT test FROM orders WHERE id = $1`, body["order_id"]).Scan(&test)
+	if !test {
+		t.Fatal("admin sample order not flagged as test")
+	}
+}

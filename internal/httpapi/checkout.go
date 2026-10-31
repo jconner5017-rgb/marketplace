@@ -29,7 +29,7 @@ func (s *Server) checkoutError(w http.ResponseWriter, r *http.Request, err error
 	case errors.Is(err, checkout.ErrAlreadyPaid):
 		writeError(w, http.StatusConflict, "already_paid", err.Error(), nil)
 	case errors.Is(err, checkout.ErrEmpty), errors.Is(err, checkout.ErrChanged), errors.Is(err, checkout.ErrSellerClosed),
-		errors.Is(err, checkout.ErrOwn), errors.Is(err, checkout.ErrState):
+		errors.Is(err, checkout.ErrOwn), errors.Is(err, checkout.ErrState), errors.Is(err, checkout.ErrSample):
 		writeError(w, http.StatusConflict, "cannot_checkout", err.Error(), nil)
 	case errors.Is(err, checkout.ErrEnvelopeOff):
 		writeError(w, http.StatusServiceUnavailable, "envelope_off", err.Error(), nil)
@@ -70,6 +70,10 @@ func (s *Server) handleStartCheckout(w http.ResponseWriter, r *http.Request) {
 		start = s.checkout.StartTest // no payment; flagged as a test order
 	}
 	orderID, url, err := start(r.Context(), u.ID, u.Email, req)
+	if errors.Is(err, checkout.ErrSample) && u.IsAdmin() {
+		// Admins can still walk through the sample shop: a test order, no payment.
+		orderID, url, err = s.checkout.StartSample(r.Context(), u.ID, u.Email, req)
+	}
 	if err != nil {
 		s.checkoutError(w, r, err)
 		return
