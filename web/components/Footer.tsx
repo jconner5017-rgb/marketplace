@@ -36,6 +36,7 @@ export const FOOTER: { title: string; links: { label: string; href: string }[] }
     title: "Help & Contact",
     links: [
       { label: "Help center", href: "/help" },
+      { label: "Support guides", href: "/help#support" },
       { label: "Problems with an order", href: "/help/returns" },
       { label: "Staying safe", href: "/help/safety" },
       { label: "Taxes", href: "/help/taxes" },

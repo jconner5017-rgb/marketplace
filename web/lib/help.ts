@@ -10,7 +10,7 @@ export type Block =
 export type Article = {
   slug: string;
   title: string;
-  section: "Buying" | "Selling" | "Help & safety" | "About";
+  section: "Buying" | "Selling" | "Support" | "Help & safety" | "About";
   summary: string;
   body: Block[];
   draft?: boolean; // shown with a "being written" note
@@ -194,13 +194,42 @@ export const ARTICLES: Article[] = [
         "No toploaders, magnetic holders or slabs. Rigid envelopes can't go through postal machines, may be returned or surcharged, and won't get tracking scans.",
         "Envelope tracking shows processing scans only. It does not confirm delivery.",
       ] },
-      { p: "To print the envelope or label with its tracking barcode, see Printing tracked envelopes." },
+      { p: "Step-by-step guides are in the Support section of the help center: Printing tracked envelopes, and Buying and printing shipping labels." },
+    ],
+  },
+  {
+    slug: "shipping-labels",
+    title: "Buying and printing shipping labels",
+    section: "Support",
+    summary: "Set up your ship-from address and card once, then buy a tracked label from any order.",
+    body: [
+      { h: "One-time setup" },
+      { list: [
+        "Go to Sell → Shipping.",
+        "Ship-from address: enter it and choose Save address. We check it with the carrier; it prints as the return address on labels and tracked envelopes.",
+        "Credit card for labels: choose Add a card. Your card is stored by Stripe, not by us.",
+      ] },
+      { h: "Buy a label" },
+      { list: [
+        "Open the order (Sell → Orders) and choose Buy label.",
+        "Pick a rate. You pay the carrier's price plus card processing; it's separate from what the buyer paid you.",
+        "Choose Print label. The order is marked shipped and the buyer gets the tracking number automatically.",
+        "Orders over $750 are sent with signature confirmation.",
+      ] },
+      { h: "Printing labels" },
+      { list: [
+        "Labels are 4 × 6 in. Print on a thermal label printer, or on plain paper and tape it on with clear tape.",
+        "Print at 100% scale with margins set to None so the barcode scans.",
+        "Don't tape over the barcode with shiny tape that wrinkles.",
+      ] },
+      { h: "Made a mistake?" },
+      { p: "Choose Void label on the order before the carrier scans the package. The label is cancelled and the cost goes back to your card. Then buy a new one." },
     ],
   },
   {
     slug: "tracked-envelopes",
     title: "Printing tracked envelopes",
-    section: "Selling",
+    section: "Support",
     summary: "Print a USPS-barcoded envelope for orders of one raw card up to $20, so the buyer can follow it.",
     body: [
       { p: "Envelope orders can carry a USPS Intelligent Mail barcode. Each one is unique to the order. As the envelope passes through USPS sorting machines, each scan shows on the order for you and the buyer. You don't need a USPS account; the barcode is ours." },
@@ -386,7 +415,12 @@ export const ARTICLES: Article[] = [
   },
 ];
 
-export const SECTIONS: Article["section"][] = ["Buying", "Selling", "Help & safety", "About"];
+export const SECTIONS: Article["section"][] = ["Buying", "Selling", "Support", "Help & safety", "About"];
+
+/** One line under each section heading in the help center. */
+export const SECTION_INTRO: Partial<Record<Article["section"], string>> = {
+  Support: "Step-by-step guides and fixes for the tools on the site.",
+};
 
 export function article(slug: string): Article | undefined {
   return ARTICLES.find((a) => a.slug === slug);

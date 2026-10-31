@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ARTICLES, SECTIONS } from "@/lib/help";
+import { ARTICLES, SECTIONS, SECTION_INTRO } from "@/lib/help";
 import { fillFees, getFees } from "@/lib/catalog";
 
 export const metadata = { title: "Help center" };
@@ -13,8 +13,9 @@ export default async function HelpCenter() {
       <p className="mt-1 text-muted">Answers for buyers and sellers.</p>
       <div className="mt-8 grid gap-x-10 gap-y-10 md:grid-cols-2">
         {SECTIONS.map((sec) => (
-          <section key={sec}>
+          <section key={sec} id={sec.toLowerCase().replace(/[^a-z]+/g, "-")} className="scroll-mt-24">
             <h2 className="border-b border-line pb-2 text-[18px] font-bold">{sec}</h2>
+            {SECTION_INTRO[sec] && <p className="mt-2 text-[14px] text-muted">{SECTION_INTRO[sec]}</p>}
             <ul className="mt-3 space-y-4">
               {ARTICLES.filter((a) => a.section === sec).map((a) => (
                 <li key={a.slug}>
