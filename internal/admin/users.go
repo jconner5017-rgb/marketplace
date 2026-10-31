@@ -43,6 +43,9 @@ type Users struct {
 // Actor is the staff member doing something, for permission checks and the log.
 type Actor struct {
 	ID, Email, Role, IP string
+	// Owner: the account named in ADMIN_EMAILS. It can set its own seller
+	// level; other changes to one's own account stay blocked.
+	Owner bool
 }
 
 func (a Actor) entry(action, targetType, targetID, reason string, details map[string]any) Entry {
@@ -191,6 +194,9 @@ type Note struct {
 	Body   string    `json:"body"`
 	At     time.Time `json:"at"`
 }
+
+// IsOwner reports whether email is an owner account (ADMIN_EMAILS).
+func (u *Users) IsOwner(email string) bool { return u.isOwner(email) }
 
 func (u *Users) isOwner(email string) bool {
 	for _, o := range u.OwnerEmails {

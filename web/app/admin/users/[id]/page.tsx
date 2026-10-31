@@ -127,7 +127,7 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
         </div>
 
         <aside className="space-y-6">
-          {m.seller && s.permissions.includes("sellers.review") && (!self || s.staff_role === "super_admin") && (
+          {m.seller && s.permissions.includes("sellers.review") && (!self || (m.owner && s.staff_role === "super_admin")) && (
             <section className="rounded-lg border border-line p-4">
                   <h2 className="font-bold">Seller level</h2>
                   <p className="mt-1 text-[13px] text-muted">Lowering it hides fixed-price listings above the new limit. Hold it to stop the nightly check moving it back.</p>
@@ -144,7 +144,9 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
           )}
           {self ? (
             <p className="rounded-lg bg-wash p-3 text-[14px]">
-              This is your account. Changes to it are made by another Super Admin{s.staff_role === "super_admin" && m.seller ? ", except your seller level" : ""}.
+              {m.owner
+                ? "This is the owner account. You can set your own seller level here; suspensions, warnings and staff roles can't be applied to your own account."
+                : "This is your account. Changes to it are made by another Super Admin."}
             </p>
           ) : (
             <>

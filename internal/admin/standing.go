@@ -65,9 +65,9 @@ func (st *Standing) SetTier(ctx context.Context, a Actor, userID string, tier in
 	if err != nil {
 		return err
 	}
-	// Staff can't change their own level, except a Super Admin (the owner),
-	// whose change is still written to the audit log.
-	if userID == a.ID && a.Role != SuperAdmin {
+	// Staff can't change their own level, except the owner account, whose
+	// change is still written to the audit log.
+	if userID == a.ID && !(a.Owner && a.Role == SuperAdmin) {
 		return ErrSelf
 	}
 	tx, err := st.DB.BeginTx(ctx, nil)

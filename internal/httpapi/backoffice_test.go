@@ -249,7 +249,7 @@ func TestWarningsTiersAppealsAndBans(t *testing.T) {
 	}
 }
 
-// A Super Admin who sells can set their own level; other staff can't.
+// The owner account can set its own seller level; other staff can't.
 func TestOwnSellerLevel(t *testing.T) {
 	e := setupEnv(t)
 	oc, _ := newSeller(t, e, "owner_olga", true)
@@ -257,6 +257,13 @@ func TestOwnSellerLevel(t *testing.T) {
 	owner := &httpClientT{oc}
 	enrollMFA(t, e.ts.URL, owner.c)
 	oid := memberID(t, e, "owner_olga")
+	var email string
+	e.db.QueryRow(`SELECT email FROM users WHERE username = 'owner_olga'`).Scan(&email)
+	// A Super Admin who isn't the owner can't.
+	if code, _ := do(t, owner.c, "POST", e.ts.URL+"/v1/admin/users/"+oid+"/tier", map[string]any{"tier": 3, "reason": "Me"}); code == 200 {
+		t.Fatal("non-owner super admin raised own level")
+	}
+	e.srv.users.OwnerEmails = []string{email}
 	if code, body := do(t, owner.c, "POST", e.ts.URL+"/v1/admin/users/"+oid+"/tier", map[string]any{"tier": 3, "lock": true, "reason": "Owner account"}); code != 200 {
 		t.Fatalf("super admin own level: %d %v", code, body)
 	}

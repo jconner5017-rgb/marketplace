@@ -10,7 +10,8 @@ import (
 
 func (s *Server) actor(r *http.Request) admin.Actor {
 	u, _ := currentUser(r)
-	return admin.Actor{ID: u.ID, Email: u.Email, Role: u.Staff(), IP: clientIP(r, s.trustProxy)}
+	return admin.Actor{ID: u.ID, Email: u.Email, Role: u.Staff(), IP: clientIP(r, s.trustProxy),
+		Owner: s.users != nil && s.users.IsOwner(u.Email)}
 }
 
 func (s *Server) adminError(w http.ResponseWriter, r *http.Request, err error) {
