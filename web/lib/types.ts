@@ -134,6 +134,9 @@ export type User = {
 export type Seller = {
   stripe_account_id: string;
   charges_enabled: boolean;
+  stripe_needs?: string[];
+  stripe_verifying?: string[];
+  stripe_reason?: string;
   details_submitted: boolean;
   tier: number;
   tier_cap_cents: number;

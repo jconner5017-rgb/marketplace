@@ -75,6 +75,10 @@ func (s *Server) handleGetSeller(w http.ResponseWriter, r *http.Request) {
 	if !p.ChargesEnabled && s.sellers.Stripe != nil {
 		if fresh, err := s.sellers.Refresh(r.Context(), u.ID); err == nil {
 			p = fresh
+			if !p.ChargesEnabled {
+				s.log.Info("seller not yet enabled", "user", u.ID, "reason", p.StripeReason,
+					"needs", p.StripeNeeds, "verifying", p.StripeVerifying)
+			}
 		} else {
 			s.log.Warn("seller refresh failed", "err", err)
 		}

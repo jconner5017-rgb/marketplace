@@ -46,11 +46,21 @@ export default async function SellPage() {
       <div className="mx-auto max-w-[640px] pt-12">
         <h1 className="text-[26px] font-bold">Finish your Stripe setup</h1>
         <p className="mt-2 text-muted">
-          {seller.details_submitted
-            ? "Stripe is reviewing your details. Listing unlocks as soon as they approve, usually within minutes."
-            : "Your Stripe account isn't finished yet. Pick up where you left off."}
+          {seller.stripe_needs?.length
+            ? "Stripe needs a little more before you can sell."
+            : seller.details_submitted
+              ? "Stripe is reviewing your details. Listing unlocks as soon as they approve, usually within minutes."
+              : "Your Stripe account isn't finished yet. Pick up where you left off."}
         </p>
-        {!seller.details_submitted && <div className="mt-6"><OnboardButton label="Continue Stripe setup" /></div>}
+        {seller.stripe_needs && seller.stripe_needs.length > 0 && (
+          <ul className="mt-3 list-disc space-y-1 pl-5 text-[14px]">
+            {Array.from(new Set(seller.stripe_needs.map(stripeNeed))).map((n) => <li key={n}>{n}</li>)}
+          </ul>
+        )}
+        {seller.stripe_verifying && seller.stripe_verifying.length > 0 && !seller.stripe_needs?.length && (
+          <p className="mt-3 text-[14px] text-muted">Stripe is checking: {Array.from(new Set(seller.stripe_verifying.map(stripeNeed))).join(", ")}.</p>
+        )}
+        {(!seller.details_submitted || (seller.stripe_needs?.length ?? 0) > 0) && <div className="mt-6"><OnboardButton label="Continue Stripe setup" /></div>}
       </div>
     );
   }
@@ -199,4 +209,26 @@ export default async function SellPage() {
       )}
     </div>
   );
+}
+
+/** Stripe's requirement names, in plain words. */
+function stripeNeed(key: string): string {
+  const k = key.replace(/^(individual|company|representative|person_[^.]+)\./, "");
+  const map: Record<string, string> = {
+    "business_profile.url": "Your website (use your seller page, slabsnsingles.com/seller/your-name)",
+    "business_profile.mcc": "Your industry",
+    "business_profile.product_description": "A description of what you sell",
+    "external_account": "A bank account for payouts",
+    "tos_acceptance.date": "Accepting Stripe's terms",
+    "tos_acceptance.ip": "Accepting Stripe's terms",
+    "verification.document": "A photo of your ID",
+    "verification.additional_document": "A second document (such as a utility bill)",
+    "id_number": "Your full Social Security number",
+    "ssn_last_4": "The last 4 digits of your Social Security number",
+    "dob.day": "Your date of birth", "dob.month": "Your date of birth", "dob.year": "Your date of birth",
+    "address.line1": "Your address", "address.city": "Your address", "address.postal_code": "Your address", "address.state": "Your address",
+    "phone": "Your phone number", "email": "Your email address",
+    "first_name": "Your name", "last_name": "Your name",
+  };
+  return map[key] ?? map[k] ?? key.replace(/[._]/g, " ");
 }

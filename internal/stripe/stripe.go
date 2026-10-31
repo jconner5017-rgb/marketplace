@@ -34,6 +34,12 @@ type Account struct {
 	ChargesEnabled   bool   `json:"charges_enabled"`
 	DetailsSubmitted bool   `json:"details_submitted"`
 	PayoutsEnabled   bool   `json:"payouts_enabled"`
+	Requirements     struct {
+		CurrentlyDue        []string `json:"currently_due"`
+		PastDue             []string `json:"past_due"`
+		PendingVerification []string `json:"pending_verification"`
+		DisabledReason      string   `json:"disabled_reason"`
+	} `json:"requirements"`
 }
 
 // Error is an error returned by the Stripe API.

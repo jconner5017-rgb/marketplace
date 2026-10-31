@@ -35,6 +35,11 @@ type Profile struct {
 	CreatedAt          time.Time `json:"created_at"`
 	ReviewStatus       string    `json:"review_status"` // pending, approved, rejected (staff review)
 	CollectTax         bool      `json:"collect_tax"`   // Stripe Tax adds sales tax at checkout
+	// From Stripe on a refresh (not stored): what Stripe still needs before
+	// the seller can take payments, and why charges are off.
+	StripeNeeds     []string `json:"stripe_needs,omitempty"`
+	StripeVerifying []string `json:"stripe_verifying,omitempty"`
+	StripeReason    string   `json:"stripe_reason,omitempty"`
 }
 
 // CanSell reports whether the seller may publish listings.
@@ -188,7 +193,13 @@ func (s *Service) Refresh(ctx context.Context, userID string) (Profile, error) {
 	if err := s.ApplyAccount(ctx, acct); err != nil {
 		return p, err
 	}
-	return s.Get(ctx, userID)
+	fresh, err := s.Get(ctx, userID)
+	if err == nil && !acct.ChargesEnabled {
+		fresh.StripeNeeds = append(append([]string{}, acct.Requirements.PastDue...), acct.Requirements.CurrentlyDue...)
+		fresh.StripeVerifying = acct.Requirements.PendingVerification
+		fresh.StripeReason = acct.Requirements.DisabledReason
+	}
+	return fresh, err
 }
 
 // ApplyAccount stores Stripe's view of an account (from a refresh or webhook).
