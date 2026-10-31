@@ -109,8 +109,9 @@ export default async function EnvelopePage({ params, searchParams }: {
         <h1 className="mt-2 text-[24px] font-bold">Print a tracked envelope</h1>
         <p className="mt-1 max-w-[680px] text-[14px] text-muted">
           Print this, put on a First-Class stamp, and mail it. Then mark the order shipped: the barcode becomes its tracking, and
-          the buyer sees each USPS scan. Keep the envelope flat (penny sleeve and a thin top loader) so it runs through the
-          sorting machines; stiff or lumpy envelopes are hand-sorted and don&apos;t get scans.
+          the buyer sees each USPS scan. Keep the envelope flat (penny sleeve and a thin, flexible stiffener) so it runs through the
+          sorting machines; stiff or lumpy envelopes are hand-sorted and don&apos;t get scans.{" "}
+          <Link href="/help/tracked-envelopes" className="text-link underline">Printing tips</Link>
         </p>
         <div className="mt-4 flex flex-wrap items-center gap-3 text-[14px]">
           <PrintButton label={format === "label" ? "Print label" : "Print envelope"} />
@@ -133,7 +134,8 @@ export default async function EnvelopePage({ params, searchParams }: {
           </div>
         )}
         <p className="mt-2 text-[13px] text-muted">
-          Print at 100% (actual size), not &ldquo;fit to page&rdquo;, so the barcode stays the right size.
+          In the print dialog: paper size to match the envelope, margins None, scale 100% (not &ldquo;fit to page&rdquo;),
+          headers and footers off.
           {!e.full_zip && " This address printed with a 5-digit ZIP; it still tracks, though ZIP+4 sorts a little better."}
         </p>
       </div>
