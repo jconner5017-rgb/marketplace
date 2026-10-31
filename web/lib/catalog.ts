@@ -1,17 +1,18 @@
 import "server-only";
 import { API_URL } from "./api";
-import { ATTRIBUTES, GAMES, SPORTS } from "./format";
+import { ATTRIBUTES, GAMES, NONSPORT, SPORTS } from "./format";
 
 export type Choice = { value: string; label: string; short: string };
-export type SiteCatalog = { sports: Choice[]; games: Choice[]; features: Record<string, string> };
+export type SiteCatalog = { sports: Choice[]; games: Choice[]; nonsport: Choice[]; features: Record<string, string> };
 export type FeeSchedule = { flat_cents: number; threshold_cents: number; percent_bps: number; cap_cents: number };
 
-type ApiCategory = { kind: "sports" | "tcg"; value: string; label: string; short_label: string; sort: number };
+type ApiCategory = { kind: "sports" | "tcg" | "nonsport"; value: string; label: string; short_label: string; sort: number };
 type ApiFeature = { key: string; label: string };
 
 const FALLBACK: SiteCatalog = {
   sports: SPORTS.map((s) => ({ ...s, short: s.value })),
   games: GAMES.map((g) => ({ value: g.value, label: g.label, short: g.short })),
+  nonsport: NONSPORT.map((g) => ({ value: g.value, label: g.label, short: g.short })),
   features: ATTRIBUTES,
 };
 
@@ -26,6 +27,7 @@ export async function getCatalog(): Promise<SiteCatalog> {
     return {
       sports: pick("sports"),
       games: pick("tcg"),
+      nonsport: pick("nonsport"),
       features: Object.fromEntries((d.features ?? []).map((f) => [f.key, f.label])),
     };
   } catch {
@@ -35,7 +37,12 @@ export async function getCatalog(): Promise<SiteCatalog> {
 
 /** Display label for a stored sport or game value. */
 export function labelFor(cat: SiteCatalog, value: string): string {
-  return [...cat.sports, ...cat.games].find((c) => c.value === value)?.label ?? value;
+  return [...cat.sports, ...cat.games, ...cat.nonsport].find((c) => c.value === value)?.label ?? value;
+}
+
+/** The sports, games or themes in one category. */
+export function choicesFor(cat: SiteCatalog, category: string): Choice[] {
+  return category === "sports" ? cat.sports : category === "nonsport" ? cat.nonsport : cat.games;
 }
 
 const FEE_FALLBACK: FeeSchedule = { flat_cents: 150, threshold_cents: 10000, percent_bps: 300, cap_cents: 2500 };

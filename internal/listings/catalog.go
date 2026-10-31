@@ -24,13 +24,27 @@ var Sports = []string{
 var Games = []string{
 	"Pokemon", "Magic", "Yu-Gi-Oh!", "One Piece", "Lorcana", "Dragon Ball",
 	"Digimon", "Weiss Schwarz", "Flesh and Blood", "Final Fantasy", "Star Wars",
-	"Lord of the Rings", "Naruto", "UniVersus", "Cardfight!! Vanguard",
-	// Non-sport trading cards (FireCardManagerTCG's categories).
-	"Superheroes", "Sci-Fi", "Fantasy", "Anime", "Horror", "Entertainment", "Music", "Historical", "Novelty",
-	OtherTCG,
+	"Lord of the Rings", "Naruto", "UniVersus", "Cardfight!! Vanguard", OtherTCG,
 }
 
 const OtherTCG = "Other TCG"
+
+// NonSport is the fixed list of non-sport card themes (entertainment,
+// superhero, sci-fi... trading cards that aren't sports and aren't games),
+// plus "Other non-sport". FireCardManagerTCG lists into these.
+var NonSport = []string{
+	"Superheroes", "Sci-Fi", "Fantasy", "Anime", "Horror", "Entertainment", "Music", "Historical", "Novelty", OtherNonSport,
+}
+
+const OtherNonSport = "Other non-sport"
+
+var nonSportAliases = map[string]string{
+	"superhero": "Superheroes", "marvel": "Superheroes", "dc comics": "Superheroes", "comics": "Superheroes",
+	"scifi": "Sci-Fi", "sci fi": "Sci-Fi", "science fiction": "Sci-Fi", "star trek": "Sci-Fi",
+	"movies": "Entertainment", "tv": "Entertainment", "television": "Entertainment", "movies & tv": "Entertainment",
+	"history": "Historical", "rock": "Music",
+	"other": OtherNonSport, "mixed": OtherNonSport, "non-sport": OtherNonSport, "nonsport": OtherNonSport,
+}
 
 var sportAliases = map[string]string{
 	"nfl": "Football", "american football": "Football",
@@ -63,11 +77,7 @@ var gameAliases = map[string]string{
 	"naruto ccg": "Naruto", "naruto tcg": "Naruto",
 	"universal fighting system": "UniVersus", "ufs": "UniVersus", "universus ccg": "UniVersus",
 	"cardfight vanguard": "Cardfight!! Vanguard", "cardfight!! vanguard tcg": "Cardfight!! Vanguard", "vanguard": "Cardfight!! Vanguard",
-	"other": OtherTCG, "other tcg": OtherTCG, "mixed": OtherTCG,
-	"superhero": "Superheroes", "marvel": "Superheroes", "dc comics": "Superheroes", "comics": "Superheroes",
-	"scifi": "Sci-Fi", "sci fi": "Sci-Fi", "science fiction": "Sci-Fi", "star trek": "Sci-Fi",
-	"movies": "Entertainment", "tv": "Entertainment", "television": "Entertainment", "non-sport": "Entertainment",
-	"history": "Historical", "rock": "Music",
+	"other": OtherTCG, "other tcg": OtherTCG,
 }
 
 // Built-in display labels, used when the catalog tables are first filled.
@@ -92,6 +102,7 @@ var defaultLabels = map[string][2]string{
 	"Entertainment":        {"Movies & TV", "Movies & TV"},
 	"Historical":           {"Historical", "Historical"},
 	OtherTCG:               {"Other trading card games", "Other TCG"},
+	OtherNonSport:          {"Other non-sport cards", "Other non-sport"},
 }
 
 var defaultAttrLabels = map[string]string{
@@ -103,7 +114,7 @@ var defaultAttrLabels = map[string]string{
 // Category is one sport or game.
 type Category struct {
 	ID         int      `json:"id"`
-	Kind       string   `json:"kind"` // sports or tcg
+	Kind       string   `json:"kind"` // sports, tcg or nonsport
 	Value      string   `json:"value"`
 	Label      string   `json:"label"`
 	ShortLabel string   `json:"short_label"`
@@ -123,11 +134,11 @@ type Feature struct {
 }
 
 type catalogState struct {
-	sports, games         []string // active values
-	sportAlias, gameAlias map[string]string
-	attrs                 []string // active keys
-	categories            []Category
-	features              []Feature
+	sports, games, nonsport              []string // active values
+	sportAlias, gameAlias, nonsportAlias map[string]string
+	attrs                                []string // active keys
+	categories                           []Category
+	features                             []Feature
 }
 
 var current atomic.Pointer[catalogState]
@@ -135,12 +146,16 @@ var current atomic.Pointer[catalogState]
 func init() { current.Store(defaultState()) }
 
 func defaultState() *catalogState {
-	st := &catalogState{sports: Sports, games: Games, sportAlias: sportAliases, gameAlias: gameAliases, attrs: Attributes}
+	st := &catalogState{sports: Sports, games: Games, nonsport: NonSport,
+		sportAlias: sportAliases, gameAlias: gameAliases, nonsportAlias: nonSportAliases, attrs: Attributes}
 	for i, v := range Sports {
 		st.categories = append(st.categories, defaultCategory("sports", v, i, sportAliases))
 	}
 	for i, v := range Games {
 		st.categories = append(st.categories, defaultCategory("tcg", v, i, gameAliases))
+	}
+	for i, v := range NonSport {
+		st.categories = append(st.categories, defaultCategory("nonsport", v, i, nonSportAliases))
 	}
 	for i, k := range Attributes {
 		st.features = append(st.features, Feature{Key: k, Label: defaultAttrLabels[k], Active: true, Sort: i})
@@ -164,8 +179,26 @@ func defaultCategory(kind, v string, i int, aliases map[string]string) Category 
 }
 
 // ActiveSports, ActiveGames and ActiveAttributes are what new listings may use.
-func ActiveSports() []string     { return current.Load().sports }
-func ActiveGames() []string      { return current.Load().games }
+func ActiveSports() []string   { return current.Load().sports }
+func ActiveGames() []string    { return current.Load().games }
+func ActiveNonSport() []string { return current.Load().nonsport }
+
+// ActiveFor is the active sports, games or non-sport themes for a category.
+func ActiveFor(category string) []string {
+	switch category {
+	case "sports":
+		return ActiveSports()
+	case "tcg":
+		return ActiveGames()
+	case "nonsport":
+		return ActiveNonSport()
+	}
+	return nil
+}
+
+// Categories are the top-level kinds of card.
+var CategoryKinds = []string{"sports", "tcg", "nonsport"}
+
 func ActiveAttributes() []string { return current.Load().attrs }
 
 // CatalogView is the public catalog: active categories and features.
@@ -228,11 +261,15 @@ func (c *Catalog) Load(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	st := &catalogState{sportAlias: map[string]string{}, gameAlias: map[string]string{}, categories: cats, features: feats}
+	st := &catalogState{sportAlias: map[string]string{}, gameAlias: map[string]string{}, nonsportAlias: map[string]string{},
+		categories: cats, features: feats}
 	for _, cat := range cats {
 		alias := st.gameAlias
-		if cat.Kind == "sports" {
+		switch cat.Kind {
+		case "sports":
 			alias = st.sportAlias
+		case "nonsport":
+			alias = st.nonsportAlias
 		}
 		for _, a := range cat.Aliases {
 			alias[strings.ToLower(a)] = cat.Value
@@ -240,9 +277,12 @@ func (c *Catalog) Load(ctx context.Context) error {
 		if !cat.Active {
 			continue
 		}
-		if cat.Kind == "sports" {
+		switch cat.Kind {
+		case "sports":
 			st.sports = append(st.sports, cat.Value)
-		} else {
+		case "nonsport":
+			st.nonsport = append(st.nonsport, cat.Value)
+		default:
 			st.games = append(st.games, cat.Value)
 		}
 	}
@@ -332,7 +372,7 @@ func cleanAliases(in []string) []string {
 func validCategory(in *CategoryInput) error {
 	in.Value, in.Label, in.ShortLabel = strings.TrimSpace(in.Value), strings.TrimSpace(in.Label), strings.TrimSpace(in.ShortLabel)
 	f := map[string]string{}
-	if in.Kind != "sports" && in.Kind != "tcg" {
+	if !slices.Contains(CategoryKinds, in.Kind) {
 		f["kind"] = "sports or tcg"
 	}
 	if in.Value == "" || len(in.Value) > 60 {
@@ -505,6 +545,12 @@ func normalizeGameOrSport(category, name string) string {
 	st := current.Load()
 	if category == "sports" {
 		if c := canonical(name, st.sports, st.sportAlias); c != "" {
+			return c
+		}
+		return name
+	}
+	if category == "nonsport" {
+		if c := canonical(name, st.nonsport, st.nonsportAlias); c != "" {
 			return c
 		}
 		return name

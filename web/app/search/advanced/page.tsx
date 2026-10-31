@@ -19,7 +19,7 @@ export default async function AdvancedSearch({ searchParams }: { searchParams: P
     const v = sp[k];
     return (Array.isArray(v) ? v : v ? [v] : []).flatMap((x) => x.split(","));
   };
-  const cat = one("game") ? `${one("category") || (catalog.sports.some((s) => s.value === one("game")) ? "sports" : "tcg")}:${one("game")}` : one("category");
+  const cat = one("game") ? `${one("category") || (catalog.sports.some((s) => s.value === one("game")) ? "sports" : catalog.nonsport.some((s) => s.value === one("game")) ? "nonsport" : "tcg")}:${one("game")}` : one("category");
 
   const label = "block text-[14px] font-semibold";
   const input = "mt-1 w-full rounded-md border border-line bg-paper px-3 py-2 text-[15px] focus:border-ink";
@@ -65,6 +65,10 @@ export default async function AdvancedSearch({ searchParams }: { searchParams: P
               <option value="tcg">All trading card games</option>
               <optgroup label="Trading card games">
                 {catalog.games.map((g) => <option key={g.value} value={`tcg:${g.value}`}>{g.label}</option>)}
+              </optgroup>
+              <option value="nonsport">All non-sport cards</option>
+              <optgroup label="Non-sport cards">
+                {catalog.nonsport.map((g) => <option key={g.value} value={`nonsport:${g.value}`}>{g.label}</option>)}
               </optgroup>
             </select>
           </div>

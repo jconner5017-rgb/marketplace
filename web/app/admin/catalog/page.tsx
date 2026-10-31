@@ -26,9 +26,9 @@ export default async function CatalogPage() {
       </p>
       {!edit && <p className="mt-2 text-[13px] text-muted">Only a Super Admin can make changes.</p>}
 
-      {(["sports", "tcg"] as const).map((kind) => (
+      {(["sports", "tcg", "nonsport"] as const).map((kind) => (
         <section key={kind} className="mt-8">
-          <h2 className="text-[20px] font-bold">{kind === "sports" ? "Sports" : "Trading card games"}</h2>
+          <h2 className="text-[20px] font-bold">{kind === "sports" ? "Sports" : kind === "tcg" ? "Trading card games" : "Non-sport card themes"}</h2>
           <ul className="mt-3 divide-y divide-line border-y border-line">
             {cats.filter((c) => c.kind === kind).map((c) => (
               <li key={c.id} className="py-3 text-[14px]">
@@ -63,13 +63,13 @@ export default async function CatalogPage() {
           </ul>
           {edit && (
             <details className="mt-3 max-w-[520px] rounded-lg border border-line p-4">
-              <summary className="cursor-pointer font-semibold">Add a {kind === "sports" ? "sport" : "game"}</summary>
+              <summary className="cursor-pointer font-semibold">Add a {kind === "sports" ? "sport" : kind === "tcg" ? "game" : "theme"}</summary>
               <div className="mt-3">
                 <ActionForm
                   endpoint="/v1/admin/catalog/categories"
                   fields={[
-                    { name: "value", label: "Stored name (can't change later)", placeholder: kind === "sports" ? "Lacrosse" : "Altered" },
-                    { name: "label", label: "Name buyers see", placeholder: kind === "sports" ? "Lacrosse" : "Altered TCG" },
+                    { name: "value", label: "Stored name (can't change later)", placeholder: kind === "sports" ? "Lacrosse" : kind === "tcg" ? "Altered" : "Cartoons" },
+                    { name: "label", label: "Name buyers see", placeholder: kind === "sports" ? "Lacrosse" : kind === "tcg" ? "Altered TCG" : "Cartoons" },
                     { name: "short_label", label: "Short name" },
                     { name: "aliases", label: "Alternate names (comma separated)", as: "list" },
                   ]}

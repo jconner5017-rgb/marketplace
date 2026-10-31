@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { getSummary } from "@/lib/api";
-import { QUICK_LINKS, SITE_NAME, gameHref, sportHref } from "@/lib/format";
+import { QUICK_LINKS, SITE_NAME, gameHref, nonsportHref, sportHref } from "@/lib/format";
 import { getCatalog } from "@/lib/catalog";
 import SignOutButton from "./SignOutButton";
 import BellMenu from "./BellMenu";
@@ -91,6 +91,7 @@ export default async function Header() {
         <ul className="flex flex-wrap items-center gap-x-5 gap-y-1 pb-2 text-[13px] text-muted">
           <li><Menu label="Sports cards" allHref="/search?category=sports" items={cat.sports.map((s) => ({ label: s.label, href: sportHref(s.value) }))} /></li>
           <li><Menu label="Trading card games" allHref="/search?category=tcg" items={cat.games.map((g) => ({ label: g.label, href: gameHref(g.value) }))} /></li>
+          <li><Menu label="Non-sport cards" allHref="/search?category=nonsport" items={cat.nonsport.map((g) => ({ label: g.label, href: nonsportHref(g.value) }))} /></li>
           {QUICK_LINKS.map((c) => (
             <li key={c.label}>
               <Link href={c.href} className="hover:text-ink hover:underline">{c.label}</Link>

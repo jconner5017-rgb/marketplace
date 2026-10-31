@@ -1,5 +1,5 @@
 import type { Listing } from "./types";
-import { CONDITIONS, SITE_NAME, gradeLabel } from "./format";
+import { CONDITIONS, SITE_NAME, categoryInfo, gradeLabel } from "./format";
 
 export const SITE_URL = (process.env.SITE_URL || "https://slabsnsingles.com").replace(/\/$/, "");
 
@@ -31,7 +31,7 @@ export function productJsonLd(l: Listing, gameLabel: string) {
   };
   if (l.format === "auction" && l.auction) offer.priceValidUntil = l.auction.ends_at.slice(0, 10);
   const props: { "@type": string; name: string; value: string }[] = [
-    { "@type": "PropertyValue", name: l.category === "tcg" ? "Game" : "Sport", value: gameLabel },
+    { "@type": "PropertyValue", name: categoryInfo(l.category)?.subject ?? "Type", value: gameLabel },
     { "@type": "PropertyValue", name: "Set", value: l.set_name },
   ];
   if (l.grader) props.push({ "@type": "PropertyValue", name: "Grade", value: `${l.grader} ${gradeLabel(l.grade)}` });
@@ -43,7 +43,7 @@ export function productJsonLd(l: Listing, gameLabel: string) {
     image: l.photo_urls.slice(0, 4),
     description: describeListing(l, gameLabel),
     sku: l.id,
-    category: l.category === "tcg" ? "Trading card games" : "Sports trading cards",
+    category: l.category === "sports" ? "Sports trading cards" : l.category === "nonsport" ? "Non-sport trading cards" : "Trading card games",
     additionalProperty: props,
     offers: offer,
   };

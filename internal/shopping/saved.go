@@ -121,7 +121,7 @@ func describe(v url.Values) string {
 			case "max_price":
 				x = "under $" + x
 			case "category":
-				x = map[string]string{"tcg": "TCG", "sports": "Sports cards"}[x]
+				x = map[string]string{"tcg": "TCG", "sports": "Sports cards", "nonsport": "Non-sport cards"}[x]
 			}
 			if x != "" {
 				parts = append(parts, x)

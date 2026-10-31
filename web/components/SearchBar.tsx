@@ -8,6 +8,7 @@ const SCOPES = [
   { value: "", label: "All categories" },
   { value: "sports", label: "Sports cards" },
   { value: "tcg", label: "Trading card games" },
+  { value: "nonsport", label: "Non-sport cards" },
 ];
 
 export default function SearchBar() {

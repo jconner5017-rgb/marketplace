@@ -2,7 +2,7 @@ export type Listing = {
   id: string;
   seller_username: string;
   external_id?: string | null;
-  category: "sports" | "tcg";
+  category: "sports" | "tcg" | "nonsport";
   game_or_sport: string;
   set_name: string;
   year: number | null;

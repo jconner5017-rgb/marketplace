@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { facets as getFacets, search } from "@/lib/api";
 import { ListingRow, ListingTile } from "@/components/CardBits";
-import { CONDITIONS, money } from "@/lib/format";
+import { CONDITIONS, money, categoryInfo } from "@/lib/format";
 import { getCatalog, labelFor, type SiteCatalog } from "@/lib/catalog";
 import type { Facet, Facets } from "@/lib/types";
 import SortSelect from "@/components/SortSelect";
@@ -33,7 +33,7 @@ function pick(sp: SP): URLSearchParams {
   const cat = Array.isArray(sp.cat) ? sp.cat[0] : sp.cat;
   if (cat) {
     const [c, g] = cat.split(":");
-    if (c === "sports" || c === "tcg") out.set("category", c);
+    if (c === "sports" || c === "tcg" || c === "nonsport") out.set("category", c);
     if (g) out.set("game", g);
   }
   return out;
@@ -54,7 +54,7 @@ function hrefWith(base: URLSearchParams, changes: Record<string, string | null>)
 
 export async function generateMetadata({ searchParams }: { searchParams: Promise<SP> }): Promise<Metadata> {
   const p = pick(await searchParams);
-  const what = p.get("q") || p.get("game") || (p.get("category") === "tcg" ? "TCG singles" : p.get("category") === "sports" ? "Sports cards" : "All cards");
+  const what = p.get("q") || p.get("game") || (p.get("category") === "tcg" ? "TCG singles" : categoryInfo(p.get("category"))?.label ?? "All cards");
   // Only plain category and keyword pages are indexed. Filter combinations
   // are endless, so crawlers are kept off them (see also app/robots.ts).
   const keys = new Set(p.keys());
@@ -89,7 +89,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
   const last = Math.min(page * PAGE_SIZE, res.total);
 
   const q = params.get("q");
-  const heading = q ? `Results for “${q}”` : params.get("game") || (params.get("category") === "tcg" ? "Trading card games" : params.get("category") === "sports" ? "Sports cards" : "All cards");
+  const heading = q ? `Results for “${q}”` : params.get("game") || (categoryInfo(params.get("category"))?.label ?? "All cards");
 
   return (
     <div className="grid gap-8 pt-4 md:grid-cols-[230px_1fr]">
@@ -197,7 +197,7 @@ const FILTER_NAMES: Record<string, string> = {
 const FORMATS: Record<string, string> = { auction: "Auction", fixed: "Buy It Now", offers: "Accepts offers" };
 
 function chipLabel(k: string, v: string, cat: SiteCatalog): string {
-  if (k === "category") return v === "tcg" ? "Trading card games" : "Sports cards";
+  if (k === "category") return categoryInfo(v)?.label ?? v;
   if (k === "grader") return v.toUpperCase() === "RAW" ? "Raw (ungraded)" : v;
   if (k === "min_grade") return Number(v) <= 1 ? "Any graded" : `Grade ${v} and up`;
   if (k === "condition") return CONDITIONS[v.toUpperCase()] ?? v;
@@ -286,10 +286,10 @@ function Sidebar({ params, facets, cat }: { params: URLSearchParams; facets: Fac
         param="category"
         params={params}
         items={facets?.category}
-        label={(v) => (v === "tcg" ? "Trading card games" : "Sports cards")}
+        label={(v) => categoryInfo(v)?.label ?? v}
       />
       <FacetGroup
-        title={params.get("category") === "sports" ? "Sport" : params.get("category") === "tcg" ? "Game" : "Sport or game"}
+        title={categoryInfo(params.get("category"))?.subject ?? "Sport, game or theme"}
         param="game"
         params={params}
         items={facets?.game}

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { FOOTER } from "@/components/Footer";
-import { gameHref, sportHref } from "@/lib/format";
+import { gameHref, nonsportHref, sportHref } from "@/lib/format";
 import { getCatalog } from "@/lib/catalog";
 
 export const metadata = { title: "Site map" };
@@ -19,6 +19,7 @@ export default async function SiteMap() {
   const cols = [
     { title: "Sports cards", links: cat.sports.map((s) => ({ label: s.label, href: sportHref(s.value) })) },
     { title: "Trading card games", links: cat.games.map((g) => ({ label: g.label, href: gameHref(g.value) })) },
+    { title: "Non-sport cards", links: cat.nonsport.map((g) => ({ label: g.label, href: nonsportHref(g.value) })) },
     { title: "Your account", links: MEMBER },
     ...FOOTER,
   ];

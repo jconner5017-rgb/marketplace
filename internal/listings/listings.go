@@ -218,16 +218,14 @@ func (in *Input) validate(capCents int) error {
 			f[field] = fmt.Sprintf("at most %d characters", n)
 		}
 	}
-	if in.Category != "sports" && in.Category != "tcg" {
-		f["category"] = "sports or tcg"
+	if !slices.Contains(CategoryKinds, in.Category) {
+		f["category"] = "sports, tcg or nonsport"
 	}
 	switch {
 	case in.GameOrSport == "":
-		f["game_or_sport"] = "required (e.g. Pokemon, Baseball)"
-	case in.Category == "sports" && !slices.Contains(ActiveSports(), in.GameOrSport):
-		f["game_or_sport"] = "choose one of " + strings.Join(ActiveSports(), ", ")
-	case in.Category == "tcg" && !slices.Contains(ActiveGames(), in.GameOrSport):
-		f["game_or_sport"] = "choose one of " + strings.Join(ActiveGames(), ", ")
+		f["game_or_sport"] = "required (e.g. Pokemon, Baseball, Superheroes)"
+	case slices.Contains(CategoryKinds, in.Category) && !slices.Contains(ActiveFor(in.Category), in.GameOrSport):
+		f["game_or_sport"] = "choose one of " + strings.Join(ActiveFor(in.Category), ", ")
 	}
 	maxLen("game_or_sport", in.GameOrSport, 60)
 	if in.SetName == "" {

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { search } from "@/lib/api";
 import { ListingTile } from "@/components/CardBits";
 import type { Listing } from "@/lib/types";
-import { gameHref, sportHref } from "@/lib/format";
+import { gameHref, sportHref, nonsportHref } from "@/lib/format";
 import { getCatalog } from "@/lib/catalog";
 import { SITE_URL, ldJson } from "@/lib/seo";
 import { SITE_NAME } from "@/lib/format";
@@ -20,6 +20,7 @@ export default async function Home() {
   const SHELVES = [
     { title: "Sports cards", category: "sports", items: cat.sports.map((s) => ({ label: s.short, href: sportHref(s.value) })) },
     { title: "Trading card games", category: "tcg", items: cat.games.map((g) => ({ label: g.short, href: gameHref(g.value) })) },
+    { title: "Non-sport cards", category: "nonsport", items: cat.nonsport.map((g) => ({ label: g.short, href: nonsportHref(g.value) })) },
   ];
 
   const site = {
@@ -51,7 +52,7 @@ export default async function Home() {
             </Link>
           </div>
         </div>
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-3">
           {SHELVES.map((s) => (
             <div key={s.title} className="rounded-lg border border-line p-4">
               <h2 className="font-bold">

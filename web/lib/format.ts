@@ -68,6 +68,11 @@ export const GAMES: { value: string; label: string; short: string }[] = [
   { value: "Naruto", label: "Naruto CCG", short: "Naruto" },
   { value: "UniVersus", label: "UniVersus (UFS)", short: "UniVersus" },
   { value: "Cardfight!! Vanguard", label: "Cardfight!! Vanguard", short: "Vanguard" },
+  { value: "Other TCG", label: "Other trading card games", short: "Other TCG" },
+];
+
+/** Non-sport card themes (matches the API). */
+export const NONSPORT: { value: string; label: string; short: string }[] = [
   { value: "Superheroes", label: "Superheroes (Marvel, DC)", short: "Superheroes" },
   { value: "Sci-Fi", label: "Sci-Fi", short: "Sci-Fi" },
   { value: "Fantasy", label: "Fantasy", short: "Fantasy" },
@@ -77,10 +82,23 @@ export const GAMES: { value: string; label: string; short: string }[] = [
   { value: "Music", label: "Music", short: "Music" },
   { value: "Historical", label: "Historical", short: "Historical" },
   { value: "Novelty", label: "Novelty", short: "Novelty" },
-  { value: "Other TCG", label: "Other trading card games", short: "Other TCG" },
+  { value: "Other non-sport", label: "Other non-sport cards", short: "Other non-sport" },
 ];
 
-const LABELS: Record<string, string> = Object.fromEntries([...SPORTS, ...GAMES].map((x) => [x.value, x.label]));
+/** The three top-level kinds of card. */
+export const CATEGORIES = [
+  { value: "sports", label: "Sports cards", one: "Sports card", subject: "Sport" },
+  { value: "tcg", label: "Trading card games", one: "Trading card game", subject: "Game" },
+  { value: "nonsport", label: "Non-sport cards", one: "Non-sport card", subject: "Theme" },
+] as const;
+export type CategoryKind = (typeof CATEGORIES)[number]["value"];
+
+/** Label, singular and "Sport/Game/Theme" for a category value. */
+export function categoryInfo(v: string | null | undefined) {
+  return CATEGORIES.find((c) => c.value === v) ?? null;
+}
+
+const LABELS: Record<string, string> = Object.fromEntries([...SPORTS, ...GAMES, ...NONSPORT].map((x) => [x.value, x.label]));
 export function gameLabel(value: string): string {
   return LABELS[value] ?? value;
 }
@@ -90,6 +108,13 @@ export function sportHref(v: string) {
 }
 export function gameHref(v: string) {
   return `/search?category=tcg&game=${encodeURIComponent(v)}`;
+}
+export function nonsportHref(v: string) {
+  return `/search?category=nonsport&game=${encodeURIComponent(v)}`;
+}
+/** Search link for one sport, game or theme within its category. */
+export function subjectHref(category: string, v: string) {
+  return `/search?category=${encodeURIComponent(category)}&game=${encodeURIComponent(v)}`;
 }
 
 /** Quick links shown next to the Sports and Trading cards menus. */

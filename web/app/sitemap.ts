@@ -1,5 +1,5 @@
 import type { MetadataRoute } from "next";
-import { gameHref, sportHref } from "@/lib/format";
+import { gameHref, nonsportHref, sportHref } from "@/lib/format";
 import { ARTICLES } from "@/lib/help";
 import { API_URL } from "@/lib/api";
 import { getCatalog } from "@/lib/catalog";
@@ -34,8 +34,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     "/",
     "/search?category=sports",
     "/search?category=tcg",
+    "/search?category=nonsport",
     ...cat.sports.map((s) => sportHref(s.value)),
     ...cat.games.map((g) => gameHref(g.value)),
+    ...cat.nonsport.map((g) => nonsportHref(g.value)),
     "/help",
     ...ARTICLES.filter((a) => !a.draft).map((a) => `/help/${a.slug}`),
     "/announcements",

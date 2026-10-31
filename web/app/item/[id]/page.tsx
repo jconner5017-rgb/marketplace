@@ -10,7 +10,7 @@ import ContactSeller from "@/components/ContactSeller";
 import ReportButton from "@/components/ReportButton";
 import { GradeBadge, ListingTile } from "@/components/CardBits";
 import Gallery from "@/components/Gallery";
-import { CONDITIONS, gradeLabel, money } from "@/lib/format";
+import { CONDITIONS, categoryInfo, gradeLabel, money } from "@/lib/format";
 import { getCatalog, labelFor } from "@/lib/catalog";
 import { SITE_URL, describeListing, ldJson, productJsonLd } from "@/lib/seo";
 
@@ -51,8 +51,8 @@ export default async function ItemPage({ params }: Props) {
   const gameHref = `/search?category=${l.category}&game=${encodeURIComponent(l.game_or_sport)}`;
 
   const specifics: [string, string | null][] = [
-    ["Category", l.category === "tcg" ? "Trading card game" : "Sports card"],
-    [l.category === "tcg" ? "Game" : "Sport", labelFor(catalog, l.game_or_sport)],
+    ["Category", categoryInfo(l.category)?.one ?? "Card"],
+    [categoryInfo(l.category)?.subject ?? "Type", labelFor(catalog, l.game_or_sport)],
     ["Set", l.set_name],
     ["Year", l.year ? String(l.year) : null],
     ["Card number", l.card_number],
@@ -71,7 +71,7 @@ export default async function ItemPage({ params }: Props) {
         <Link href="/" className="hover:underline">Home</Link>
         <span className="mx-1.5">›</span>
         <Link href={`/search?category=${l.category}`} className="hover:underline">
-          {l.category === "tcg" ? "Trading card games" : "Sports cards"}
+          {categoryInfo(l.category)?.label ?? "Cards"}
         </Link>
         <span className="mx-1.5">›</span>
         <Link href={gameHref} className="hover:underline">{l.game_or_sport}</Link>

@@ -293,6 +293,7 @@ func handleCatalog(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"sports":            listings.ActiveSports(),
 		"games":             listings.ActiveGames(),
+		"nonsport":          listings.ActiveNonSport(),
 		"categories":        cats,
 		"features":          feats,
 		"conditions":        listings.Conditions,

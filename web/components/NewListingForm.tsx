@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { send } from "@/lib/client";
-import { CONDITIONS, money, toCents } from "@/lib/format";
+import { CONDITIONS, categoryInfo, money, toCents } from "@/lib/format";
 import type { FeeSchedule, SiteCatalog } from "@/lib/catalog";
 import type { Listing } from "@/lib/types";
 import Field from "./Field";
@@ -161,12 +161,13 @@ export default function NewListingForm({ capCents, catalog, fees, initial }: {
           <select id="category" name="category" className={select} value={category} onChange={(e) => setCategory(e.target.value)}>
             <option value="tcg">Trading card game</option>
             <option value="sports">Sports card</option>
+            <option value="nonsport">Non-sport card</option>
           </select>
         </Field>
-        <Field label={category === "sports" ? "Sport" : "Game"} name="game_or_sport" error={fields.game_or_sport}>
+        <Field label={categoryInfo(category)?.subject ?? "Game"} name="game_or_sport" error={fields.game_or_sport}>
           <select id="game_or_sport" name="game_or_sport" key={category} className={select} defaultValue={initial?.category === category ? initial.game_or_sport : ""}>
             <option value="" disabled>Choose…</option>
-            {(category === "sports" ? catalog.sports : catalog.games).map((o) => (
+            {(category === "sports" ? catalog.sports : category === "nonsport" ? catalog.nonsport : catalog.games).map((o) => (
               <option key={o.value} value={o.value}>{o.label}</option>
             ))}
           </select>
