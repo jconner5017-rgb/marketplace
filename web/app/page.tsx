@@ -9,12 +9,23 @@ import { SITE_NAME } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
+/** Every shelf but Newly listed is shuffled on each visit, so no card holds a fixed, favoured spot. */
+function shuffle<T>(xs: T[]): T[] {
+  const a = [...xs];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
 export default async function Home() {
   const [ending, fresh, graded, cheap, cat] = await Promise.all([
-    search("format=auction&sort=ending&limit=6"),
+    // Six picked at random from the 24 auctions ending soonest.
+    search("format=auction&sort=ending&limit=24"),
     search("sort=newest&limit=12"),
-    search("min_grade=1&sort=newest&limit=6"),
-    search("max_price=20&sort=price_asc&limit=6"),
+    search("min_grade=1&sort=random&limit=6"),
+    search("max_price=20&sort=random&limit=6"),
     getCatalog(),
   ]);
   const SHELVES = [
@@ -71,7 +82,7 @@ export default async function Home() {
       </section>
 
       {ending.listings.length > 0 && (
-        <Shelf title="Auctions ending soon" href="/search?format=auction&sort=ending" items={ending.listings} />
+        <Shelf title="Auctions ending soon" href="/search?format=auction&sort=ending" items={shuffle(ending.listings).slice(0, 6)} />
       )}
       <Shelf title="Newly listed" href="/search?sort=newest" items={fresh.listings} />
       <Shelf title="Graded slabs" href="/search?min_grade=1" items={graded.listings} />

@@ -83,9 +83,9 @@ func ParseSearch(q url.Values) (p SearchParams, bad map[string]string) {
 		}
 	}
 	switch p.Sort {
-	case "", "newest", "price_asc", "price_desc", "relevance", "ending":
+	case "", "newest", "price_asc", "price_desc", "relevance", "ending", "random":
 	default:
-		bad["sort"] = "newest, price_asc, price_desc, relevance or ending"
+		bad["sort"] = "newest, price_asc, price_desc, relevance, ending or random"
 	}
 	switch p.Format {
 	case "", "auction", "fixed", "offers":

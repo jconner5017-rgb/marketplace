@@ -89,6 +89,9 @@ func (s *Service) Search(ctx context.Context, p SearchParams) (SearchResult, err
 		order = "l.price_cents DESC, l.created_at DESC, l.id"
 	case "ending":
 		order = "(l.format = 'auction') DESC, l.ends_at ASC NULLS LAST, l.created_at DESC, l.id"
+	case "random":
+		// Home page shelves: no card gets a fixed spot.
+		order = "random()"
 	case "relevance":
 		if tsq != "" {
 			order = "ts_rank(l.search, " + tsq + ") DESC, l.created_at DESC, l.id"
