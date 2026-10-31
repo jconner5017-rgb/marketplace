@@ -111,7 +111,7 @@ func run(log *slog.Logger) error {
 	reputation := &sellers.Reputation{DB: database}
 	checkoutSvc := &checkout.Service{DB: database, Sellers: sellerSvc, Fees: feeSvc, Rep: reputation,
 		Enabled: cfg.CheckoutEnabled, WebURL: cfg.WebURL,
-		Letters: checkout.Letters{MailerID: cfg.USPSMailerID, ServiceType: cfg.USPSServiceType}}
+		Letters: checkout.Letters{MailerID: cfg.USPSMailerID, ServiceType: cfg.USPSServiceType, Warn: log.Warn}}
 	if cfg.USPSClientID != "" && cfg.USPSSecret != "" {
 		checkoutSvc.Letters.Addresses = &usps.Addresses{ClientID: cfg.USPSClientID, Secret: cfg.USPSSecret}
 	}

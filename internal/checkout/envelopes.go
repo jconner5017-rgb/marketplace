@@ -43,6 +43,8 @@ type Letters struct {
 	ServiceType int    // service type ID; 40 = First-Class Mail, basic tracing
 	Addresses   AddressLookup
 	Tracker     PieceTracker
+	// Warn logs lookups that fell back to the plain ZIP (optional).
+	Warn func(msg string, args ...any)
 }
 
 // Envelope is everything needed to print a tracked envelope.
@@ -114,8 +116,16 @@ func (s *Service) EnvelopeFor(ctx context.Context, sellerID, orderID string) (En
 			lctx, cancel := context.WithTimeout(ctx, addressLookupTO)
 			std, lerr := s.Letters.Addresses.Standardize(lctx, e.To.Street1, e.To.Street2, e.To.City, e.To.State, e.To.Zip)
 			cancel()
-			if lerr == nil && len(std.Routing()) > len(routing) {
+			switch {
+			case lerr != nil:
+				if s.Letters.Warn != nil {
+					s.Letters.Warn("usps address lookup failed; using typed ZIP", "order", e.OrderNumber, "err", lerr)
+				}
+			case len(std.Routing()) > len(routing):
 				routing = std.Routing()
+			}
+			if lerr == nil && s.Letters.Warn != nil && len(routing) < 9 {
+				s.Letters.Warn("usps address lookup found no ZIP+4", "order", e.OrderNumber)
 			}
 		}
 		if routing == "" {
