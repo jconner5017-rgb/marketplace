@@ -59,6 +59,11 @@ export default async function SellerOrders({ searchParams }: { searchParams: Pro
                   <p className="mt-2">
                     {o.ship_to?.name}, {o.ship_to?.line1}{o.ship_to?.line2 ? `, ${o.ship_to.line2}` : ""}, {o.ship_to?.city}, {o.ship_to?.state} {o.ship_to?.zip}
                   </p>
+                  {o.ship_method === "envelope" && (
+                    <Link href={`/sell/orders/${o.id}/envelope`} className="mt-2 inline-block rounded-full bg-link px-4 py-1.5 text-[13px] font-semibold text-white hover:bg-link-dark">
+                      Print tracked envelope
+                    </Link>
+                  )}
                   <ShipForm orderId={o.id} method={o.ship_method} />
                 </>
               )}
