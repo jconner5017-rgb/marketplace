@@ -13,6 +13,7 @@ import (
 	"github.com/jconner5017-rgb/marketplace/internal/auth"
 	"github.com/jconner5017-rgb/marketplace/internal/blocklist"
 	"github.com/jconner5017-rgb/marketplace/internal/checkout"
+	"github.com/jconner5017-rgb/marketplace/internal/email"
 	"github.com/jconner5017-rgb/marketplace/internal/fcm"
 	"github.com/jconner5017-rgb/marketplace/internal/feedback"
 	"github.com/jconner5017-rgb/marketplace/internal/fees"
@@ -34,6 +35,7 @@ type Server struct {
 	sessionTTL   time.Duration
 	trustProxy   bool
 	authLimiter  *rateLimiter
+	mail         *email.Service
 
 	sellers       *sellers.Service
 	listings      *listings.Service
@@ -90,6 +92,7 @@ type Options struct {
 	FCM      *fcm.Service
 	Feedback *feedback.Service
 	Photos   *photos.Service
+	Mail     *email.Service // nil or without a sender: no mail, no confirmation required
 	// ShippingWebhookToken must be in the tracking webhook URL (?token=).
 	ShippingWebhookToken string
 	// AdminIPAllowlistOff turns off the admin IP allowlist (break-glass).
@@ -124,6 +127,7 @@ func New(o Options) *Server {
 		fcm:           o.FCM,
 		feedback:      o.Feedback,
 		photos:        o.Photos,
+		mail:          o.Mail,
 		shippingToken: o.ShippingWebhookToken,
 		ipRules:       &admin.IPRules{DB: o.DB, Audit: o.Audit, Disabled: o.AdminIPAllowlistOff},
 		// 30 bids or offers per user per minute.
@@ -146,6 +150,15 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/auth/signup", s.handleSignup)
 	mux.HandleFunc("POST /v1/auth/login", s.handleLogin)
 	mux.HandleFunc("POST /v1/auth/logout", s.handleLogout)
+	mux.HandleFunc("POST /v1/auth/confirm-email", s.handleConfirmEmail)
+	mux.HandleFunc("POST /v1/auth/forgot", s.handleForgotPassword)
+	mux.HandleFunc("POST /v1/auth/reset", s.handleResetPassword)
+	mux.HandleFunc("POST /v1/email/unsubscribe", s.handleUnsubscribe)
+	mux.HandleFunc("POST /v1/me/confirm-email", requireUser(s.handleResendConfirm))
+	mux.HandleFunc("GET /v1/me/email-prefs", requireUser(s.handleGetEmailPrefs))
+	mux.HandleFunc("PUT /v1/me/email-prefs", requireUser(s.handleEmailPrefs))
+	mux.HandleFunc("GET /v1/admin/email", s.requireStaff(admin.Announce, s.handleAdminEmail))
+	mux.HandleFunc("POST /v1/admin/email", s.requireStaff(admin.Announce, s.handleAdminSendEmail))
 	mux.HandleFunc("GET /v1/me", requireUser(s.handleMe))
 
 	// Staff back office. Everything but the sign-in check needs a recent
@@ -231,21 +244,21 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PUT /v1/cart/{id}", requireUser(s.handleSetCart))
 	mux.HandleFunc("DELETE /v1/cart/{id}", requireUser(s.handleRemoveCart))
 	mux.HandleFunc("GET /v1/listings/{id}/me", requireUser(s.handleListingForMe))
-	mux.HandleFunc("POST /v1/listings/{id}/messages", requireUser(s.handleAskSeller))
+	mux.HandleFunc("POST /v1/listings/{id}/messages", s.verified(s.handleAskSeller))
 	mux.HandleFunc("GET /v1/messages", requireUser(s.handleThreads))
 	mux.HandleFunc("GET /v1/messages/{id}", requireUser(s.handleConversation))
-	mux.HandleFunc("POST /v1/messages/{id}", requireUser(s.handleReply))
+	mux.HandleFunc("POST /v1/messages/{id}", s.verified(s.handleReply))
 	mux.HandleFunc("GET /v1/notifications", requireUser(s.handleNotifications))
 
 	// Auctions and Best Offer.
-	mux.HandleFunc("POST /v1/listings/{id}/bids", requireUser(s.handleBid))
+	mux.HandleFunc("POST /v1/listings/{id}/bids", s.verified(s.handleBid))
 	mux.HandleFunc("GET /v1/listings/{id}/bids", s.handleBids)
 	mux.HandleFunc("POST /v1/listings/{id}/buy-now", requireUser(s.handleAuctionBuyNow))
-	mux.HandleFunc("POST /v1/listings/{id}/offers", requireUser(s.handleMakeOffer))
+	mux.HandleFunc("POST /v1/listings/{id}/offers", s.verified(s.handleMakeOffer))
 	mux.HandleFunc("POST /v1/offers/{id}/respond", requireUser(s.handleRespondOffer))
 	mux.HandleFunc("GET /v1/offers", requireUser(s.handleOffers))
 	mux.HandleFunc("GET /v1/checkout/status", s.handleCheckoutStatus)
-	mux.HandleFunc("POST /v1/checkout", requireUser(s.handleStartCheckout))
+	mux.HandleFunc("POST /v1/checkout", s.verified(s.handleStartCheckout))
 	mux.HandleFunc("POST /v1/orders/{id}/confirm", requireUser(s.handleConfirmOrder))
 	mux.HandleFunc("POST /v1/orders/{id}/cancel", requireUser(s.handleAbandonOrder))
 	mux.HandleFunc("GET /v1/orders", s.sellerAPI(s.handleOrders))
@@ -286,7 +299,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/notifications/{id}/read", requireUser(s.handleReadOne))
 
 	// Selling: Stripe Connect onboarding and settings.
-	mux.HandleFunc("POST /v1/seller/onboarding", requireUser(s.handleStartOnboarding))
+	mux.HandleFunc("POST /v1/seller/onboarding", s.verified(s.handleStartOnboarding))
 	mux.HandleFunc("GET /v1/seller", requireUser(s.handleGetSeller))
 	mux.HandleFunc("PATCH /v1/seller/settings", requireUser(s.handleSellerSettings))
 	mux.HandleFunc("PATCH /v1/seller/tax", requireUser(s.handleSellerTax))
@@ -400,6 +413,9 @@ func (s *Server) handleSignup(w http.ResponseWriter, r *http.Request) {
 			s.log.Error("banned ip alert", "err", err)
 		}
 	}
+	if err := s.sendConfirm(r, u); err != nil {
+		s.log.Error("queue confirmation email", "err", err)
+	}
 	token, err := s.auth.StartSession(r.Context(), u.ID, ip, r.UserAgent())
 	if err != nil {
 		s.internalError(w, r, err)
@@ -452,5 +468,5 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 	u, _ := currentUser(r)
-	writeJSON(w, http.StatusOK, map[string]any{"user": u})
+	writeJSON(w, http.StatusOK, map[string]any{"user": u, "must_confirm_email": s.mustConfirm(u), "mail": s.mail.Enabled()})
 }

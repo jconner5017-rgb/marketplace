@@ -127,6 +127,7 @@ export type User = {
   role: string;
   status: string;
   email_verified: boolean;
+  verify_required?: boolean;
   created_at: string;
   staff_role?: string;
 };
@@ -154,6 +155,7 @@ export type ApiError = {
 
 export type Summary = {
   user: User;
+  must_confirm_email?: boolean;
   is_seller: boolean;
   cart_cards: number;
   watching: number;

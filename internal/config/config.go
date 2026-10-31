@@ -59,6 +59,14 @@ type Config struct {
 	USPSSecret      string
 	USPSIVUser      string
 	USPSIVPassword  string
+	// Email: EMAIL_PROVIDER (postmark or resend), EMAIL_API_KEY, EMAIL_FROM
+	// (e.g. "Slabs & Singles <hello@slabsnsingles.com>") and
+	// EMAIL_POSTAL_ADDRESS (printed on blasts). No provider: no mail is sent
+	// and new members don't have to confirm their email.
+	EmailProvider string
+	EmailAPIKey   string
+	EmailFrom     string
+	EmailPostal   string
 }
 
 func Load() (Config, error) {
@@ -121,6 +129,10 @@ func Load() (Config, error) {
 	c.S3AccessKey = strings.TrimSpace(os.Getenv("S3_ACCESS_KEY_ID"))
 	c.S3SecretKey = strings.TrimSpace(os.Getenv("S3_SECRET_ACCESS_KEY"))
 	c.PhotoPublicURL = strings.TrimRight(strings.TrimSpace(os.Getenv("PHOTO_PUBLIC_URL")), "/")
+	c.EmailProvider = strings.TrimSpace(os.Getenv("EMAIL_PROVIDER"))
+	c.EmailAPIKey = strings.TrimSpace(os.Getenv("EMAIL_API_KEY"))
+	c.EmailFrom = strings.TrimSpace(getenv("EMAIL_FROM", "Slabs & Singles <hello@slabsnsingles.com>"))
+	c.EmailPostal = strings.TrimSpace(os.Getenv("EMAIL_POSTAL_ADDRESS"))
 	c.USPSMailerID = strings.TrimSpace(os.Getenv("USPS_MAILER_ID"))
 	if c.USPSMailerID != "" && (len(c.USPSMailerID) != 9 && len(c.USPSMailerID) != 6 || strings.Trim(c.USPSMailerID, "0123456789") != "") {
 		return c, errors.New("USPS_MAILER_ID must be 6 or 9 digits")

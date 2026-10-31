@@ -68,6 +68,9 @@ export default function AuthForm({ mode }: { mode: "signin" | "register" }) {
         error={fields.password}
         hint={register ? "At least 10 characters." : undefined}
       />
+      {!register && (
+        <p className="-mt-2 text-right text-[13px]"><Link href="/forgot-password" className="text-link underline">Forgot password?</Link></p>
+      )}
       <button type="submit" disabled={busy} className="w-full rounded-full bg-link py-2.5 font-semibold text-white hover:bg-link-dark disabled:opacity-60">
         {busy ? (register ? "Creating account…" : "Signing in…") : register ? "Create account" : "Sign in"}
       </button>

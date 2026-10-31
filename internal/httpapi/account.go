@@ -53,12 +53,13 @@ func (s *Server) handleSummary(w http.ResponseWriter, r *http.Request) {
 	}
 	_, sellerErr := s.sellers.Get(r.Context(), u.ID)
 	writeJSON(w, http.StatusOK, map[string]any{
-		"user":            u,
-		"is_seller":       sellerErr == nil,
-		"cart_cards":      counts.CartCards,
-		"watching":        counts.Watching,
-		"unread_notices":  bell.Unread,
-		"unread_messages": unreadMsgs,
+		"user":               u,
+		"must_confirm_email": s.mustConfirm(u),
+		"is_seller":          sellerErr == nil,
+		"cart_cards":         counts.CartCards,
+		"watching":           counts.Watching,
+		"unread_notices":     bell.Unread,
+		"unread_messages":    unreadMsgs,
 	})
 }
 

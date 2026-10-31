@@ -34,13 +34,16 @@ type ValidationError struct{ Fields map[string]string }
 func (e *ValidationError) Error() string { return "invalid input" }
 
 type User struct {
-	ID            string    `json:"id"`
-	Email         string    `json:"email"`
-	Username      string    `json:"username"`
-	Role          string    `json:"role"`
-	Status        string    `json:"status"`
-	EmailVerified bool      `json:"email_verified"`
-	CreatedAt     time.Time `json:"created_at"`
+	ID            string `json:"id"`
+	Email         string `json:"email"`
+	Username      string `json:"username"`
+	Role          string `json:"role"`
+	Status        string `json:"status"`
+	EmailVerified bool   `json:"email_verified"`
+	// VerifyRequired: signed up after email confirmation started, so they
+	// must confirm before buying, bidding, messaging or selling.
+	VerifyRequired bool      `json:"verify_required"`
+	CreatedAt      time.Time `json:"created_at"`
 	// StaffRole is set for marketplace staff: super_admin, moderator, support, auditor.
 	StaffRole *string `json:"staff_role,omitempty"`
 }
@@ -120,12 +123,12 @@ func validateSignup(email, username, password string) error {
 	return nil
 }
 
-const userCols = `id, email, username, role, status, email_verified_at IS NOT NULL, created_at, staff_role`
+const userCols = `id, email, username, role, status, email_verified_at IS NOT NULL, created_at, staff_role, verify_required`
 
 func scanUser(row interface{ Scan(...any) error }) (User, error) {
 	var u User
 	var staff sql.NullString
-	err := row.Scan(&u.ID, &u.Email, &u.Username, &u.Role, &u.Status, &u.EmailVerified, &u.CreatedAt, &staff)
+	err := row.Scan(&u.ID, &u.Email, &u.Username, &u.Role, &u.Status, &u.EmailVerified, &u.CreatedAt, &staff, &u.VerifyRequired)
 	if staff.Valid {
 		u.StaffRole = &staff.String
 	}
@@ -200,7 +203,7 @@ func (s *Service) Login(ctx context.Context, email, password, ip, userAgent stri
 		SELECT `+prefixed("u.", userCols)+`, u.password_hash, `+signInStatus+` FROM users u
 		WHERE CASE WHEN strpos($1, '@') > 0 THEN lower(u.email) = lower($1) ELSE lower(u.username) = lower($1) END`,
 		email, // an email address, or a username (they can't contain @)
-	).Scan(&u.ID, &u.Email, &u.Username, &u.Role, &u.Status, &u.EmailVerified, &u.CreatedAt, &staff, &hash, &canSignIn)
+	).Scan(&u.ID, &u.Email, &u.Username, &u.Role, &u.Status, &u.EmailVerified, &u.CreatedAt, &staff, &u.VerifyRequired, &hash, &canSignIn)
 	if errors.Is(err, sql.ErrNoRows) {
 		VerifyPassword(password, dummyHash)
 		s.loginEvent(ctx, nil, email, ip, userAgent, false, "unknown_email")
@@ -377,7 +380,7 @@ func (s *Service) DisabledAccount(ctx context.Context, email, password string) (
 	err := s.DB.QueryRowContext(ctx, `
 		SELECT `+prefixed("u.", userCols)+`, u.password_hash, `+signInStatus+` FROM users u WHERE lower(u.email) = lower($1)`,
 		strings.TrimSpace(email),
-	).Scan(&u.ID, &u.Email, &u.Username, &u.Role, &u.Status, &u.EmailVerified, &u.CreatedAt, &staff, &hash, &canSignIn)
+	).Scan(&u.ID, &u.Email, &u.Username, &u.Role, &u.Status, &u.EmailVerified, &u.CreatedAt, &staff, &u.VerifyRequired, &hash, &canSignIn)
 	if errors.Is(err, sql.ErrNoRows) {
 		VerifyPassword(password, dummyHash)
 		return User{}, ErrInvalidCredentials
@@ -399,4 +402,43 @@ func (s *Service) UserByID(ctx context.Context, id string) (User, error) {
 		return User{}, ErrNoSession
 	}
 	return u, err
+}
+
+// MarkEmailVerified confirms a member's email, if it's still the address
+// the link was sent to.
+func MarkEmailVerified(ctx context.Context, tx *sql.Tx, userID, email string) (bool, error) {
+	res, err := tx.ExecContext(ctx, `UPDATE users SET email_verified_at = coalesce(email_verified_at, now()), updated_at = now()
+		WHERE id = $1 AND lower(email) = lower($2)`, userID, email)
+	if err != nil {
+		return false, err
+	}
+	n, _ := res.RowsAffected()
+	return n > 0, nil
+}
+
+// SetPassword replaces a password (from a reset link) and signs the member
+// out everywhere.
+func SetPassword(ctx context.Context, tx *sql.Tx, userID, password string) error {
+	if n := utf8.RuneCountInString(password); n < minPasswordLen || n > maxPasswordLen {
+		return &ValidationError{Fields: map[string]string{"password": "must be 10 to 128 characters"}}
+	}
+	hash, err := HashPassword(password)
+	if err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE users SET password_hash = $2, updated_at = now() WHERE id = $1`, userID, hash); err != nil {
+		return err
+	}
+	_, err = tx.ExecContext(ctx, `DELETE FROM sessions WHERE user_id = $1`, userID)
+	return err
+}
+
+// ResetTarget finds an active member by email for a password reset.
+func (s *Service) ResetTarget(ctx context.Context, email string) (User, bool, error) {
+	u, err := scanUser(s.DB.QueryRowContext(ctx, `SELECT `+prefixed("u.", userCols)+` FROM users u
+		WHERE lower(u.email) = lower($1) AND `+signInStatus, strings.TrimSpace(email)))
+	if errors.Is(err, sql.ErrNoRows) {
+		return u, false, nil
+	}
+	return u, err == nil, err
 }

@@ -8,6 +8,7 @@ import BellMenu from "./BellMenu";
 import { BellIcon, CartIcon, ChevronIcon, HeartIcon } from "./Icons";
 import SearchBar from "./SearchBar";
 import MenuCloser from "./MenuCloser";
+import ConfirmEmailBanner from "./ConfirmEmailBanner";
 
 export default async function Header() {
   const [me, cat] = await Promise.all([getSummary(), getCatalog()]);
@@ -15,6 +16,7 @@ export default async function Header() {
   return (
     <header className="border-b border-line">
       <MenuCloser />
+      {me?.must_confirm_email && <ConfirmEmailBanner email={me.user.email} />}
       {/* Utility row, eBay-style: greeting on the left, account shortcuts on the right */}
       <div className="border-b border-wash">
         <div className="mx-auto flex max-w-[1280px] items-center gap-5 px-4 py-1.5 text-[13px]">
@@ -32,6 +34,7 @@ export default async function Header() {
                 <MenuLink href="/saved-searches">Saved searches</MenuLink>
                 <MenuLink href={`/seller/${encodeURIComponent(me.user.username)}`}>My feedback</MenuLink>
                 <MenuLink href="/account/standing">Account standing</MenuLink>
+                <MenuLink href="/account/email">Email settings</MenuLink>
                 <MenuLink href="/messages">Messages{me.unread_messages > 0 ? ` (${me.unread_messages})` : ""}</MenuLink>
                 <MenuLink href="/cart">Cart</MenuLink>
                 {(me.user.role === "admin" || me.user.staff_role) && <MenuLink href="/admin">Back office</MenuLink>}

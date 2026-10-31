@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -19,6 +20,7 @@ import (
 	"github.com/jconner5017-rgb/marketplace/internal/config"
 	"github.com/jconner5017-rgb/marketplace/internal/db"
 	"github.com/jconner5017-rgb/marketplace/internal/demo"
+	"github.com/jconner5017-rgb/marketplace/internal/email"
 	"github.com/jconner5017-rgb/marketplace/internal/fcm"
 	"github.com/jconner5017-rgb/marketplace/internal/feedback"
 	"github.com/jconner5017-rgb/marketplace/internal/fees"
@@ -109,6 +111,37 @@ func run(log *slog.Logger) error {
 	}
 	feeSvc := &fees.Service{DB: database}
 	reputation := &sellers.Reputation{DB: database}
+	sender, err := email.Pick(cfg.EmailProvider, cfg.EmailAPIKey)
+	if err != nil {
+		log.Error("email setup", "err", err)
+		os.Exit(1)
+	}
+	unsubKey := sha256.Sum256([]byte("unsubscribe-links:" + cfg.MFAKey + cfg.DatabaseURL))
+	mailSvc := &email.Service{DB: database, Sender: sender, From: cfg.EmailFrom, WebURL: cfg.WebURL,
+		Postal: cfg.EmailPostal, Secret: unsubKey[:]}
+	if sender != nil {
+		log.Info("email", "provider", sender.Name(), "from", cfg.EmailFrom, "postal_address", cfg.EmailPostal != "")
+		if sender.Name() == "resend" {
+			mailSvc.Pace = 600 * time.Millisecond
+		}
+		// Its own loop, so a big blast never holds up auctions or checkout jobs.
+		go func() {
+			t := time.NewTicker(15 * time.Second)
+			defer t.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-t.C:
+					if n, err := mailSvc.RunOutbox(ctx, 50); err != nil {
+						log.Error("email outbox", "err", err)
+					} else if n > 0 {
+						log.Info("emails sent", "count", n)
+					}
+				}
+			}
+		}()
+	}
 	checkoutSvc := &checkout.Service{DB: database, Sellers: sellerSvc, Fees: feeSvc, Rep: reputation,
 		Enabled: cfg.CheckoutEnabled, WebURL: cfg.WebURL,
 		Letters: checkout.Letters{MailerID: cfg.USPSMailerID, ServiceType: cfg.USPSServiceType, Warn: log.Warn}}
@@ -189,6 +222,7 @@ func run(log *slog.Logger) error {
 		FCM:      fcmSvc,
 		Feedback: feedbackSvc,
 		Photos:   photoSvc,
+		Mail:     mailSvc,
 
 		ShippingWebhookToken: cfg.ShippingWebhookToken,
 
@@ -235,6 +269,7 @@ func run(log *slog.Logger) error {
 				if err := checkoutSvc.RunJobs(ctx); err != nil {
 					log.Error("checkout jobs", "err", err)
 				}
+
 				if err := feedbackSvc.RunJobs(ctx); err != nil {
 					log.Error("feedback jobs", "err", err)
 				}
