@@ -131,9 +131,15 @@ export const ARTICLES: Article[] = [
         "The fee applies to the final auction price or the accepted offer, the same way.",
       ] },
       { h: "Stripe's fee" },
-      { p: "Stripe charges its card processing fee on each sale. It comes out of your own Stripe balance." },
-      { h: "Shipping labels" },
-      { p: "Labels you buy through Slabs & Singles are charged to the card saved on your account at the carrier rate plus card processing. Single cards up to $20 can ship in a stamped envelope with your own stamp." },
+      { p: "Stripe charges its card processing fee on each sale, usually 2.9% + 30¢ per order for US cards. It comes out of your own Stripe balance, not through us." },
+      { h: "Shipping" },
+      { p: "Every listing ships free to the buyer, so shipping is part of your price." },
+      { list: [
+        "Stamped envelope: one raw card up to $20, with your own First-Class stamp. Tracked envelopes print free from the order.",
+        "Labels: bought from the order at the carrier's price, charged to the card saved under Sell → Shipping, plus 2.9% + 30¢ card processing. For example, a $5.86 USPS Ground Advantage label costs $6.35.",
+        "Typical USPS Ground Advantage prices: a bubble mailer about $5–7, a small box with a slab about $6–9, depending on distance and weight.",
+        "You can also buy a label elsewhere and enter its tracking number on the order.",
+      ] },
     ],
   },
   {

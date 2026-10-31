@@ -86,6 +86,18 @@ export function feeSentence(f: FeeSchedule): string {
   return `${w.flat} per card sold up to ${w.threshold}, then ${w.percent} (capped at ${w.cap})`;
 }
 
+/** Our fee on one card sold at priceCents (matches internal/fees Schedule.For). */
+export function feeFor(f: FeeSchedule, priceCents: number): number {
+  if (priceCents <= f.threshold_cents) return Math.min(f.flat_cents, priceCents);
+  return Math.min(f.cap_cents, priceCents, Math.max(f.flat_cents, Math.floor((priceCents * f.percent_bps) / 10000)));
+}
+
+/** Stripe's standard US card processing, 2.9% + 30¢ (charged by Stripe, not us). */
+export const stripeFee = (cents: number) => Math.round(cents * 0.029) + 30;
+
+/** What a label costs on the seller's card: carrier price grossed up for 2.9% + 30¢. */
+export const labelCharge = (cents: number) => Math.ceil(((cents + 30) * 10000) / 9710);
+
 /** Replaces {fee.flat}, {fee.threshold}, {fee.percent} and {fee.cap} in help text. */
 export function fillFees(text: string, f: FeeSchedule): string {
   const w = feeWords(f);

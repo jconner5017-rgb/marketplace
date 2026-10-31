@@ -8,7 +8,7 @@ import { GradeBadge, Photo } from "@/components/CardBits";
 import ListingActions from "@/components/ListingActions";
 import BundleDiscountForm from "@/components/BundleDiscountForm";
 import TaxToggle from "@/components/TaxToggle";
-import { feeSentence, getFees } from "@/lib/catalog";
+import { feeFor, feeSentence, getFees, labelCharge, stripeFee, type FeeSchedule } from "@/lib/catalog";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Seller hub" };
@@ -18,6 +18,39 @@ const TIERS = [
   { tier: 2, cap: 25000, need: "50 sales to different buyers, 97% positive, 30 days" },
   { tier: 3, cap: 100000, need: "150 sales to different buyers, 98% positive, 90 days" },
 ];
+
+/** Everything a sale costs the seller, with a worked example. */
+function SellingCosts({ fees }: { fees: FeeSchedule }) {
+  const price = 2500, label = 586;
+  const fee = feeFor(fees, price), stripe = stripeFee(price), lab = labelCharge(label);
+  const row = "flex justify-between gap-4";
+  return (
+    <section className="mt-6 rounded-lg border border-line p-4 text-[14px]">
+      <h2 className="text-[17px] font-bold">What selling costs</h2>
+      <ul className="mt-2 space-y-2">
+        <li><strong>Listing:</strong> free.</li>
+        <li><strong>Our fee:</strong> {feeSentence(fees)}, only when a card sells.</li>
+        <li><strong>Card processing:</strong> Stripe&apos;s fee, usually 2.9% + 30¢ per order, comes out of your Stripe balance.</li>
+        <li>
+          <strong>Shipping:</strong> buyers never pay it, so it&apos;s yours. One raw card up to $20 can go in an envelope with a
+          First-Class stamp. Everything else ships with a tracked label you buy from the order at the carrier&apos;s price, plus
+          2.9% + 30¢ card processing on the label. A bubble mailer by USPS Ground Advantage is usually about $5–7.
+        </li>
+      </ul>
+      <div className="mt-3 rounded-md bg-wash p-3">
+        <p className="font-semibold">Example: a {money(price)} card in a bubble mailer</p>
+        <dl className="num mt-1 space-y-0.5">
+          <div className={row}><dt>Buyer pays</dt><dd>{money(price)}</dd></div>
+          <div className={row}><dt>Our fee</dt><dd>−{money(fee)}</dd></div>
+          <div className={row}><dt>Stripe processing (about)</dt><dd>−{money(stripe)}</dd></div>
+          <div className={row}><dt>Label ({money(label)} + processing)</dt><dd>−{money(lab)}</dd></div>
+          <div className={`${row} border-t border-line pt-1 font-bold`}><dt>You keep about</dt><dd>{money(price - fee - stripe - lab)}</dd></div>
+        </dl>
+      </div>
+      <p className="mt-2 text-muted">Set your price with shipping in mind. <Link href="/help/fees" className="text-link underline">Fees in detail</Link></p>
+    </section>
+  );
+}
 
 export default async function SellPage() {
   const me = await requireUser("/sell");
@@ -32,10 +65,10 @@ export default async function SellPage() {
           your bank details and ID, handled by Stripe.
         </p>
         <ul className="mt-5 space-y-2 text-[15px]">
-          <li>Listing is free. Our fee is {feeSentence(fees)}.</li>
           <li>Every listing ships free, so build shipping into your price.</li>
           <li>New sellers can list cards up to $20 each, rising to $250 and then $1,000 as you build feedback.</li>
         </ul>
+        <SellingCosts fees={fees} />
         <div className="mt-6"><OnboardButton label="Set up payments with Stripe" /></div>
       </div>
     );
