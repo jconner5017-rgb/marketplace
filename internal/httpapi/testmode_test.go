@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"github.com/jconner5017-rgb/marketplace/internal/demo"
 	"strings"
 	"testing"
@@ -92,5 +93,23 @@ func TestAdminTestMode(t *testing.T) {
 	e.co.Enabled = true
 	if _, b := do(t, boss.c, "GET", e.ts.URL+"/v1/checkout/status", nil); b["enabled"] != true || b["test"] != false {
 		t.Fatalf("status when live: %v", b)
+	}
+	// The admin's test seller goes back to "set up payments", and real
+	// onboarding replaces the test account.
+	if n, err := e.srv.sellers.RetireTestSellers(context.Background()); err != nil || n < 1 {
+		t.Fatalf("retire: %d %v", n, err)
+	}
+	_, body = do(t, boss.c, "GET", e.ts.URL+"/v1/seller", nil)
+	if sel := body["seller"].(map[string]any); sel["charges_enabled"] != false {
+		t.Fatalf("retired seller: %v", sel)
+	}
+	code, body = do(t, boss.c, "POST", e.ts.URL+"/v1/seller/onboarding", map[string]string{})
+	if code != 200 || !strings.HasPrefix(body["url"].(string), "https://connect.stripe.com/") {
+		t.Fatalf("real onboarding: %d %v", code, body)
+	}
+	var acct string
+	e.db.QueryRow(`SELECT stripe_account_id FROM seller_profiles sp JOIN users u ON u.id = sp.user_id WHERE u.username = 'tm_boss'`).Scan(&acct)
+	if strings.HasPrefix(acct, "acct_test_") {
+		t.Fatalf("test account not replaced: %s", acct)
 	}
 }

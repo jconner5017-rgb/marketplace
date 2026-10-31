@@ -107,6 +107,20 @@ func (s *Service) StartTestSeller(ctx context.Context, userID string) error {
 	return err
 }
 
+// RetireTestSellers runs once checkout is live: test sellers (set up
+// without Stripe) can't take payments, so they go back to "set up payments"
+// and are sent through real Stripe onboarding, keeping their listings.
+func (s *Service) RetireTestSellers(ctx context.Context) (int, error) {
+	res, err := s.DB.ExecContext(ctx, `
+		UPDATE seller_profiles SET charges_enabled = false, details_submitted = false, updated_at = now()
+		WHERE stripe_account_id LIKE $1 AND (charges_enabled OR details_submitted)`, TestAccountPrefix+"%")
+	if err != nil {
+		return 0, err
+	}
+	n, _ := res.RowsAffected()
+	return int(n), nil
+}
+
 func (s *Service) ensureAccount(ctx context.Context, userID, email string) (string, error) {
 	tx, err := s.DB.BeginTx(ctx, nil)
 	if err != nil {

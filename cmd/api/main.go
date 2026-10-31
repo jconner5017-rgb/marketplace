@@ -124,6 +124,13 @@ func run(log *slog.Logger) error {
 			"tracking_webhook", cfg.ShippingWebhookToken != "")
 	}
 	log.Info("checkout", "enabled", checkoutSvc.Ready(), "return_to", cfg.WebURL)
+	if checkoutSvc.Ready() {
+		if n, err := sellerSvc.RetireTestSellers(ctx); err != nil {
+			log.Error("retire test sellers", "err", err)
+		} else if n > 0 {
+			log.Info("test sellers sent to Stripe onboarding", "count", n)
+		}
+	}
 	fcmSvc := &fcm.Service{DB: database}
 	feedbackSvc := &feedback.Service{DB: database, Rep: reputation}
 	shoppingSvc := &shopping.Service{DB: database, Listings: listingSvc, Sellers: sellerSvc}
