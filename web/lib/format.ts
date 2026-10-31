@@ -68,6 +68,15 @@ export const GAMES: { value: string; label: string; short: string }[] = [
   { value: "Naruto", label: "Naruto CCG", short: "Naruto" },
   { value: "UniVersus", label: "UniVersus (UFS)", short: "UniVersus" },
   { value: "Cardfight!! Vanguard", label: "Cardfight!! Vanguard", short: "Vanguard" },
+  { value: "Superheroes", label: "Superheroes (Marvel, DC)", short: "Superheroes" },
+  { value: "Sci-Fi", label: "Sci-Fi", short: "Sci-Fi" },
+  { value: "Fantasy", label: "Fantasy", short: "Fantasy" },
+  { value: "Anime", label: "Anime", short: "Anime" },
+  { value: "Horror", label: "Horror", short: "Horror" },
+  { value: "Entertainment", label: "Movies & TV", short: "Movies & TV" },
+  { value: "Music", label: "Music", short: "Music" },
+  { value: "Historical", label: "Historical", short: "Historical" },
+  { value: "Novelty", label: "Novelty", short: "Novelty" },
   { value: "Other TCG", label: "Other trading card games", short: "Other TCG" },
 ];
 

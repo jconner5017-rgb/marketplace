@@ -24,7 +24,10 @@ var Sports = []string{
 var Games = []string{
 	"Pokemon", "Magic", "Yu-Gi-Oh!", "One Piece", "Lorcana", "Dragon Ball",
 	"Digimon", "Weiss Schwarz", "Flesh and Blood", "Final Fantasy", "Star Wars",
-	"Lord of the Rings", "Naruto", "UniVersus", "Cardfight!! Vanguard", OtherTCG,
+	"Lord of the Rings", "Naruto", "UniVersus", "Cardfight!! Vanguard",
+	// Non-sport trading cards (FireCardManagerTCG's categories).
+	"Superheroes", "Sci-Fi", "Fantasy", "Anime", "Horror", "Entertainment", "Music", "Historical", "Novelty",
+	OtherTCG,
 }
 
 const OtherTCG = "Other TCG"
@@ -60,7 +63,11 @@ var gameAliases = map[string]string{
 	"naruto ccg": "Naruto", "naruto tcg": "Naruto",
 	"universal fighting system": "UniVersus", "ufs": "UniVersus", "universus ccg": "UniVersus",
 	"cardfight vanguard": "Cardfight!! Vanguard", "cardfight!! vanguard tcg": "Cardfight!! Vanguard", "vanguard": "Cardfight!! Vanguard",
-	"other": OtherTCG, "other tcg": OtherTCG,
+	"other": OtherTCG, "other tcg": OtherTCG, "mixed": OtherTCG,
+	"superhero": "Superheroes", "marvel": "Superheroes", "dc comics": "Superheroes", "comics": "Superheroes",
+	"scifi": "Sci-Fi", "sci fi": "Sci-Fi", "science fiction": "Sci-Fi", "star trek": "Sci-Fi",
+	"movies": "Entertainment", "tv": "Entertainment", "television": "Entertainment", "non-sport": "Entertainment",
+	"history": "Historical", "rock": "Music",
 }
 
 // Built-in display labels, used when the catalog tables are first filled.
@@ -80,6 +87,10 @@ var defaultLabels = map[string][2]string{
 	"Naruto":               {"Naruto CCG", "Naruto"},
 	"UniVersus":            {"UniVersus (UFS)", "UniVersus"},
 	"Cardfight!! Vanguard": {"Cardfight!! Vanguard", "Vanguard"},
+	"Superheroes":          {"Superheroes (Marvel, DC)", "Superheroes"},
+	"Sci-Fi":               {"Sci-Fi", "Sci-Fi"},
+	"Entertainment":        {"Movies & TV", "Movies & TV"},
+	"Historical":           {"Historical", "Historical"},
 	OtherTCG:               {"Other trading card games", "Other TCG"},
 }
 
