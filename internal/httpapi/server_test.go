@@ -443,3 +443,18 @@ func enrollMFA(t *testing.T, base string, c *http.Client) string {
 	}
 	return secret
 }
+
+func TestLoginWithUsername(t *testing.T) {
+	ts, _ := setup(t)
+	c := client(t)
+	if code, b := do(t, c, "POST", ts.URL+"/v1/auth/signup", map[string]string{"email": "byname@example.com", "username": "ByName_1", "password": "longenough1"}); code != 201 {
+		t.Fatalf("signup: %d %v", code, b)
+	}
+	do(t, c, "POST", ts.URL+"/v1/auth/logout", map[string]string{})
+	if code, b := do(t, client(t), "POST", ts.URL+"/v1/auth/login", map[string]string{"email": "byname_1", "password": "longenough1"}); code != 200 {
+		t.Fatalf("username login: %d %v", code, b)
+	}
+	if code, _ := do(t, client(t), "POST", ts.URL+"/v1/auth/login", map[string]string{"email": "byname_1", "password": "wrongpassword"}); code != 401 {
+		t.Fatalf("wrong password: %d", code)
+	}
+}

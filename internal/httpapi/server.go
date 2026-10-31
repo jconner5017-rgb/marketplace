@@ -425,7 +425,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	u, token, err := s.auth.Login(r.Context(), req.Email, req.Password, clientIP(r, s.trustProxy), r.UserAgent())
 	switch {
 	case errors.Is(err, auth.ErrInvalidCredentials):
-		writeError(w, http.StatusUnauthorized, "invalid_credentials", "email or password is incorrect", nil)
+		writeError(w, http.StatusUnauthorized, "invalid_credentials", "email, username or password is incorrect", nil)
 		return
 	case errors.Is(err, auth.ErrAccountDisabled):
 		writeError(w, http.StatusForbidden, "account_disabled", "this account is suspended or banned; you can appeal once from the sign-in page", nil)

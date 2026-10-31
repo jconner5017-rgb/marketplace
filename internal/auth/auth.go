@@ -197,8 +197,9 @@ func (s *Service) Login(ctx context.Context, email, password, ip, userAgent stri
 	var canSignIn bool
 	email = strings.TrimSpace(email)
 	err := s.DB.QueryRowContext(ctx, `
-		SELECT `+prefixed("u.", userCols)+`, u.password_hash, `+signInStatus+` FROM users u WHERE lower(u.email) = lower($1)`,
-		email,
+		SELECT `+prefixed("u.", userCols)+`, u.password_hash, `+signInStatus+` FROM users u
+		WHERE CASE WHEN strpos($1, '@') > 0 THEN lower(u.email) = lower($1) ELSE lower(u.username) = lower($1) END`,
+		email, // an email address, or a username (they can't contain @)
 	).Scan(&u.ID, &u.Email, &u.Username, &u.Role, &u.Status, &u.EmailVerified, &u.CreatedAt, &staff, &hash, &canSignIn)
 	if errors.Is(err, sql.ErrNoRows) {
 		VerifyPassword(password, dummyHash)

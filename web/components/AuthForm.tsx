@@ -46,7 +46,9 @@ export default function AuthForm({ mode }: { mode: "signin" | "register" }) {
           {disabled && <> <Link href="/appeal" className="font-semibold underline">Appeal this decision</Link></>}
         </p>
       )}
-      <Field label="Email" name="email" type="email" autoComplete="email" required error={fields.email} />
+      {register
+        ? <Field label="Email" name="email" type="email" autoComplete="email" required error={fields.email} />
+        : <Field label="Email or username" name="email" type="text" autoComplete="username" autoCapitalize="none" required error={fields.email} />}
       {register && (
         <Field
           label="Username"
