@@ -274,3 +274,40 @@ func atoi(s string) int64 {
 	}
 	return n
 }
+
+// A card that sold on the site isn't put back up by inventory software,
+// even if the seller selects it and lists again before FCM sees the sale.
+func TestFCMNoRelistAfterSale(t *testing.T) {
+	e := setupEnv(t)
+	sc, _ := newSeller(t, e, "relist_shop", true)
+	key := newKey(t, e, sc)
+	card := rawCard("FCM-77", 900)
+	code, b, _ := api(t, e, key, "POST", "/v1/listings", card, "")
+	if code != 201 {
+		t.Fatalf("list: %d %v", code, b)
+	}
+	id := b["listing"].(map[string]any)["id"].(string)
+	// Re-listing while it's still for sale just updates it.
+	if code, b, _ := api(t, e, key, "POST", "/v1/listings", card, ""); code != 200 || b["created"] != false {
+		t.Fatalf("update: %d %v", code, b)
+	}
+	buy := buyer(t, e, "relist_buyer")
+	do(t, buy.c, "PUT", e.ts.URL+"/v1/cart/"+id, map[string]int{"quantity": 1})
+	if code, body := do(t, buy.c, "POST", e.ts.URL+"/v1/checkout", map[string]any{"seller": "relist_shop"}); code != 201 {
+		t.Fatalf("checkout: %d %v", code, body)
+	}
+	code, b, _ = api(t, e, key, "POST", "/v1/listings", card, "")
+	if code != 409 || b["error"].(map[string]any)["code"] != "recently_sold" {
+		t.Fatalf("relist after sale: %d %v", code, b)
+	}
+	var qty int
+	e.db.QueryRow(`SELECT quantity FROM listings WHERE id = $1`, id).Scan(&qty)
+	if qty != 0 {
+		t.Fatalf("quantity reset to %d", qty)
+	}
+	// The bulk endpoint refuses it too.
+	code, b, _ = api(t, e, key, "POST", "/v1/listings/bulk", map[string]any{"listings": []any{card}}, "")
+	if code != 200 || !strings.Contains(b["results"].([]any)[0].(map[string]any)["error"].(string), "sold") {
+		t.Fatalf("bulk relist: %d %v", code, b)
+	}
+}

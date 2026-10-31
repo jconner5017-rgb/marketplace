@@ -137,7 +137,7 @@ func (s *Service) ImportCSV(ctx context.Context, sellerID string, r io.Reader) (
 			continue
 		}
 
-		l, created, err := s.upsert(ctx, sellerID, in)
+		l, created, err := s.upsert(ctx, sellerID, in, false)
 		if err != nil {
 			if errors.Is(err, ErrDuplicateExtern) {
 				res.add(RowResult{Row: rowNum, Status: "error", Errors: map[string]string{"external_id": "already in use"}})

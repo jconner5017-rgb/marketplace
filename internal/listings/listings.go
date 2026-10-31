@@ -735,10 +735,28 @@ func (s *Service) UpsertByExternalID(ctx context.Context, sellerID string, in In
 	if err := in.validate(p.TierCapCents); err != nil {
 		return Listing{}, false, err
 	}
-	return s.upsert(ctx, sellerID, in)
+	return s.upsert(ctx, sellerID, in, false)
 }
 
-func (s *Service) upsert(ctx context.Context, sellerID string, in Input) (Listing, bool, error) {
+// UpsertFromInventory is UpsertByExternalID for inventory software such as
+// FireCardManager, where each SKU is one physical card: a SKU that sold on
+// the site in the last 30 days is never put back up (ErrRecentlySold).
+func (s *Service) UpsertFromInventory(ctx context.Context, sellerID string, in Input) (Listing, bool, error) {
+	p, err := s.sellerFor(ctx, sellerID)
+	if err != nil {
+		return Listing{}, false, err
+	}
+	in.normalize()
+	if in.ExternalID == nil {
+		return Listing{}, false, &ValidationError{map[string]string{"external_id": "required"}}
+	}
+	if err := in.validate(p.TierCapCents); err != nil {
+		return Listing{}, false, err
+	}
+	return s.upsert(ctx, sellerID, in, true)
+}
+
+func (s *Service) upsert(ctx context.Context, sellerID string, in Input, noRelist bool) (Listing, bool, error) {
 	tx, err := s.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return Listing{}, false, err
@@ -762,6 +780,16 @@ func (s *Service) upsert(ctx context.Context, sellerID string, in Input) (Listin
 		}
 		if cur.Status == "blocked" {
 			return Listing{}, false, ErrBlocked
+		}
+		if noRelist && cur.Status == "sold_out" {
+			var sold bool
+			if err := tx.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM order_items oi JOIN orders o ON o.id = oi.order_id
+				WHERE oi.listing_id = $1 AND o.status <> 'cancelled' AND o.created_at > now() - interval '30 days')`, id).Scan(&sold); err != nil {
+				return Listing{}, false, err
+			}
+			if sold {
+				return Listing{}, false, ErrRecentlySold
+			}
 		}
 		if cur.Format != in.Format {
 			return Listing{}, false, &ValidationError{Fields: map[string]string{

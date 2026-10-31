@@ -116,7 +116,7 @@ func (s *Server) handleAPICreateListing(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusUnprocessableEntity, "invalid_input", "external_id is required", map[string]string{"external_id": "required"})
 		return
 	}
-	l, created, err := s.listings.UpsertByExternalID(r.Context(), u.ID, in)
+	l, created, err := s.listings.UpsertFromInventory(r.Context(), u.ID, in)
 	if err != nil {
 		s.listingError(w, r, err)
 		return
@@ -157,7 +157,7 @@ func (s *Server) handleAPIBulk(w http.ResponseWriter, r *http.Request) {
 		}
 		if res.ExternalID == "" {
 			res.Status, res.Error = "error", "external_id is required"
-		} else if l, created, err := s.listings.UpsertByExternalID(r.Context(), u.ID, in); err != nil {
+		} else if l, created, err := s.listings.UpsertFromInventory(r.Context(), u.ID, in); err != nil {
 			res.Status, res.Error = "error", err.Error()
 			var ve *listings.ValidationError
 			if errors.As(err, &ve) {
@@ -182,7 +182,7 @@ func isClientListingErr(err error) bool {
 	return errors.Is(err, listings.ErrBlocked) || errors.Is(err, listings.ErrSellerRejected) ||
 		errors.Is(err, listings.ErrFormatChange) || errors.Is(err, listings.ErrNotFound) || errors.Is(err, listings.ErrHasBids) ||
 		errors.Is(err, listings.ErrAuctionOver) || errors.Is(err, listings.ErrCannotSell) ||
-		errors.Is(err, listings.ErrDuplicateExtern) || errors.Is(err, sellers.ErrNotSeller)
+		errors.Is(err, listings.ErrDuplicateExtern) || errors.Is(err, sellers.ErrNotSeller) || errors.Is(err, listings.ErrRecentlySold)
 }
 
 func (s *Server) listingByExternal(w http.ResponseWriter, r *http.Request) (string, bool) {

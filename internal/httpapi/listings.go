@@ -34,6 +34,8 @@ func (s *Server) listingError(w http.ResponseWriter, r *http.Request, err error)
 		writeError(w, http.StatusConflict, "has_bids", "this auction has bids; you can only add to the description and photos, and it can't be ended early", nil)
 	case errors.Is(err, listings.ErrAuctionOver):
 		writeError(w, http.StatusConflict, "auction_over", "this auction has ended", nil)
+	case errors.Is(err, listings.ErrRecentlySold):
+		writeError(w, http.StatusConflict, "recently_sold", err.Error(), nil)
 	case errors.Is(err, listings.ErrFormatChange):
 		writeError(w, http.StatusConflict, "format_change", err.Error(), nil)
 	case errors.Is(err, sellers.ErrNotSeller):

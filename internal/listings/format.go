@@ -18,6 +18,9 @@ var (
 	AuctionDurations = []int{5, 7, 10}
 	ErrHasBids       = errors.New("this auction has bids, so it can't be ended or changed")
 	ErrFormatChange  = errors.New("a listing's format can't be changed; end it and list the card again")
+	// ErrRecentlySold: inventory software tried to put back up a one-of-a-kind
+	// card that sold on the site in the last 30 days.
+	ErrRecentlySold = errors.New("this card sold on Slabs & Singles in the last 30 days, so it wasn't relisted; if you have another copy, relist it on the website")
 )
 
 // AuctionInput is what a seller sets for an auction.
