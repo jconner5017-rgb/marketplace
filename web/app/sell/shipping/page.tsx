@@ -29,7 +29,7 @@ export default async function ShippingSettingsPage({ searchParams }: { searchPar
 
       <section className="mt-6">
         <h2 className="border-b border-line pb-2 text-[18px] font-bold">Ship-from address</h2>
-        <p className="mt-2 text-[14px] text-muted">Printed as the return address on labels. We check it with the carrier when you save.</p>
+        <p className="mt-2 text-[14px] text-muted">Printed as the return address on labels and tracked envelopes. We check it with the carrier when you save.</p>
         <div className="mt-3"><ShipFromForm initial={s.ship_from} /></div>
       </section>
 
