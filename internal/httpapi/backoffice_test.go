@@ -248,3 +248,29 @@ func TestWarningsTiersAppealsAndBans(t *testing.T) {
 		t.Fatalf("blocklist should be cleared: %d", blocked)
 	}
 }
+
+// A Super Admin who sells can set their own level; other staff can't.
+func TestOwnSellerLevel(t *testing.T) {
+	e := setupEnv(t)
+	oc, _ := newSeller(t, e, "owner_olga", true)
+	e.db.Exec(`UPDATE users SET staff_role = $1 WHERE username = 'owner_olga'`, admin.SuperAdmin)
+	owner := &httpClientT{oc}
+	enrollMFA(t, e.ts.URL, owner.c)
+	oid := memberID(t, e, "owner_olga")
+	if code, body := do(t, owner.c, "POST", e.ts.URL+"/v1/admin/users/"+oid+"/tier", map[string]any{"tier": 3, "lock": true, "reason": "Owner account"}); code != 200 {
+		t.Fatalf("super admin own level: %d %v", code, body)
+	}
+	var tier int
+	e.db.QueryRow(`SELECT tier FROM seller_profiles sp JOIN users u ON u.id = sp.user_id WHERE u.username = 'owner_olga'`).Scan(&tier)
+	if tier != 3 {
+		t.Fatalf("tier %d", tier)
+	}
+
+	mc, _ := newSeller(t, e, "mod_mo", true)
+	e.db.Exec(`UPDATE users SET staff_role = $1 WHERE username = 'mod_mo'`, admin.Moderator)
+	enrollMFA(t, e.ts.URL, mc)
+	mid := memberID(t, e, "mod_mo")
+	if code, _ := do(t, mc, "POST", e.ts.URL+"/v1/admin/users/"+mid+"/tier", map[string]any{"tier": 3, "reason": "Me"}); code == 200 {
+		t.Fatal("moderator raised own level")
+	}
+}

@@ -127,23 +127,8 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
         </div>
 
         <aside className="space-y-6">
-          {self ? (
-            <p className="rounded-lg bg-wash p-3 text-[14px]">This is your account. Changes to it are made by another Super Admin.</p>
-          ) : (
-            <>
-              <MemberActions m={m} permissions={s.permissions} myRole={s.staff_role} />
-              {s.permissions.includes("users.restrict") && (
-                <section className="rounded-lg border border-line p-4">
-                  <h2 className="font-bold">Give a warning</h2>
-                  <p className="mt-1 text-[13px] text-muted">The member sees it on their account page and can appeal once.</p>
-                  <div className="mt-2">
-                    <ActionForm endpoint={`/v1/admin/users/${m.id}/warn`} submit="Warn member" done="Warning added." compact
-                      fields={[{ name: "reason", label: "Reason", type: "textarea" }]} />
-                  </div>
-                </section>
-              )}
-              {m.seller && s.permissions.includes("sellers.review") && (
-                <section className="rounded-lg border border-line p-4">
+          {m.seller && s.permissions.includes("sellers.review") && (!self || s.staff_role === "super_admin") && (
+            <section className="rounded-lg border border-line p-4">
                   <h2 className="font-bold">Seller level</h2>
                   <p className="mt-1 text-[13px] text-muted">Lowering it hides fixed-price listings above the new limit. Hold it to stop the nightly check moving it back.</p>
                   <div className="mt-2">
@@ -154,6 +139,23 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
                         { name: "lock", label: "Hold at this level", type: "checkbox", initial: r.data.tier_locked },
                         { name: "reason", label: "Reason (shown to the seller)", type: "textarea" },
                       ]} />
+                  </div>
+                </section>
+          )}
+          {self ? (
+            <p className="rounded-lg bg-wash p-3 text-[14px]">
+              This is your account. Changes to it are made by another Super Admin{s.staff_role === "super_admin" && m.seller ? ", except your seller level" : ""}.
+            </p>
+          ) : (
+            <>
+              <MemberActions m={m} permissions={s.permissions} myRole={s.staff_role} />
+              {s.permissions.includes("users.restrict") && (
+                <section className="rounded-lg border border-line p-4">
+                  <h2 className="font-bold">Give a warning</h2>
+                  <p className="mt-1 text-[13px] text-muted">The member sees it on their account page and can appeal once.</p>
+                  <div className="mt-2">
+                    <ActionForm endpoint={`/v1/admin/users/${m.id}/warn`} submit="Warn member" done="Warning added." compact
+                      fields={[{ name: "reason", label: "Reason", type: "textarea" }]} />
                   </div>
                 </section>
               )}
