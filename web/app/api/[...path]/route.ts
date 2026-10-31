@@ -23,19 +23,27 @@ async function proxy(req: NextRequest, ctx: { params: Promise<{ path: string[] }
   const hasBody = !["GET", "HEAD"].includes(req.method);
   const body = hasBody ? await req.arrayBuffer() : undefined;
   const call = () => fetch(target, { method: req.method, headers, body, redirect: "manual", cache: "no-store" });
-  let res: Response;
-  try {
+  let res: Response | undefined;
+  // While a deploy swaps API instances, connections can fail for a few
+  // seconds. Reads and idempotent writes (PUT, PATCH, DELETE) are retried on
+  // any network error; a POST only when the connection was refused, so the
+  // API never saw it and can't have acted on it twice.
+  const waits = [1000, 2500, 5000];
+  for (let i = 0; ; i++) {
     try {
       res = await call();
+      break;
     } catch (e) {
-      // Reads can be repeated: one retry covers the moment a deploy swaps instances.
-      if (hasBody) throw e;
-      await new Promise((ok) => setTimeout(ok, 1000));
-      res = await call();
+      const code = (e as { cause?: { code?: string } })?.cause?.code ?? "";
+      const neverSent = ["ECONNREFUSED", "ENOTFOUND", "EAI_AGAIN", "EHOSTUNREACH"].includes(code);
+      const retryable = req.method !== "POST" || neverSent;
+      if (!retryable || i >= waits.length) break;
+      await new Promise((ok) => setTimeout(ok, waits[i]));
     }
-  } catch {
+  }
+  if (!res) {
     return Response.json(
-      { error: { code: "api_unreachable", message: "The marketplace service is not responding. Try again in a minute." } },
+      { error: { code: "api_unreachable", message: "The marketplace service is restarting. Try again in a minute; your changes weren't saved." } },
       { status: 502 },
     );
   }
