@@ -34,10 +34,10 @@ var (
 	ErrSellerClosed = errors.New("this seller can't take payments right now")
 	// ErrSample: the sample shop's listings show off the site and can't be
 	// paid for (its Stripe account isn't real). Admins get a test order.
-	ErrSample = errors.New("this is a sample listing for showing off the site; it can't be bought")
-	ErrOwn          = errors.New("you can't buy your own cards")
-	ErrNotPaid      = errors.New("payment hasn't gone through yet")
-	ErrAlreadyPaid  = errors.New("you've already paid for these cards; see Purchases")
+	ErrSample      = errors.New("this is a sample listing for showing off the site; it can't be bought")
+	ErrOwn         = errors.New("you can't buy your own cards")
+	ErrNotPaid     = errors.New("payment hasn't gone through yet")
+	ErrAlreadyPaid = errors.New("you've already paid for these cards; see Purchases")
 )
 
 // SessionTTL is how long the buyer has on Stripe's page (Stripe's minimum is 30 minutes).
