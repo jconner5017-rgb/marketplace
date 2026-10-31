@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { apiPost } from "@/lib/api";
@@ -34,13 +35,42 @@ function Barcode({ e }: { e: Envelope }) {
   );
 }
 
+type Face = { w: number; h: number; addrLeft: number; addrTop: number; addrPt: number; retPt: number; stampW: number; stampH: number };
+const FACES: Record<"10" | "6", Face> = {
+  "10": { w: 9.5, h: 4.125, addrLeft: 3.6, addrTop: 1.75, addrPt: 12, retPt: 9, stampW: 0.85, stampH: 1 },
+  // #6¾ (6½ × 3⅝ in), the usual small envelope for a single card.
+  "6": { w: 6.5, h: 3.625, addrLeft: 2.15, addrTop: 1.45, addrPt: 11, retPt: 8, stampW: 0.75, stampH: 0.9 },
+};
+
+/** The front of an envelope at true size, in inches. */
+function EnvelopeFace({ e, f, style }: { e: Envelope; f: Face; style?: CSSProperties }) {
+  return (
+    <div style={{ position: "relative", width: `${f.w}in`, height: `${f.h}in`, background: "#fff", color: "#000",
+      fontFamily: "Arial, Helvetica, sans-serif", ...style }}>
+      <div style={{ position: "absolute", left: "0.3in", top: "0.25in", fontSize: `${f.retPt}pt`, lineHeight: 1.2 }}>
+        {e.from ? <Lines a={e.from} /> : null}
+      </div>
+      <div style={{ position: "absolute", right: "0.25in", top: "0.2in", width: `${f.stampW}in`, height: `${f.stampH}in`, border: "1px dashed #999",
+        fontSize: "7pt", color: "#777", display: "flex", alignItems: "center", justifyContent: "center" }}
+        className="print:!border-transparent print:!text-transparent">
+        Stamp
+      </div>
+      <div style={{ position: "absolute", left: `${f.addrLeft}in`, top: `${f.addrTop}in` }}>
+        <Barcode e={e} />
+        <div style={{ fontSize: `${f.addrPt}pt`, lineHeight: 1.25, marginTop: "0.05in", textTransform: "uppercase" }}><Lines a={e.to} /></div>
+      </div>
+    </div>
+  );
+}
+
 export default async function EnvelopePage({ params, searchParams }: {
-  params: Promise<{ id: string }>; searchParams: Promise<{ format?: string }>;
+  params: Promise<{ id: string }>; searchParams: Promise<{ format?: string; turn?: string }>;
 }) {
   const { id } = await params;
-  const { format } = await searchParams;
+  const { format: fmt, turn } = await searchParams;
   await requireUser(`/sell/orders/${id}/envelope`);
-  const label = format === "label";
+  const format = fmt === "label" || fmt === "6" ? fmt : "10";
+  const left = turn === "left";
   const r = await apiPost<{ envelope: Envelope }>(`/v1/orders/${encodeURIComponent(id)}/envelope`);
   if (r.status === 404) notFound();
   const e = r.data?.envelope;
@@ -59,11 +89,16 @@ export default async function EnvelopePage({ params, searchParams }: {
     );
   }
 
+  const base = `/sell/orders/${e.order_id}/envelope`;
+  const six = FACES["6"];
+  const page = format === "label" ? "4in 2in" : format === "6" ? `${six.h}in ${six.w}in` : "9.5in 4.125in";
+  const opt = (on: boolean) => (on ? "font-semibold" : "text-link underline");
+
   return (
     <div className="mx-auto max-w-[960px] pt-6">
       <style>{`
         @media print {
-          @page { size: ${label ? "4in 2in" : "9.5in 4.125in"}; margin: 0; }
+          @page { size: ${page}; margin: 0; }
           body * { visibility: hidden !important; }
           #print-area, #print-area * { visibility: visible !important; }
           #print-area { position: fixed; left: 0; top: 0; border: 0 !important; box-shadow: none !important; margin: 0 !important; }
@@ -74,22 +109,36 @@ export default async function EnvelopePage({ params, searchParams }: {
         <h1 className="mt-2 text-[24px] font-bold">Print a tracked envelope</h1>
         <p className="mt-1 max-w-[680px] text-[14px] text-muted">
           Print this, put on a First-Class stamp, and mail it. Then mark the order shipped: the barcode becomes its tracking, and
-          the buyer sees each USPS scan. Use a flat #10 envelope with a penny sleeve and a thin top loader so it runs through the
+          the buyer sees each USPS scan. Keep the envelope flat (penny sleeve and a thin top loader) so it runs through the
           sorting machines; stiff or lumpy envelopes are hand-sorted and don&apos;t get scans.
         </p>
         <div className="mt-4 flex flex-wrap items-center gap-3 text-[14px]">
-          <PrintButton label={label ? "Print label" : "Print envelope"} />
+          <PrintButton label={format === "label" ? "Print label" : "Print envelope"} />
           <span className="text-muted">Size:</span>
-          <Link href={`/sell/orders/${e.order_id}/envelope`} className={label ? "text-link underline" : "font-semibold"}>#10 envelope</Link>
-          <Link href={`/sell/orders/${e.order_id}/envelope?format=label`} className={label ? "font-semibold" : "text-link underline"}>4×2 in label</Link>
+          <Link href={base} className={opt(format === "10")}>#10 envelope</Link>
+          <Link href={`${base}?format=6`} className={opt(format === "6")}>#6¾ envelope (sideways)</Link>
+          <Link href={`${base}?format=label`} className={opt(format === "label")}>4×2 in label</Link>
         </div>
+        {format === "6" && (
+          <div className="mt-3 max-w-[680px] rounded-lg bg-wash p-3 text-[13px]">
+            <p>
+              For a 6½ × 3⅝ in envelope fed into the printer short edge first. In the print dialog choose paper size
+              &ldquo;Envelope #6¾&rdquo; (or a custom 3.625 × 6.5 in), portrait, 100% scale.
+            </p>
+            <p className="mt-1">
+              Address came out upside down? Turn it the other way:{" "}
+              <Link href={`${base}?format=6`} className={opt(!left)}>turned right</Link>{" · "}
+              <Link href={`${base}?format=6&turn=left`} className={opt(left)}>turned left</Link>
+            </p>
+          </div>
+        )}
         <p className="mt-2 text-[13px] text-muted">
           Print at 100% (actual size), not &ldquo;fit to page&rdquo;, so the barcode stays the right size.
           {!e.full_zip && " This address printed with a 5-digit ZIP; it still tracks, though ZIP+4 sorts a little better."}
         </p>
       </div>
 
-      {label ? (
+      {format === "label" ? (
         <div id="print-area" className="mt-6 overflow-hidden border border-line bg-white text-black shadow-sm"
           style={{ width: "4in", height: "2in", padding: "0.15in 0.2in", fontFamily: "Arial, Helvetica, sans-serif" }}>
           <div style={{ fontSize: "7pt", lineHeight: 1.15 }}>
@@ -100,21 +149,19 @@ export default async function EnvelopePage({ params, searchParams }: {
             <div style={{ fontSize: "10pt", lineHeight: 1.2, marginTop: "0.04in", textTransform: "uppercase" }}><Lines a={e.to} /></div>
           </div>
         </div>
+      ) : format === "6" ? (
+        // A portrait page the width of the envelope's short side; the face is
+        // turned a quarter so it prints sideways.
+        <div id="print-area" className="relative mt-6 overflow-hidden border border-line bg-white shadow-sm"
+          style={{ width: `${six.h}in`, height: `${six.w}in` }}>
+          <EnvelopeFace e={e} f={six} style={{
+            position: "absolute", left: 0, top: 0, transformOrigin: "top left",
+            transform: left ? `translateY(${six.w}in) rotate(-90deg)` : `translateX(${six.h}in) rotate(90deg)`,
+          }} />
+        </div>
       ) : (
-        <div id="print-area" className="relative mt-6 overflow-hidden border border-line bg-white text-black shadow-sm"
-          style={{ width: "9.5in", height: "4.125in", fontFamily: "Arial, Helvetica, sans-serif" }}>
-          <div style={{ position: "absolute", left: "0.35in", top: "0.3in", fontSize: "9pt", lineHeight: 1.2 }}>
-            {e.from ? <Lines a={e.from} /> : <div>&nbsp;</div>}
-          </div>
-          <div style={{ position: "absolute", right: "0.3in", top: "0.25in", width: "0.85in", height: "1in", border: "1px dashed #999",
-            fontSize: "7pt", color: "#777", display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center" }}
-            className="print:!border-transparent print:!text-transparent">
-            Stamp
-          </div>
-          <div style={{ position: "absolute", left: "3.6in", top: "1.75in" }}>
-            <Barcode e={e} />
-            <div style={{ fontSize: "12pt", lineHeight: 1.25, marginTop: "0.05in", textTransform: "uppercase" }}><Lines a={e.to} /></div>
-          </div>
+        <div id="print-area" className="mt-6 overflow-hidden border border-line shadow-sm" style={{ width: "9.5in", height: "4.125in" }}>
+          <EnvelopeFace e={e} f={FACES["10"]} />
         </div>
       )}
       <p className="num mt-2 text-[12px] text-muted print:hidden">Barcode {e.human_readable}</p>
