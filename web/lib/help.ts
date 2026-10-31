@@ -227,6 +227,38 @@ export const ARTICLES: Article[] = [
     ],
   },
   {
+    slug: "packing",
+    title: "Packing cards: envelope, bubble mailer or box",
+    section: "Support",
+    summary: "Which package to choose, the sizes our labels use, and how to pack each so cards arrive safe.",
+    body: [
+      { p: "Each listing names a package. It sets how the order ships and the label size we buy. If an order mixes items, it goes in the biggest one: any box item means a box." },
+      { h: "Stamped envelope" },
+      { list: [
+        "One raw card up to $20, in a #10 or #6¾ letter envelope with a First-Class stamp.",
+        "Penny sleeve and a thin, flexible stiffener. No toploaders, magnetic holders or slabs: rigid envelopes can't go through postal machines.",
+        "Print a tracked envelope from the order so the buyer gets USPS scans.",
+      ] },
+      { h: "Bubble mailer (7¼ × 5¼ × ¾ in)" },
+      { list: [
+        "For raw cards up to about 10 per order.",
+        "Penny sleeve, then a toploader or semi-rigid holder. Tape the top so the card can't slide out.",
+        "Sandwich between two pieces of cardboard a little larger than the toploader, and tape the edges.",
+        "Label bought on the order, usually USPS Ground Advantage with tracking. We add 1 oz for the mailer.",
+      ] },
+      { h: "Small box (8 × 6 × 2 in)" },
+      { list: [
+        "For graded slabs, several toploaders, or more than 10 cards.",
+        "Wrap each slab in bubble wrap and fill the gaps so nothing moves when you shake the box.",
+        "Orders over $750 ship with signature confirmation.",
+        "We add 4 oz for the box and padding.",
+      ] },
+      { h: "Weight" },
+      { p: "Enter the weight of each card as you'll pack it: a raw card in a toploader is about 1 oz, a graded slab about 3–4 oz. We add the mailer or box. A kitchen scale is accurate enough; a label bought on too little weight can be charged extra by the carrier." },
+      { note: "Your price includes shipping, since every listing ships free. The listing form shows a label estimate so you can see what you'll keep." },
+    ],
+  },
+  {
     slug: "tracked-envelopes",
     title: "Printing tracked envelopes",
     section: "Support",

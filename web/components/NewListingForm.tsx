@@ -12,6 +12,28 @@ import PhotoUploader from "./sell/PhotoUploader";
 const GRADERS = ["PSA", "BGS", "SGC", "CGC", "TAG", "OTHER"];
 const LABEL_ESTIMATE: Record<string, number> = { envelope: 0, bubble: 480, box: 650 };
 
+/** What each package choice means; sizes match how labels are bought (internal/shipping ParcelFor). */
+const PACKAGES: Record<string, { size: string; adds: string; carrier: string; pack: string }> = {
+  envelope: {
+    size: "#10 or #6¾ letter envelope",
+    adds: "",
+    carrier: "USPS First-Class letter with your stamp. Print a tracked envelope from the order for USPS scans.",
+    pack: "One raw card in a penny sleeve and a thin, flexible stiffener. No toploaders or slabs.",
+  },
+  bubble: {
+    size: "7¼ × 5¼ × ¾ in padded mailer",
+    adds: "We add 1 oz for the mailer.",
+    carrier: "Label bought on the order, usually USPS Ground Advantage, with tracking.",
+    pack: "Penny sleeve and toploader (or semi-rigid), taped between two pieces of cardboard. Up to about 10 raw cards.",
+  },
+  box: {
+    size: "8 × 6 × 2 in box",
+    adds: "We add 4 oz for the box and padding.",
+    carrier: "Label bought on the order, usually USPS Ground Advantage, with tracking. Signature over $750.",
+    pack: "For graded slabs, several toploaders or lots over 10 cards. Bubble-wrap each slab so nothing moves when shaken.",
+  },
+};
+
 type Kind = "amount" | "percent";
 
 /** Reads a threshold: dollars → cents, percent → whole percent. */
@@ -321,11 +343,21 @@ export default function NewListingForm({ capCents, catalog, fees, initial }: {
         <Field label="Package" name="package_preset" error={fields.package_preset}>
           <select id="package_preset" value={preset} onChange={(e) => setPreset(e.target.value)} className={select}>
             <option value="envelope">Stamped envelope (one raw card up to $20)</option>
-            <option value="bubble">Bubble mailer</option>
-            <option value="box">Small box</option>
+            <option value="bubble">Bubble mailer (7¼ × 5¼ in)</option>
+            <option value="box">Small box (8 × 6 × 2 in)</option>
           </select>
         </Field>
-        <Field label="Weight (oz)" name="weight_oz" inputMode="decimal" defaultValue={String(initial?.weight_oz ?? 1)} error={fields.weight_oz} />
+        <Field label="Weight (oz)" name="weight_oz" inputMode="decimal" defaultValue={String(initial?.weight_oz ?? 1)} error={fields.weight_oz}
+          hint={preset === "envelope" ? "The card and its sleeve." : "Each card as packed (a raw card in a toploader is about 1 oz, a slab about 3–4 oz)."} />
+        {PACKAGES[preset] && (
+          <div className="rounded-lg border border-line p-3 text-[13px] sm:col-span-2">
+            <p><span className="font-semibold">Size:</span> {PACKAGES[preset].size}{PACKAGES[preset].adds ? `. ${PACKAGES[preset].adds}` : ""}</p>
+            <p className="mt-1"><span className="font-semibold">Shipping:</span> {PACKAGES[preset].carrier}{LABEL_ESTIMATE[preset] ? ` About ${money(LABEL_ESTIMATE[preset])} for one card.` : ""}</p>
+            <p className="mt-1"><span className="font-semibold">Packing:</span> {PACKAGES[preset].pack}</p>
+            <p className="mt-1 text-muted">Graded cards and orders of two or more cards always go by label; an order with any box item ships in a box.{" "}
+              <a href="/help/packing" target="_blank" className="text-link underline">Packing guide</a></p>
+          </div>
+        )}
         {!editing && <Field label="Your SKU (optional)" name="external_id" hint="Your own ID, used by CSV uploads and FireCardManager." error={fields.external_id} />}
 
         <div className="rounded-lg bg-wash p-4 text-[14px] sm:col-span-2" aria-live="polite">
