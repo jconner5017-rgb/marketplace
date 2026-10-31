@@ -2,6 +2,7 @@ package stripe
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -133,5 +134,20 @@ func TestCheckoutSessionRequest(t *testing.T) {
 		if got.Get(k) != v {
 			t.Errorf("%s = %q, want %q", k, got.Get(k), v)
 		}
+	}
+}
+
+func TestCheckoutSessionNewerAddress(t *testing.T) {
+	var s CheckoutSession
+	json.Unmarshal([]byte(`{"id":"cs_1","collected_information":{"shipping_details":{"name":"Pat","address":{"line1":"1 Main","postal_code":"10001"}}}}`), &s)
+	s.Normalize()
+	if s.ShippingDetails == nil || s.ShippingDetails.Name != "Pat" || s.ShippingDetails.Address.PostalCode != "10001" {
+		t.Fatalf("got %+v", s.ShippingDetails)
+	}
+	var old CheckoutSession
+	json.Unmarshal([]byte(`{"id":"cs_2","shipping_details":{"name":"Old","address":{"line1":"2 Main"}}}`), &old)
+	old.Normalize()
+	if old.ShippingDetails.Name != "Old" {
+		t.Fatal("older format lost")
 	}
 }

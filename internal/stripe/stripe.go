@@ -269,6 +269,26 @@ type CheckoutSession struct {
 		Name    string  `json:"name"`
 		Address Address `json:"address"`
 	} `json:"shipping_details"`
+	// Newer API versions (2025-03-31 onward, which webhook endpoints may use)
+	// move the address here; Normalize copies it to ShippingDetails.
+	CollectedInformation *struct {
+		ShippingDetails *struct {
+			Name    string  `json:"name"`
+			Address Address `json:"address"`
+		} `json:"shipping_details"`
+	} `json:"collected_information,omitempty"`
+}
+
+// Normalize fills ShippingDetails from collected_information when a newer
+// API version sent it there.
+func (c *CheckoutSession) Normalize() {
+	if c.ShippingDetails == nil && c.CollectedInformation != nil && c.CollectedInformation.ShippingDetails != nil {
+		sd := c.CollectedInformation.ShippingDetails
+		c.ShippingDetails = &struct {
+			Name    string  `json:"name"`
+			Address Address `json:"address"`
+		}{Name: sd.Name, Address: sd.Address}
+	}
 }
 
 func (c *Client) CreateCheckoutSession(ctx context.Context, account string, p CheckoutParams) (CheckoutSession, error) {
@@ -309,6 +329,7 @@ func (c *Client) CreateCheckoutSession(ctx context.Context, account string, p Ch
 func (c *Client) GetCheckoutSession(ctx context.Context, account, id string) (CheckoutSession, error) {
 	var s CheckoutSession
 	err := c.doAs(ctx, account, http.MethodGet, "/v1/checkout/sessions/"+url.PathEscape(id), nil, &s)
+	s.Normalize()
 	return s, err
 }
 

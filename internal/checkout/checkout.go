@@ -616,6 +616,7 @@ func (s *Service) HandleEvent(ctx context.Context, ev stripe.Event) (bool, error
 	if err := json.Unmarshal(ev.Data.Object, &sess); err != nil {
 		return true, err
 	}
+	sess.Normalize()
 	var orderID, acct string
 	err := s.DB.QueryRowContext(ctx, `SELECT id, coalesce(stripe_account, '') FROM orders WHERE stripe_checkout_id = $1`, sess.ID).
 		Scan(&orderID, &acct)
