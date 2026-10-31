@@ -80,8 +80,11 @@ export default async function Header() {
       <div className="mx-auto flex max-w-[1280px] flex-wrap items-center gap-x-5 gap-y-3 px-4 py-3">
         <Link href="/" className="flex items-center gap-2" aria-label={`${SITE_NAME} home`}>
           <Logo />
-          <span className="text-[22px] font-extrabold leading-none tracking-tight" style={{ fontStretch: "92%" }}>
-            {SITE_NAME}
+          <span aria-hidden="true" className="text-[25px] font-extrabold leading-none tracking-[-0.02em]">
+            <span className="text-ink">Slabs</span>
+            <span className="text-[#c9961f]">N</span>
+            <span className="text-[#3f78c9]">Singl</span>
+            <span className="text-[#c9961f]">es</span>
           </span>
         </Link>
         <Suspense fallback={<div className="min-w-[280px] flex-1" />}>
@@ -106,14 +109,20 @@ export default async function Header() {
   );
 }
 
-/** A graded slab seen from the front: label band on top, card window below. */
+/** Two cards fanned out: a gold-edged card behind, and in front a dark
+ * card with a gold border holding a blue card (the SlabsNSingles mark). */
 function Logo() {
   return (
-    <svg width="26" height="34" viewBox="0 0 26 34" aria-hidden="true">
-      <rect x="1" y="1" width="24" height="32" rx="3" fill="#fff" stroke="#18202b" strokeWidth="2" />
-      <rect x="1" y="1" width="24" height="8" rx="3" fill="#c8102e" />
-      <rect x="1" y="6" width="24" height="3" fill="#c8102e" />
-      <rect x="5" y="12" width="16" height="17" rx="1.5" fill="#1a4fd6" />
+    <svg width="40" height="40" viewBox="0 0 40 40" aria-hidden="true">
+      <g transform="rotate(-16 12 19)">
+        <rect x="3" y="4" width="19" height="27" rx="3" fill="#18202b" stroke="#c9961f" strokeWidth="2.2" />
+      </g>
+      <g transform="rotate(9 25 22)">
+        <rect x="15" y="7" width="20" height="28" rx="3" fill="#18202b" stroke="#c9961f" strokeWidth="2.4" />
+        <g transform="rotate(14 25 21)">
+          <rect x="19.5" y="14" width="11" height="15" rx="1.6" fill="#3f78c9" stroke="#9cc0ee" strokeWidth="0.8" />
+        </g>
+      </g>
     </svg>
   );
 }
