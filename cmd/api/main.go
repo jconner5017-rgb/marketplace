@@ -116,7 +116,24 @@ func run(log *slog.Logger) error {
 		checkoutSvc.Letters.Addresses = &usps.Addresses{ClientID: cfg.USPSClientID, Secret: cfg.USPSSecret}
 	}
 	if cfg.USPSIVUser != "" && cfg.USPSIVPassword != "" {
-		checkoutSvc.Letters.Tracker = &usps.Visibility{Username: cfg.USPSIVUser, Password: cfg.USPSIVPassword}
+		iv := &usps.Visibility{Username: cfg.USPSIVUser, Password: cfg.USPSIVPassword}
+		checkoutSvc.Letters.Tracker = iv
+		// Confirm the USPS sign-in at startup, then do a first scan pass
+		// instead of waiting for the hourly job.
+		go func() {
+			cctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			if err := iv.Check(cctx); err != nil {
+				log.Error("usps informed visibility sign-in failed", "err", err)
+				return
+			}
+			log.Info("usps informed visibility sign-in ok")
+			if n, err := checkoutSvc.RefreshLetterScans(cctx); err != nil {
+				log.Error("letter scans", "err", err)
+			} else {
+				log.Info("letter scans checked", "updated", n)
+			}
+		}()
 	}
 	if cfg.StripeSecretKey != "" {
 		sc := stripe.NewClient(cfg.StripeSecretKey)

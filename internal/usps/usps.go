@@ -246,6 +246,12 @@ func (v *Visibility) auth(ctx context.Context) (string, error) {
 	})
 }
 
+// Check signs in, to confirm the credentials work.
+func (v *Visibility) Check(ctx context.Context) error {
+	_, err := v.auth(ctx)
+	return err
+}
+
 // Scan is one USPS handling event for a letter.
 type Scan struct {
 	DateTime     string `json:"scan_date_time"`
