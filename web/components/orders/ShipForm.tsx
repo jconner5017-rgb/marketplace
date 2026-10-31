@@ -41,7 +41,7 @@ export default function ShipForm({ orderId, method }: { orderId: string; method:
       </div>
       {method === "envelope" && (
         <button type="button" onClick={() => ship(false)} disabled={busy} className="text-[14px] font-semibold text-link hover:underline">
-          Sent in a stamped envelope without tracking
+          Sent it in a stamped envelope (uses the printed barcode, if any)
         </button>
       )}
       {error && <p role="alert" className="text-[13px] text-slab">{error}</p>}

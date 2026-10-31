@@ -52,7 +52,9 @@ type Service struct {
 	Platform stripe.Platform
 	Enabled  bool   // CHECKOUT_ENABLED
 	WebURL   string // where Stripe sends the buyer back, e.g. https://slabsnsingles.com
-	Now      func() time.Time
+	// Letters: USPS Intelligent Mail barcodes on envelope orders.
+	Letters Letters
+	Now     func() time.Time
 }
 
 func (s *Service) now() time.Time {

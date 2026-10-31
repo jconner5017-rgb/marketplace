@@ -31,6 +31,7 @@ import (
 	"github.com/jconner5017-rgb/marketplace/internal/shipping"
 	"github.com/jconner5017-rgb/marketplace/internal/shopping"
 	"github.com/jconner5017-rgb/marketplace/internal/stripe"
+	"github.com/jconner5017-rgb/marketplace/internal/usps"
 )
 
 func main() {
@@ -109,7 +110,14 @@ func run(log *slog.Logger) error {
 	feeSvc := &fees.Service{DB: database}
 	reputation := &sellers.Reputation{DB: database}
 	checkoutSvc := &checkout.Service{DB: database, Sellers: sellerSvc, Fees: feeSvc, Rep: reputation,
-		Enabled: cfg.CheckoutEnabled, WebURL: cfg.WebURL}
+		Enabled: cfg.CheckoutEnabled, WebURL: cfg.WebURL,
+		Letters: checkout.Letters{MailerID: cfg.USPSMailerID, ServiceType: cfg.USPSServiceType}}
+	if cfg.USPSClientID != "" && cfg.USPSSecret != "" {
+		checkoutSvc.Letters.Addresses = &usps.Addresses{ClientID: cfg.USPSClientID, Secret: cfg.USPSSecret}
+	}
+	if cfg.USPSIVUser != "" && cfg.USPSIVPassword != "" {
+		checkoutSvc.Letters.Tracker = &usps.Visibility{Username: cfg.USPSIVUser, Password: cfg.USPSIVPassword}
+	}
 	if cfg.StripeSecretKey != "" {
 		sc := stripe.NewClient(cfg.StripeSecretKey)
 		checkoutSvc.Pay, checkoutSvc.Platform = sc, sc
@@ -234,6 +242,11 @@ func run(log *slog.Logger) error {
 			case <-t.C:
 				if err := fcmSvc.RunReconcile(ctx, checkoutSvc.ReleaseListing, func(m string, kv ...any) { log.Info(m, kv...) }); err != nil {
 					log.Error("inventory reconcile", "err", err)
+				}
+				if n, err := checkoutSvc.RefreshLetterScans(ctx); err != nil {
+					log.Error("letter scans", "err", err)
+				} else if n > 0 {
+					log.Info("letter scans updated", "count", n)
 				}
 				if n, err := photoSvc.Sweep(ctx); err != nil {
 					log.Error("sweep unused photos", "err", err)

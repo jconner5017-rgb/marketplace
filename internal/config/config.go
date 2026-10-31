@@ -49,6 +49,16 @@ type Config struct {
 	S3AccessKey    string // S3_ACCESS_KEY_ID
 	S3SecretKey    string // S3_SECRET_ACCESS_KEY
 	PhotoPublicURL string // PHOTO_PUBLIC_URL: the bucket's public address
+	// USPS letter tracking: USPS_MAILER_ID turns on barcoded envelopes;
+	// USPS_CLIENT_ID/SECRET (developers.usps.com) add ZIP+4 lookups;
+	// USPS_IV_USERNAME/PASSWORD (a Business Customer Gateway user with
+	// Informed Visibility access) turn on scan tracking.
+	USPSMailerID    string
+	USPSServiceType int
+	USPSClientID    string
+	USPSSecret      string
+	USPSIVUser      string
+	USPSIVPassword  string
 }
 
 func Load() (Config, error) {
@@ -111,6 +121,22 @@ func Load() (Config, error) {
 	c.S3AccessKey = strings.TrimSpace(os.Getenv("S3_ACCESS_KEY_ID"))
 	c.S3SecretKey = strings.TrimSpace(os.Getenv("S3_SECRET_ACCESS_KEY"))
 	c.PhotoPublicURL = strings.TrimRight(strings.TrimSpace(os.Getenv("PHOTO_PUBLIC_URL")), "/")
+	c.USPSMailerID = strings.TrimSpace(os.Getenv("USPS_MAILER_ID"))
+	if c.USPSMailerID != "" && (len(c.USPSMailerID) != 9 && len(c.USPSMailerID) != 6 || strings.Trim(c.USPSMailerID, "0123456789") != "") {
+		return c, errors.New("USPS_MAILER_ID must be 6 or 9 digits")
+	}
+	c.USPSServiceType = 40
+	if v := strings.TrimSpace(os.Getenv("USPS_SERVICE_TYPE")); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 0 || n > 999 {
+			return c, errors.New("USPS_SERVICE_TYPE must be 0-999")
+		}
+		c.USPSServiceType = n
+	}
+	c.USPSClientID = strings.TrimSpace(os.Getenv("USPS_CLIENT_ID"))
+	c.USPSSecret = strings.TrimSpace(os.Getenv("USPS_CLIENT_SECRET"))
+	c.USPSIVUser = strings.TrimSpace(os.Getenv("USPS_IV_USERNAME"))
+	c.USPSIVPassword = os.Getenv("USPS_IV_PASSWORD")
 	switch c.PhotoStore {
 	case "db":
 	case "s3":

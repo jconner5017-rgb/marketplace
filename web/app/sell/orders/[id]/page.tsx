@@ -32,7 +32,16 @@ export default async function SellerOrder({ params }: { params: Promise<{ id: st
         <div className="mt-4 max-w-[560px] rounded-lg border border-ink p-4">
           <h2 className="font-semibold">Ship by {day(o.ship_by)}</h2>
           {o.ship_method === "envelope" ? (
-            <p className="text-[14px] text-muted">One raw card: a stamped envelope is fine. Add tracking if you have it.</p>
+            <>
+              <p className="text-[14px] text-muted">
+                One raw card: a stamped envelope is fine. Print a tracked envelope so the buyer can follow it, add a stamp, then
+                mark it shipped below.
+              </p>
+              <Link href={`/sell/orders/${o.id}/envelope`} className="mt-3 inline-block rounded-full bg-link px-4 py-2 text-[14px] font-semibold text-white hover:bg-link-dark">
+                Print tracked envelope
+              </Link>
+              <p className="mt-4 text-[13px] font-semibold">Mark it shipped</p>
+            </>
           ) : (
             <>
               <p className="text-[14px] text-muted">Ship in one package with tracking. Buy the label here, or enter tracking from a label you bought elsewhere.</p>

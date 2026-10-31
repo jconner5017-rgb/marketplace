@@ -261,6 +261,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/seller/shipping/card/finish", requireUser(s.handleLabelCardFinish))
 	mux.HandleFunc("POST /v1/orders/{id}/label/rates", requireUser(s.handleLabelRates))
 	mux.HandleFunc("POST /v1/orders/{id}/label", requireUser(s.handleBuyLabel))
+	mux.HandleFunc("POST /v1/orders/{id}/envelope", s.sellerAPI(s.handleEnvelope))
 	mux.HandleFunc("POST /v1/orders/{id}/label/void", requireUser(s.handleVoidLabel))
 	mux.HandleFunc("POST /v1/webhooks/shipping/{provider}", s.handleShippingWebhook)
 	mux.HandleFunc("POST /v1/feedback/{id}/reply", requireUser(s.handleFeedbackReply))

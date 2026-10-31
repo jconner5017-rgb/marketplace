@@ -14,6 +14,11 @@ export const STATUS_LABEL: Record<Order["status"], string> = {
 const dateFmt = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" });
 export const day = (iso: string | null) => (iso ? dateFmt.format(new Date(iso)) : "");
 
+/** Shipments tracked by our own envelope barcode (USPS letter scans). */
+export const LETTER_SERVICE = "First-Class letter (Intelligent Mail)";
+
+const timeFmt = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/New_York" });
+
 export function trackingUrl(carrier: string | null, n: string | null): string | null {
   if (!n) return null;
   const t = encodeURIComponent(n);
@@ -41,7 +46,9 @@ export function StatusPill({ o }: { o: Order }) {
 /** Cards, totals and shipping for one order, from either side. */
 export default function OrderView({ o }: { o: Order }) {
   const selling = o.side === "selling";
-  const track = o.shipment && (o.shipment.tracking_url || trackingUrl(o.shipment.carrier, o.shipment.tracking_number));
+  const letter = o.shipment?.service === LETTER_SERVICE;
+  const track = o.shipment && !letter && (o.shipment.tracking_url || trackingUrl(o.shipment.carrier, o.shipment.tracking_number));
+  const events = [...(o.shipment?.events ?? [])].reverse();
   return (
     <div className="grid gap-6 md:grid-cols-[1fr_300px]">
       <div>
@@ -89,12 +96,26 @@ export default function OrderView({ o }: { o: Order }) {
         {o.shipment && (
           <div className="rounded-lg border border-line p-4">
             <h2 className="font-semibold">Shipment</h2>
-            <p className="mt-1">Sent {day(o.shipment.created_at)}{o.shipment.carrier ? ` with ${o.shipment.carrier}` : ""}</p>
+            <p className="mt-1">Sent {day(o.shipment.created_at)}{letter ? " by USPS letter mail with tracking" : o.shipment.carrier ? ` with ${o.shipment.carrier}` : ""}</p>
             {o.shipment.tracking_number ? (
               track ? <a href={track} target="_blank" rel="noopener noreferrer" className="num mt-1 inline-block break-all text-link underline">{o.shipment.tracking_number}</a>
                 : <p className="num mt-1 break-all">{o.shipment.tracking_number}</p>
             ) : <p className="mt-1 text-muted">No tracking (stamped envelope)</p>}
-            {o.shipment.last_event && !o.delivered_at && <p className="mt-1 text-muted">Latest: {o.shipment.last_event}</p>}
+            {events.length > 0 ? (
+              <ol className="mt-3 space-y-2 border-l-2 border-line pl-3">
+                {events.map((ev, i) => (
+                  <li key={i} className={i === 0 ? "" : "text-muted"}>
+                    <p className={i === 0 ? "font-semibold" : ""}>{ev.description}</p>
+                    <p className="text-[12px] text-muted" suppressHydrationWarning>{timeFmt.format(new Date(ev.at))}</p>
+                  </li>
+                ))}
+              </ol>
+            ) : letter && !o.delivered_at ? (
+              <p className="mt-1 text-muted">USPS scans show here as the envelope is sorted, usually starting the day after it&apos;s mailed.</p>
+            ) : o.shipment.last_event && !o.delivered_at && <p className="mt-1 text-muted">Latest: {o.shipment.last_event}</p>}
+            {letter && events.length > 0 && !o.delivered_at && (
+              <p className="mt-2 text-[12px] text-muted">Letters don&apos;t get a delivery scan. &ldquo;Sorted for delivery&rdquo; means it&apos;s with the carrier route.</p>
+            )}
             {o.delivered_at && <p className="mt-1 text-ship">Delivered {day(o.delivered_at)}</p>}
           </div>
         )}

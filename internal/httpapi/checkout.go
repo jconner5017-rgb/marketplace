@@ -31,6 +31,10 @@ func (s *Server) checkoutError(w http.ResponseWriter, r *http.Request, err error
 	case errors.Is(err, checkout.ErrEmpty), errors.Is(err, checkout.ErrChanged), errors.Is(err, checkout.ErrSellerClosed),
 		errors.Is(err, checkout.ErrOwn), errors.Is(err, checkout.ErrState):
 		writeError(w, http.StatusConflict, "cannot_checkout", err.Error(), nil)
+	case errors.Is(err, checkout.ErrEnvelopeOff):
+		writeError(w, http.StatusServiceUnavailable, "envelope_off", err.Error(), nil)
+	case errors.Is(err, checkout.ErrNotEnvelope), errors.Is(err, checkout.ErrNoShipToZIP):
+		writeError(w, http.StatusConflict, "not_envelope", err.Error(), nil)
 	default:
 		s.internalError(w, r, err)
 	}
@@ -187,6 +191,26 @@ func (s *Server) handleShipOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.handleOrder(w, r)
+}
+
+// POST /v1/orders/{id}/envelope — the order's tracked-envelope barcode,
+// created the first time it's asked for.
+func (s *Server) handleEnvelope(w http.ResponseWriter, r *http.Request) {
+	u, _ := currentUser(r)
+	id, ok := orderParam(w, r)
+	if !ok {
+		return
+	}
+	sellerID := u.ID
+	if sid, ok := s.sampleSellerForTest(r, u, id); ok {
+		sellerID = sid
+	}
+	e, err := s.checkout.EnvelopeFor(r.Context(), sellerID, id)
+	if err != nil {
+		s.checkoutError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"envelope": e})
 }
 
 // POST /v1/orders/{id}/delivered — buyer confirms the cards arrived.

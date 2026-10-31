@@ -32,17 +32,19 @@ type Line struct {
 }
 
 type Shipment struct {
-	Method      string    `json:"method"`
-	Carrier     *string   `json:"carrier"`
-	Service     *string   `json:"service"`
-	Tracking    *string   `json:"tracking_number"`
-	TrackingURL *string   `json:"tracking_url"`
-	Status      string    `json:"status"`
-	LastEvent   *string   `json:"last_event"`
-	LabelURL    *string   `json:"label_url,omitempty"` // seller only
-	Bought      bool      `json:"label_bought"`        // bought through the platform (can be voided)
-	ChargeCents *int      `json:"charge_cents,omitempty"`
-	CreatedAt   time.Time `json:"created_at"`
+	Method      string  `json:"method"`
+	Carrier     *string `json:"carrier"`
+	Service     *string `json:"service"`
+	Tracking    *string `json:"tracking_number"`
+	TrackingURL *string `json:"tracking_url"`
+	Status      string  `json:"status"`
+	// Events: carrier scans, oldest first ({at, description, location}).
+	Events      json.RawMessage `json:"events"`
+	LastEvent   *string         `json:"last_event"`
+	LabelURL    *string         `json:"label_url,omitempty"` // seller only
+	Bought      bool            `json:"label_bought"`        // bought through the platform (can be voided)
+	ChargeCents *int            `json:"charge_cents,omitempty"`
+	CreatedAt   time.Time       `json:"created_at"`
 }
 
 type Feedback struct {
@@ -225,9 +227,9 @@ func (s *Service) fill(ctx context.Context, userID string, o *Order) error {
 	var sh Shipment
 	var label sql.NullString
 	err = s.DB.QueryRowContext(ctx, `SELECT method, carrier, service, tracking_number, tracking_url, status, last_event, label_url,
-		provider IS NOT NULL, charge_cents, created_at FROM shipments
+		provider IS NOT NULL, charge_cents, created_at, events FROM shipments
 		WHERE order_id = $1 AND voided_at IS NULL ORDER BY created_at DESC LIMIT 1`, o.ID).Scan(&sh.Method, &sh.Carrier, &sh.Service,
-		&sh.Tracking, &sh.TrackingURL, &sh.Status, &sh.LastEvent, &label, &sh.Bought, &sh.ChargeCents, &sh.CreatedAt)
+		&sh.Tracking, &sh.TrackingURL, &sh.Status, &sh.LastEvent, &label, &sh.Bought, &sh.ChargeCents, &sh.CreatedAt, &sh.Events)
 	if err == nil {
 		if o.Side == "selling" && label.Valid {
 			sh.LabelURL = &label.String
@@ -317,12 +319,16 @@ func (s *Service) MarkShipped(ctx context.Context, sellerID, orderID, carrier, t
 			return &FieldError{"tracking_number", "enter the tracking number (8 to 40 letters and digits)"}
 		}
 	}
-	var c, t any
+	var c, t, svc any
+	letter := false
 	if tracking != "" {
 		c, t = carrier, tracking
+	} else if code, ok := envelopeBarcode(ctx, tx, id); ok && method == "envelope" {
+		// The seller printed our tracked envelope: its barcode is the tracking.
+		c, t, svc, letter = "USPS", code, LetterService, true
 	}
-	if _, err := tx.ExecContext(ctx, `INSERT INTO shipments (order_id, method, carrier, tracking_number, status, last_event, last_event_at)
-		VALUES ($1, $2, $3, $4, 'in_transit', 'Marked shipped by seller', now())`, id, method, c, t); err != nil {
+	if _, err := tx.ExecContext(ctx, `INSERT INTO shipments (order_id, method, carrier, service, tracking_number, status, last_event, last_event_at)
+		VALUES ($1, $2, $3, $4, $5, 'in_transit', 'Marked shipped by seller', now())`, id, method, c, svc, t); err != nil {
 		return err
 	}
 	if _, err := tx.ExecContext(ctx, `UPDATE orders SET status = 'shipped', shipped_at = now(), updated_at = now() WHERE id = $1`, id); err != nil {
@@ -331,6 +337,8 @@ func (s *Service) MarkShipped(ctx context.Context, sellerID, orderID, carrier, t
 	body := "It's on the way in a plain envelope (no tracking)."
 	if tracking != "" {
 		body = fmt.Sprintf("Tracking: %s %s", carrier, tracking)
+	} else if letter {
+		body = "It's on the way in an envelope with USPS letter tracking. Scans show on your order as the post office sorts it."
 	}
 	if err := inbox.Notify(ctx, tx, buyer, "order", fmt.Sprintf("Order #%d shipped", number), body, "/purchases/"+id); err != nil {
 		return err
