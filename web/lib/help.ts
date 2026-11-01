@@ -271,6 +271,34 @@ export const ARTICLES: Article[] = [
     ],
   },
   {
+    slug: "firecardmanager",
+    title: "Connecting FireCardManager",
+    section: "Support",
+    summary: "List your FireCardManager inventory here, and keep eBay and Slabs & Singles in step.",
+    body: [
+      { h: "Connect" },
+      { list: [
+        "Set up payments first: Sell → Set up payments with Stripe.",
+        "Go to Sell → Connect FCM, create an API key and paste it into FireCardManager under Settings → Slabs & Singles.",
+        "In FireCardManager, open Slabs & Singles, select cards and choose List selected. Cards already listed here (SF or Both in the Status column) are skipped; use Update price/details to change them.",
+      ] },
+      { h: "While it's running" },
+      { list: [
+        "FireCardManager checks for sales every few minutes while it's open. A card that sells here moves to its Sold Log and its eBay listing is ended; a card that sells on eBay is taken off here.",
+        "A card that sold here is never put back up by FireCardManager, even if it's selected again before the sale reaches it.",
+      ] },
+      { h: "When FireCardManager stops" },
+      { p: "If the trial or license ends, or the computer is off, FireCardManager can't sync. Your eBay and Slabs & Singles listings stay live, so a card could sell twice." },
+      { list: [
+        "We pause the cards FireCardManager listed here after 3 days without a sync, and email you. They come back on its next sync.",
+        "eBay listings aren't paused by us: end them on eBay if FireCardManager will be off for a while.",
+        "To keep a card for sale here without FireCardManager, edit it on the website.",
+      ] },
+      { h: "Price limit for new sellers" },
+      { p: "New sellers can list cards up to $20 each. The limit rises to $250, then $1,000, as you complete sales with good feedback. FireCardManager tells you which cards are over your limit; they stay on eBay." },
+    ],
+  },
+  {
     slug: "tracked-envelopes",
     title: "Printing tracked envelopes",
     section: "Support",

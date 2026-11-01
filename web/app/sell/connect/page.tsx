@@ -48,6 +48,15 @@ export default async function ConnectPage() {
           </ul>
         )}
         <div className="mt-3"><NewKeyForm /></div>
+        <div className="mt-4 rounded-lg border border-slab/40 bg-[#fff6f6] p-4 text-[14px]">
+          <p className="font-semibold">Keep FireCardManager running and licensed</p>
+          <ul className="mt-2 list-disc space-y-1 pl-5">
+            <li>FireCardManager only syncs while it&apos;s open. If it stops (trial or license ends, computer off), your eBay and Slabs &amp; Singles listings <strong>stay live</strong>, and a card could sell in both places.</li>
+            <li>To protect you, we pause the cards FireCardManager listed here after <strong>3 days without a sync</strong> and email you. They come back on its next sync.</li>
+            <li>eBay listings aren&apos;t paused: end them on eBay if FireCardManager will be off for a while.</li>
+            <li>New sellers can list cards up to <strong>$20 each</strong>; the limit rises to $250, then $1,000, as you build sales and feedback. Pricier cards stay on eBay until then, and FireCardManager tells you which.</li>
+          </ul>
+        </div>
       </section>
 
       <details className="mt-8 rounded-lg border border-line p-4" open={!!(endpoint.webhook_url || endpoint.inventory_url)}>
