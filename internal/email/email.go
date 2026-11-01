@@ -39,10 +39,16 @@ type Sender interface {
 var httpClient = &http.Client{Timeout: 20 * time.Second}
 
 func post(ctx context.Context, url string, hdr map[string]string, body any) error {
+	_, err := postRead(ctx, url, hdr, body)
+	return err
+}
+
+// postRead is post that also returns the response body.
+func postRead(ctx context.Context, url string, hdr map[string]string, body any) ([]byte, error) {
 	b, _ := json.Marshal(body)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(b))
 	if err != nil {
-		return err
+		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
@@ -51,14 +57,14 @@ func post(ctx context.Context, url string, hdr map[string]string, body any) erro
 	}
 	res, err := httpClient.Do(req)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer res.Body.Close()
+	data, _ := io.ReadAll(io.LimitReader(res.Body, 20000))
 	if res.StatusCode >= 300 {
-		data, _ := io.ReadAll(io.LimitReader(res.Body, 2000))
-		return fmt.Errorf("HTTP %d: %s", res.StatusCode, strings.TrimSpace(string(data)))
+		return data, fmt.Errorf("HTTP %d: %s", res.StatusCode, trim(strings.TrimSpace(string(data)), 2000))
 	}
-	return nil
+	return data, nil
 }
 
 // Postmark sends with a server API token. Blasts use its "broadcast"
@@ -113,8 +119,26 @@ func (j Mailjet) Send(ctx context.Context, from string, m Message) error {
 		msg["Headers"] = m.Headers
 	}
 	auth := base64.StdEncoding.EncodeToString([]byte(j.Key + ":" + j.Secret))
-	return post(ctx, "https://api.mailjet.com/v3.1/send", map[string]string{"Authorization": "Basic " + auth},
+	data, err := postRead(ctx, "https://api.mailjet.com/v3.1/send", map[string]string{"Authorization": "Basic " + auth},
 		map[string]any{"Messages": []any{msg}})
+	if err != nil {
+		return err
+	}
+	// Mailjet answers per message; anything but "success" is a failure.
+	var r struct {
+		Messages []struct {
+			Status string
+			Errors []struct{ ErrorMessage, ErrorCode string }
+		}
+	}
+	if json.Unmarshal(data, &r) == nil && len(r.Messages) > 0 && r.Messages[0].Status != "success" {
+		var why []string
+		for _, e := range r.Messages[0].Errors {
+			why = append(why, e.ErrorCode+" "+e.ErrorMessage)
+		}
+		return fmt.Errorf("mailjet: %s %s", r.Messages[0].Status, strings.Join(why, "; "))
+	}
+	return nil
 }
 
 // Pick builds a sender from EMAIL_PROVIDER, EMAIL_API_KEY and (Mailjet)
@@ -145,12 +169,13 @@ func Pick(provider, key, secret string) (Sender, error) {
 // Service queues and sends mail.
 type Service struct {
 	DB     *sql.DB
-	Sender Sender        // nil: nothing is sent and email confirmation isn't required
-	From   string        // e.g. "Slabs & Singles <hello@slabsnsingles.com>"
-	WebURL string        // https://slabsnsingles.com
-	Postal string        // mailing address printed on blasts (required by US law)
-	Secret []byte        // signs unsubscribe links
-	Pace   time.Duration // wait between sends (Resend allows about 2 a second)
+	Sender Sender                        // nil: nothing is sent and email confirmation isn't required
+	From   string                        // e.g. "Slabs & Singles <hello@slabsnsingles.com>"
+	WebURL string                        // https://slabsnsingles.com
+	Postal string                        // mailing address printed on blasts (required by US law)
+	Secret []byte                        // signs unsubscribe links
+	Pace   time.Duration                 // wait between sends (Resend allows about 2 a second)
+	Warn   func(msg string, args ...any) // logs failed sends (optional)
 	Now    func() time.Time
 }
 
@@ -220,6 +245,9 @@ func (s *Service) RunOutbox(ctx context.Context, batch int) (sent int, err error
 			time.Sleep(s.Pace)
 		}
 		if serr := s.Sender.Send(ctx, s.From, m); serr != nil {
+			if s.Warn != nil {
+				s.Warn("email not sent", "to", j.to, "subject", j.subject, "try", j.attempts+1, "err", serr)
+			}
 			status := "queued"
 			if j.attempts+1 >= 5 {
 				status = "failed"

@@ -118,7 +118,7 @@ func run(log *slog.Logger) error {
 	}
 	unsubKey := sha256.Sum256([]byte("unsubscribe-links:" + cfg.MFAKey + cfg.DatabaseURL))
 	mailSvc := &email.Service{DB: database, Sender: sender, From: cfg.EmailFrom, WebURL: cfg.WebURL,
-		Postal: cfg.EmailPostal, Secret: unsubKey[:]}
+		Postal: cfg.EmailPostal, Secret: unsubKey[:], Warn: log.Warn}
 	if sender != nil {
 		log.Info("email", "provider", sender.Name(), "from", cfg.EmailFrom, "postal_address", cfg.EmailPostal != "")
 		if n := sender.Name(); n == "resend" || n == "mailjet" {
