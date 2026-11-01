@@ -303,6 +303,9 @@ func run(log *slog.Logger) error {
 				if err := fcmSvc.RunReconcile(ctx, checkoutSvc.ReleaseListing, func(m string, kv ...any) { log.Info(m, kv...) }); err != nil {
 					log.Error("inventory reconcile", "err", err)
 				}
+				if _, err := sellerSvc.RefreshPending(ctx); err != nil {
+					log.Error("refresh pending sellers", "err", err)
+				}
 				if paused, err := fcmSvc.PauseStale(ctx); err != nil {
 					log.Error("pause stale synced listings", "err", err)
 				} else {

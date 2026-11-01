@@ -121,6 +121,9 @@ func (c *Client) CreateStandardAccount(ctx context.Context, email string) (Accou
 		"country": {"US"},
 		"email":   {email},
 	}, &a)
+	if v1Refused(err) {
+		return c.createAccountV2(ctx, email)
+	}
 	return a, err
 }
 
@@ -134,12 +137,23 @@ func (c *Client) CreateOnboardingLink(ctx context.Context, accountID, refreshURL
 		"return_url":  {returnURL},
 		"type":        {"account_onboarding"},
 	}, &out)
+	if err != nil {
+		// A v2 account (made where v1 isn't allowed) onboards through v2.
+		if url2, err2 := c.onboardingLinkV2(ctx, accountID, refreshURL, returnURL); err2 == nil {
+			return url2, nil
+		}
+	}
 	return out.URL, err
 }
 
 func (c *Client) GetAccount(ctx context.Context, accountID string) (Account, error) {
 	var a Account
 	err := c.do(ctx, http.MethodGet, "/v1/accounts/"+url.PathEscape(accountID), nil, &a)
+	if err != nil {
+		if a2, err2 := c.getAccountV2(ctx, accountID); err2 == nil {
+			return a2, nil
+		}
+	}
 	return a, err
 }
 

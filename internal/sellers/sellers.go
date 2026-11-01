@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -313,4 +314,37 @@ func (s *Service) SetCollectTax(ctx context.Context, userID string, on bool) (Pr
 		return Profile{}, err
 	}
 	return s.Get(ctx, userID)
+}
+
+// RefreshPending asks Stripe about sellers still finishing setup, so they're
+// switched on even if no account webhook arrives (Accounts v2 sends its own
+// event types). It returns how many it checked.
+func (s *Service) RefreshPending(ctx context.Context) (int, error) {
+	if s.Stripe == nil {
+		return 0, nil
+	}
+	rows, err := s.DB.QueryContext(ctx, `SELECT user_id FROM seller_profiles
+		WHERE NOT charges_enabled AND stripe_livemode = $1
+		  AND NOT starts_with(stripe_account_id, $2) AND NOT starts_with(stripe_account_id, $3)
+		  AND updated_at > now() - interval '30 days'
+		ORDER BY updated_at DESC LIMIT 50`, s.Live, TestAccountPrefix, demoPrefix)
+	if err != nil {
+		return 0, err
+	}
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return 0, err
+		}
+		ids = append(ids, id)
+	}
+	rows.Close()
+	for _, id := range ids {
+		if _, err := s.Refresh(ctx, id); err != nil {
+			return len(ids), fmt.Errorf("refresh seller %s: %w", id, err)
+		}
+	}
+	return len(ids), nil
 }
