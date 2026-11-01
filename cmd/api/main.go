@@ -145,7 +145,15 @@ func run(log *slog.Logger) error {
 	}
 	checkoutSvc := &checkout.Service{DB: database, Sellers: sellerSvc, Fees: feeSvc, Rep: reputation,
 		Enabled: cfg.CheckoutEnabled, WebURL: cfg.WebURL,
-		Letters: checkout.Letters{MailerID: cfg.USPSMailerID, ServiceType: cfg.USPSServiceType, Warn: log.Warn}}
+		Letters: checkout.Letters{MailerID: cfg.USPSMailerID, ServiceType: cfg.USPSServiceType, Warn: log.Warn},
+		FeeFree: func(email string) bool {
+			for _, o := range cfg.AdminEmails {
+				if strings.EqualFold(strings.TrimSpace(o), strings.TrimSpace(email)) {
+					return true
+				}
+			}
+			return false
+		}}
 	if cfg.USPSClientID != "" && cfg.USPSSecret != "" {
 		checkoutSvc.Letters.Addresses = &usps.Addresses{ClientID: cfg.USPSClientID, Secret: cfg.USPSSecret}
 	}

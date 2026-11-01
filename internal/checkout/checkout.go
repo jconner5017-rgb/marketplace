@@ -57,6 +57,9 @@ type Service struct {
 	WebURL   string // where Stripe sends the buyer back, e.g. https://slabsnsingles.com
 	// Letters: USPS Intelligent Mail barcodes on envelope orders.
 	Letters Letters
+	// FeeFree reports whether a seller (by email) pays no marketplace fee:
+	// the site's owners (ADMIN_EMAILS). Nil = everyone pays.
+	FeeFree func(email string) bool
 	Now     func() time.Time
 }
 
@@ -148,11 +151,11 @@ func (s *Service) start(ctx context.Context, buyerID, buyerEmail string, req Req
 		return "", "", ErrOwn
 	}
 
-	var acct string
+	var acct, sellerEmail string
 	var ok, collectTax bool
 	err = tx.QueryRowContext(ctx, `
-		SELECT sp.stripe_account_id, u.status = 'active' AND sp.charges_enabled AND sp.review_status <> 'rejected', sp.collect_tax
-		FROM seller_profiles sp JOIN users u ON u.id = sp.user_id WHERE sp.user_id = $1`, sellerID).Scan(&acct, &ok, &collectTax)
+		SELECT sp.stripe_account_id, u.status = 'active' AND sp.charges_enabled AND sp.review_status <> 'rejected', sp.collect_tax, u.email
+		FROM seller_profiles sp JOIN users u ON u.id = sp.user_id WHERE sp.user_id = $1`, sellerID).Scan(&acct, &ok, &collectTax, &sellerEmail)
 	if errors.Is(err, sql.ErrNoRows) || (err == nil && (!ok || acct == "")) {
 		return "", "", ErrSellerClosed
 	}
@@ -187,6 +190,9 @@ func (s *Service) start(ctx context.Context, buyerID, buyerEmail string, req Req
 		fee += sched.For(l.unit) * l.qty
 	}
 	fee = min(fee, total)
+	if s.FeeFree != nil && s.FeeFree(sellerEmail) {
+		fee = 0 // the site's owner selling their own cards would only pay themselves
+	}
 	var schedID any
 	if sched.ID > 0 {
 		schedID = sched.ID

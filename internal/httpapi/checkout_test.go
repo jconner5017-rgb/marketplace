@@ -285,6 +285,23 @@ func TestCheckoutExpiryAndHolds(t *testing.T) {
 	if p := e.pay.Params(cs); p.Lines[0].UnitCents != 2500 || p.FeeCents != 150 {
 		t.Fatalf("hold params: %+v", p)
 	}
+
+	// The site's owner selling their own cards pays no marketplace fee.
+	ownerCard := createListing(t, e, seller, rawCard("OWN1", 2500))["id"].(string)
+	e.co.FeeFree = func(string) bool { return true }
+	do(t, rob.c, "PUT", e.ts.URL+"/v1/cart/"+ownerCard, map[string]int{"quantity": 1})
+	sellerName := ""
+	e.db.QueryRow(`SELECT u.username FROM users u JOIN listings l ON l.seller_id = u.id WHERE l.id = $1`, ownerCard).Scan(&sellerName)
+	code, body = do(t, rob.c, "POST", e.ts.URL+"/v1/checkout", map[string]any{"seller": sellerName})
+	e.co.FeeFree = nil
+	if code != 201 {
+		t.Fatalf("owner checkout: %d %v", code, body)
+	}
+	var ownerFee int
+	e.db.QueryRow(`SELECT fee_cents FROM orders WHERE id = $1`, body["order_id"]).Scan(&ownerFee)
+	if p := e.pay.Params(sessionOf(t, e, body["order_id"].(string))); p.FeeCents != 0 || ownerFee != 0 {
+		t.Fatalf("owner sale fee: params %d, order %d", p.FeeCents, ownerFee)
+	}
 	e.pay.Complete(cs)
 	do(t, quinn.c, "POST", e.ts.URL+"/v1/orders/"+ho+"/confirm?session_id="+cs, map[string]any{})
 	e.db.QueryRow(`SELECT status FROM holds WHERE id = $1`, hold).Scan(&st)
