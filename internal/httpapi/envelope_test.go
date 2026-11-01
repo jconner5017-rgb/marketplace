@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jconner5017-rgb/marketplace/internal/demo"
 	"github.com/jconner5017-rgb/marketplace/internal/usps"
 )
 
@@ -120,5 +121,17 @@ func TestSampleShopCheckout(t *testing.T) {
 	e.db.QueryRow(`SELECT test FROM orders WHERE id = $1`, body["order_id"]).Scan(&test)
 	if !test {
 		t.Fatal("admin sample order not flagged as test")
+	}
+
+	// Removing the sample shop (SEED_DEMO=remove) takes its test orders too.
+	e.db.Exec(`UPDATE users SET email = $1 WHERE username = 'sample_like'`, demo.SellerEmail)
+	if err := demo.Remove(context.Background(), e.db); err != nil {
+		t.Fatalf("remove with test orders: %v", err)
+	}
+	var left int
+	e.db.QueryRow(`SELECT count(*) FROM orders WHERE id = $1`, body["order_id"]).Scan(&left)
+	e.db.QueryRow(`SELECT $1::int + count(*) FROM users WHERE username = 'sample_like'`, left).Scan(&left)
+	if left != 0 {
+		t.Fatalf("sample shop left behind %d rows", left)
 	}
 }

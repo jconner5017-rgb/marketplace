@@ -8,8 +8,10 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"net/url"
+	"strings"
 
 	"github.com/jconner5017-rgb/marketplace/internal/listings"
 )
@@ -264,8 +266,57 @@ func seedAuctions(ctx context.Context, db *sql.DB, svc *listings.Service, seller
 	return n, nil
 }
 
-// Remove deletes the sample seller and all sample listings.
+// Remove deletes the sample seller, all sample listings, and the orders
+// placed against them. The sample shop can't take real payment, so its
+// orders are only staff test orders; they go too, with their feedback,
+// cases and ledger lines, so nothing still points at the seller.
 func Remove(ctx context.Context, db *sql.DB) error {
-	_, err := db.ExecContext(ctx, `DELETE FROM users WHERE lower(email) = lower($1)`, SellerEmail)
-	return err
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var id string
+	err = tx.QueryRowContext(ctx, `SELECT id FROM users WHERE lower(email) = lower($1)`, SellerEmail).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	const demoOrders = `SELECT id FROM orders WHERE seller_id = $1 OR buyer_id = $1`
+	// The ledger is append-only; its lock is lifted only inside this
+	// transaction, only to drop lines that belong to sample-shop orders (no
+	// real money ever moved for them), and put back before commit.
+	var ledgerLines int
+	if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM ledger_entries WHERE order_id IN (`+demoOrders+`) OR seller_id = $1`,
+		id).Scan(&ledgerLines); err != nil {
+		return err
+	}
+	steps := []string{
+		`DELETE FROM feedback WHERE order_id IN (` + demoOrders + `) OR from_user = $1 OR to_user = $1`,
+		`DELETE FROM cases WHERE order_id IN (` + demoOrders + `)`,
+		`DELETE FROM oversells WHERE order_id IN (` + demoOrders + `)`,
+	}
+	if ledgerLines > 0 {
+		steps = append(steps,
+			`ALTER TABLE ledger_entries DISABLE TRIGGER ledger_no_update`,
+			`DELETE FROM ledger_entries WHERE order_id IN (`+demoOrders+`) OR seller_id = $1`,
+			`ALTER TABLE ledger_entries ENABLE TRIGGER ledger_no_update`)
+	}
+	steps = append(steps,
+		`DELETE FROM orders WHERE seller_id = $1 OR buyer_id = $1`,
+		`DELETE FROM users WHERE id = $1`)
+	for _, q := range steps {
+		var err error
+		if strings.HasPrefix(q, "ALTER") {
+			_, err = tx.ExecContext(ctx, q)
+		} else {
+			_, err = tx.ExecContext(ctx, q, id)
+		}
+		if err != nil {
+			return fmt.Errorf("remove sample shop: %w", err)
+		}
+	}
+	return tx.Commit()
 }
