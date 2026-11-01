@@ -47,6 +47,12 @@ func (s *Server) sellerAPI(next http.HandlerFunc) http.HandlerFunc {
 				writeError(w, http.StatusForbidden, "account_frozen", "this account is frozen while we review it", nil)
 				return
 			}
+			// The software checked in: bring back anything paused while it was away.
+			if n, err := s.fcm.ResumeSynced(r.Context(), u.ID); err != nil {
+				s.log.Error("resume synced listings", "err", err)
+			} else if n > 0 {
+				s.log.Info("synced listings resumed", "user", u.ID, "count", n)
+			}
 			ctx := context.WithValue(context.WithValue(r.Context(), userKey, u), apiKeyCtx, true)
 			r = r.WithContext(ctx)
 		}

@@ -809,6 +809,12 @@ func (s *Service) upsert(ctx context.Context, sellerID string, in Input, noRelis
 	if err != nil {
 		return Listing{}, false, err
 	}
+	if noRelist {
+		// Sent by inventory software: paused if it stops checking in (see fcm.PauseStale).
+		if _, err := tx.ExecContext(ctx, `UPDATE listings SET inventory_sync = true, sync_paused_at = NULL WHERE id = $1`, l.ID); err != nil {
+			return Listing{}, false, err
+		}
+	}
 	if err := snapshot(ctx, tx, l); err != nil {
 		return Listing{}, false, err
 	}

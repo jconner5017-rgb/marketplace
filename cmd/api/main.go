@@ -303,6 +303,20 @@ func run(log *slog.Logger) error {
 				if err := fcmSvc.RunReconcile(ctx, checkoutSvc.ReleaseListing, func(m string, kv ...any) { log.Info(m, kv...) }); err != nil {
 					log.Error("inventory reconcile", "err", err)
 				}
+				if paused, err := fcmSvc.PauseStale(ctx); err != nil {
+					log.Error("pause stale synced listings", "err", err)
+				} else {
+					for _, p := range paused {
+						log.Info("synced listings paused", "user", p.UserID, "count", p.Listings)
+						if err := mailSvc.Queue(ctx, database, p.UserID, p.Email, "Your FireCardManager listings are paused",
+							fmt.Sprintf("Hi %s,\n\nFireCardManager hasn't synced with Slabs & Singles in 3 days, so we paused the %d cards it listed. "+
+								"That stops a card selling here after it's sold somewhere else.\n\nOpen FireCardManager (with a current trial or license) and "+
+								"they come back on its next sync. To keep a card for sale without FireCardManager, edit it on the website.\n\nSlabs & Singles",
+								p.Username, p.Listings)); err != nil {
+							log.Error("queue pause email", "err", err)
+						}
+					}
+				}
 				if n, err := checkoutSvc.RefreshLetterScans(ctx); err != nil {
 					log.Error("letter scans", "err", err)
 				} else if n > 0 {

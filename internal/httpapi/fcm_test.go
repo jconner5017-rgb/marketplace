@@ -311,3 +311,49 @@ func TestFCMNoRelistAfterSale(t *testing.T) {
 		t.Fatalf("bulk relist: %d %v", code, b)
 	}
 }
+
+// Listings from inventory software pause after 3 days without a check-in
+// and come back on the next sync; the seller's own listings aren't touched.
+func TestFCMStaleSyncPause(t *testing.T) {
+	e := setupEnv(t)
+	sc, _ := newSeller(t, e, "stale_shop", true)
+	key := newKey(t, e, sc)
+	_, b, _ := api(t, e, key, "POST", "/v1/listings", rawCard("FCM-501", 900), "")
+	synced := b["listing"].(map[string]any)["id"].(string)
+	own := createListing(t, e, &httpClientT{sc}, rawCard("HAND-1", 800))["id"].(string)
+
+	// Checked in recently: nothing paused.
+	if p, err := e.fcm.PauseStale(context.Background()); err != nil || len(p) != 0 {
+		t.Fatalf("fresh: %v %v", p, err)
+	}
+	e.db.Exec(`UPDATE api_keys SET last_used_at = now() - interval '4 days'`)
+	p, err := e.fcm.PauseStale(context.Background())
+	if err != nil || len(p) != 1 || p[0].Listings != 1 || p[0].Email != "stale_shop@example.com" {
+		t.Fatalf("pause: %+v %v", p, err)
+	}
+	status := func(id string) (s string) {
+		e.db.QueryRow(`SELECT status FROM listings WHERE id = $1`, id).Scan(&s)
+		return
+	}
+	if status(synced) != "hidden" || status(own) != "active" {
+		t.Fatalf("after pause: synced %s, own %s", status(synced), status(own))
+	}
+	if code, _ := do(t, client(t), "GET", e.ts.URL+"/v1/listings/"+synced, nil); code != 404 {
+		t.Fatalf("paused listing still public: %d", code)
+	}
+	var notes int
+	e.db.QueryRow(`SELECT count(*) FROM notifications WHERE title LIKE '%listings paused%'`).Scan(&notes)
+	if notes != 1 {
+		t.Fatalf("notices %d", notes)
+	}
+	// Any API call from FCM brings them back.
+	if code, _, _ := api(t, e, key, "GET", "/v1/orders", nil, ""); code != 200 {
+		t.Fatalf("orders: %d", code)
+	}
+	if status(synced) != "active" {
+		t.Fatalf("not resumed: %s", status(synced))
+	}
+	if p, _ := e.fcm.PauseStale(context.Background()); len(p) != 0 {
+		t.Fatal("paused again right after a sync")
+	}
+}
