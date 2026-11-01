@@ -35,6 +35,8 @@ type Profile struct {
 	CreatedAt          time.Time `json:"created_at"`
 	ReviewStatus       string    `json:"review_status"` // pending, approved, rejected (staff review)
 	CollectTax         bool      `json:"collect_tax"`   // Stripe Tax adds sales tax at checkout
+	// StripeLive: the account was made with a live key (false: sandbox).
+	StripeLive bool `json:"-"`
 	// From Stripe on a refresh (not stored): what Stripe still needs before
 	// the seller can take payments, and why charges are off.
 	StripeNeeds     []string `json:"stripe_needs,omitempty"`
@@ -48,17 +50,32 @@ func (p Profile) CanSell() bool { return p.ChargesEnabled }
 type Service struct {
 	DB     *sql.DB
 	Stripe stripe.Connect // nil when STRIPE_SECRET_KEY is not set
+	// Live: STRIPE_SECRET_KEY is a live key. Accounts made in the other mode
+	// can't be used with it and are replaced when the seller sets up again.
+	Live bool
+}
+
+// demoPrefix marks the sample shop's made-up account (see internal/demo).
+const demoPrefix = "acct_demo_"
+
+// otherMode reports a seller account this key can't use: a test seller, or
+// one made in sandbox while the site is live (or the reverse).
+func (s *Service) otherMode(accountID string, live bool) bool {
+	if strings.HasPrefix(accountID, TestAccountPrefix) {
+		return true
+	}
+	return !strings.HasPrefix(accountID, demoPrefix) && live != s.Live
 }
 
 const profileCols = `user_id, stripe_account_id, charges_enabled, details_submitted, tier,
-	bundle_discount_type, bundle_discount_val, fcm_connected, created_at, review_status, collect_tax`
+	bundle_discount_type, bundle_discount_val, fcm_connected, created_at, review_status, collect_tax, stripe_livemode`
 
 func scanProfile(row interface{ Scan(...any) error }) (Profile, error) {
 	var p Profile
 	var bt sql.NullString
 	var bv sql.NullInt64
 	err := row.Scan(&p.UserID, &p.StripeAccountID, &p.ChargesEnabled, &p.DetailsSubmitted, &p.Tier,
-		&bt, &bv, &p.FCMConnected, &p.CreatedAt, &p.ReviewStatus, &p.CollectTax)
+		&bt, &bv, &p.FCMConnected, &p.CreatedAt, &p.ReviewStatus, &p.CollectTax, &p.StripeLive)
 	if bt.Valid {
 		p.BundleDiscountType = &bt.String
 	}
@@ -118,7 +135,22 @@ func (s *Service) StartTestSeller(ctx context.Context, userID string) error {
 func (s *Service) RetireTestSellers(ctx context.Context) (int, error) {
 	res, err := s.DB.ExecContext(ctx, `
 		UPDATE seller_profiles SET charges_enabled = false, details_submitted = false, updated_at = now()
-		WHERE stripe_account_id LIKE $1 AND (charges_enabled OR details_submitted)`, TestAccountPrefix+"%")
+		WHERE starts_with(stripe_account_id, $1) AND (charges_enabled OR details_submitted)`, TestAccountPrefix)
+	if err != nil {
+		return 0, err
+	}
+	n, _ := res.RowsAffected()
+	return int(n), nil
+}
+
+// RetireOtherModeSellers runs at startup: sellers whose Stripe account was
+// made in the other mode (sandbox accounts once the live key is in) go back
+// to "set up payments". Their listings stay; setting up makes a new account.
+func (s *Service) RetireOtherModeSellers(ctx context.Context) (int, error) {
+	res, err := s.DB.ExecContext(ctx, `
+		UPDATE seller_profiles SET charges_enabled = false, details_submitted = false, updated_at = now()
+		WHERE stripe_livemode <> $1 AND NOT starts_with(stripe_account_id, $2) AND NOT starts_with(stripe_account_id, $3)
+		  AND (charges_enabled OR details_submitted)`, s.Live, TestAccountPrefix, demoPrefix)
 	if err != nil {
 		return 0, err
 	}
@@ -138,18 +170,20 @@ func (s *Service) ensureAccount(ctx context.Context, userID, email string) (stri
 		return "", err
 	}
 	var existing string
+	var live bool
 	err = tx.QueryRowContext(ctx,
-		`SELECT stripe_account_id FROM seller_profiles WHERE user_id = $1`, userID).Scan(&existing)
-	if err == nil && strings.HasPrefix(existing, TestAccountPrefix) {
-		// A test seller (set up before Stripe Connect was on) gets a real
-		// Stripe account now; listings stay, selling waits for onboarding.
+		`SELECT stripe_account_id, stripe_livemode FROM seller_profiles WHERE user_id = $1`, userID).Scan(&existing, &live)
+	if err == nil && s.otherMode(existing, live) {
+		// A test seller, or a sandbox account now the site is live, gets a
+		// new Stripe account; listings stay, selling waits for onboarding.
 		acct, err := s.Stripe.CreateStandardAccount(ctx, email)
 		if err != nil {
 			return "", err
 		}
 		if _, err := tx.ExecContext(ctx, `
-			UPDATE seller_profiles SET stripe_account_id = $2, charges_enabled = $3, details_submitted = $4, updated_at = now()
-			WHERE user_id = $1`, userID, acct.ID, acct.ChargesEnabled, acct.DetailsSubmitted); err != nil {
+			UPDATE seller_profiles SET stripe_account_id = $2, charges_enabled = $3, details_submitted = $4,
+				stripe_livemode = $5, updated_at = now()
+			WHERE user_id = $1`, userID, acct.ID, acct.ChargesEnabled, acct.DetailsSubmitted, s.Live); err != nil {
 			return "", err
 		}
 		return acct.ID, tx.Commit()
@@ -166,9 +200,9 @@ func (s *Service) ensureAccount(ctx context.Context, userID, email string) (stri
 		return "", err
 	}
 	if _, err := tx.ExecContext(ctx, `
-		INSERT INTO seller_profiles (user_id, stripe_account_id, charges_enabled, details_submitted)
-		VALUES ($1, $2, $3, $4)`,
-		userID, acct.ID, acct.ChargesEnabled, acct.DetailsSubmitted); err != nil {
+		INSERT INTO seller_profiles (user_id, stripe_account_id, charges_enabled, details_submitted, stripe_livemode)
+		VALUES ($1, $2, $3, $4, $5)`,
+		userID, acct.ID, acct.ChargesEnabled, acct.DetailsSubmitted, s.Live); err != nil {
 		return "", err
 	}
 	return acct.ID, tx.Commit()
@@ -180,8 +214,8 @@ func (s *Service) Refresh(ctx context.Context, userID string) (Profile, error) {
 	if err != nil {
 		return p, err
 	}
-	if strings.HasPrefix(p.StripeAccountID, TestAccountPrefix) {
-		return p, nil // no Stripe account behind it
+	if s.otherMode(p.StripeAccountID, p.StripeLive) {
+		return p, nil // no usable Stripe account behind it yet
 	}
 	if s.Stripe == nil {
 		return p, ErrStripeNotConfigured

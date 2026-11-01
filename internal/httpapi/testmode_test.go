@@ -113,3 +113,42 @@ func TestAdminTestMode(t *testing.T) {
 		t.Fatalf("test account not replaced: %s", acct)
 	}
 }
+
+// Switching the Stripe key from sandbox to live sends sandbox-made sellers
+// back to set up payments with a new account; their listings stay.
+func TestSandboxSellersRetiredOnLiveKey(t *testing.T) {
+	e := setupEnv(t)
+	sc, oldAcct := newSeller(t, e, "sandbox_sam", true)
+	l := createListing(t, e, &httpClientT{sc}, rawCard("SB1", 900))["id"].(string)
+
+	e.srv.sellers.Live = true
+	t.Cleanup(func() { e.srv.sellers.Live = false })
+	n, err := e.srv.sellers.RetireOtherModeSellers(context.Background())
+	if err != nil || n < 1 {
+		t.Fatalf("retire: %d %v", n, err)
+	}
+	// The seller page doesn't ask Stripe about the sandbox account.
+	code, body := do(t, sc, "GET", e.ts.URL+"/v1/seller", nil)
+	if code != 200 || body["seller"].(map[string]any)["charges_enabled"] != false {
+		t.Fatalf("seller after retire: %d %v", code, body)
+	}
+	// Setting up again makes a new (live) account.
+	code, body = do(t, sc, "POST", e.ts.URL+"/v1/seller/onboarding", map[string]string{})
+	if code != 200 || strings.Contains(body["url"].(string), oldAcct) {
+		t.Fatalf("re-onboarding reused the sandbox account: %d %v", code, body)
+	}
+	var live bool
+	e.db.QueryRow(`SELECT stripe_livemode FROM seller_profiles sp JOIN users u ON u.id = sp.user_id WHERE u.username = 'sandbox_sam'`).Scan(&live)
+	if !live {
+		t.Fatal("new account not marked live")
+	}
+	var status string
+	e.db.QueryRow(`SELECT status FROM listings WHERE id = $1`, l).Scan(&status)
+	if status == "removed" {
+		t.Fatal("listing removed")
+	}
+	// Running again changes nothing.
+	if n, _ := e.srv.sellers.RetireOtherModeSellers(context.Background()); n != 0 {
+		t.Fatalf("second retire: %d", n)
+	}
+}

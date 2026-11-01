@@ -72,6 +72,7 @@ func run(log *slog.Logger) error {
 	sellerSvc := &sellers.Service{DB: database}
 	if cfg.StripeSecretKey != "" {
 		sellerSvc.Stripe = stripe.NewClient(cfg.StripeSecretKey)
+		sellerSvc.Live = strings.HasPrefix(cfg.StripeSecretKey, "sk_live_") || strings.HasPrefix(cfg.StripeSecretKey, "rk_live_")
 		mode := "test"
 		if strings.HasPrefix(cfg.StripeSecretKey, "sk_live_") || strings.HasPrefix(cfg.StripeSecretKey, "rk_live_") {
 			mode = "live"
@@ -187,6 +188,13 @@ func run(log *slog.Logger) error {
 			log.Error("retire test sellers", "err", err)
 		} else if n > 0 {
 			log.Info("test sellers sent to Stripe onboarding", "count", n)
+		}
+	}
+	if sellerSvc.Stripe != nil {
+		if n, err := sellerSvc.RetireOtherModeSellers(ctx); err != nil {
+			log.Error("retire other-mode sellers", "err", err)
+		} else if n > 0 {
+			log.Info("sellers set up in the other Stripe mode sent back to set up payments", "count", n, "live", sellerSvc.Live)
 		}
 	}
 	fcmSvc := &fcm.Service{DB: database}
