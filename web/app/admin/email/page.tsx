@@ -23,7 +23,7 @@ export default async function AdminEmail() {
       </p>
       {d && !d.enabled && (
         <p className="mt-4 rounded-lg bg-wash p-3 text-[14px]">
-          Email isn&apos;t set up yet. Add <code>EMAIL_PROVIDER</code> (postmark or resend), <code>EMAIL_API_KEY</code>,{" "}
+          Email isn&apos;t set up yet. Add <code>EMAIL_PROVIDER</code> (postmark, resend or mailjet), <code>EMAIL_API_KEY</code> (and <code>EMAIL_API_SECRET</code> for Mailjet),{" "}
           <code>EMAIL_FROM</code> and <code>EMAIL_POSTAL_ADDRESS</code> to the API service in Render.
         </p>
       )}

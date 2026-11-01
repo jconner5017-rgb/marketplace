@@ -1,4 +1,4 @@
-// Package email sends the site's mail through Postmark or Resend: account
+// Package email sends the site's mail through Postmark, Resend or Mailjet: account
 // emails (confirm your email, password reset) and staff email blasts. Every
 // message goes through an outbox table so a slow or failing provider never
 // holds up a request, and blasts go out in batches.
@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/mail"
 	"strings"
 	"time"
 )
@@ -92,8 +93,33 @@ func (r Resend) Send(ctx context.Context, from string, m Message) error {
 	return post(ctx, "https://api.resend.com/emails", map[string]string{"Authorization": "Bearer " + r.Key}, body)
 }
 
-// Pick builds a sender from EMAIL_PROVIDER and EMAIL_API_KEY; nil when unset.
-func Pick(provider, key string) (Sender, error) {
+// Mailjet sends with an API key and secret key (Send API v3.1).
+type Mailjet struct{ Key, Secret string }
+
+func (j Mailjet) Name() string { return "mailjet" }
+
+func (j Mailjet) Send(ctx context.Context, from string, m Message) error {
+	addr, err := mail.ParseAddress(from)
+	if err != nil {
+		return fmt.Errorf("EMAIL_FROM: %w", err)
+	}
+	msg := map[string]any{
+		"From":     map[string]string{"Email": addr.Address, "Name": addr.Name},
+		"To":       []map[string]string{{"Email": m.To}},
+		"Subject":  m.Subject,
+		"TextPart": m.Text,
+	}
+	if len(m.Headers) > 0 {
+		msg["Headers"] = m.Headers
+	}
+	auth := base64.StdEncoding.EncodeToString([]byte(j.Key + ":" + j.Secret))
+	return post(ctx, "https://api.mailjet.com/v3.1/send", map[string]string{"Authorization": "Basic " + auth},
+		map[string]any{"Messages": []any{msg}})
+}
+
+// Pick builds a sender from EMAIL_PROVIDER, EMAIL_API_KEY and (Mailjet)
+// EMAIL_API_SECRET; nil when unset.
+func Pick(provider, key, secret string) (Sender, error) {
 	switch strings.ToLower(strings.TrimSpace(provider)) {
 	case "", "none":
 		return nil, nil
@@ -107,8 +133,13 @@ func Pick(provider, key string) (Sender, error) {
 			return nil, errors.New("EMAIL_PROVIDER=resend needs EMAIL_API_KEY")
 		}
 		return Resend{Key: key}, nil
+	case "mailjet":
+		if key == "" || secret == "" {
+			return nil, errors.New("EMAIL_PROVIDER=mailjet needs EMAIL_API_KEY and EMAIL_API_SECRET")
+		}
+		return Mailjet{Key: key, Secret: secret}, nil
 	}
-	return nil, errors.New("EMAIL_PROVIDER must be postmark or resend")
+	return nil, errors.New("EMAIL_PROVIDER must be postmark, resend or mailjet")
 }
 
 // Service queues and sends mail.

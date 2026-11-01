@@ -59,12 +59,14 @@ type Config struct {
 	USPSSecret      string
 	USPSIVUser      string
 	USPSIVPassword  string
-	// Email: EMAIL_PROVIDER (postmark or resend), EMAIL_API_KEY, EMAIL_FROM
+	// Email: EMAIL_PROVIDER (postmark, resend or mailjet), EMAIL_API_KEY
+	// (+ EMAIL_API_SECRET for Mailjet), EMAIL_FROM
 	// (e.g. "Slabs & Singles <hello@slabsnsingles.com>") and
 	// EMAIL_POSTAL_ADDRESS (printed on blasts). No provider: no mail is sent
 	// and new members don't have to confirm their email.
 	EmailProvider string
 	EmailAPIKey   string
+	EmailSecret   string // EMAIL_API_SECRET (Mailjet's secret key)
 	EmailFrom     string
 	EmailPostal   string
 }
@@ -131,6 +133,7 @@ func Load() (Config, error) {
 	c.PhotoPublicURL = strings.TrimRight(strings.TrimSpace(os.Getenv("PHOTO_PUBLIC_URL")), "/")
 	c.EmailProvider = strings.TrimSpace(os.Getenv("EMAIL_PROVIDER"))
 	c.EmailAPIKey = strings.TrimSpace(os.Getenv("EMAIL_API_KEY"))
+	c.EmailSecret = strings.TrimSpace(os.Getenv("EMAIL_API_SECRET"))
 	c.EmailFrom = strings.TrimSpace(getenv("EMAIL_FROM", "Slabs & Singles <hello@slabsnsingles.com>"))
 	c.EmailPostal = strings.TrimSpace(os.Getenv("EMAIL_POSTAL_ADDRESS"))
 	c.USPSMailerID = strings.TrimSpace(os.Getenv("USPS_MAILER_ID"))

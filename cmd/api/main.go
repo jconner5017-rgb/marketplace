@@ -111,7 +111,7 @@ func run(log *slog.Logger) error {
 	}
 	feeSvc := &fees.Service{DB: database}
 	reputation := &sellers.Reputation{DB: database}
-	sender, err := email.Pick(cfg.EmailProvider, cfg.EmailAPIKey)
+	sender, err := email.Pick(cfg.EmailProvider, cfg.EmailAPIKey, cfg.EmailSecret)
 	if err != nil {
 		log.Error("email setup", "err", err)
 		os.Exit(1)
@@ -121,7 +121,7 @@ func run(log *slog.Logger) error {
 		Postal: cfg.EmailPostal, Secret: unsubKey[:]}
 	if sender != nil {
 		log.Info("email", "provider", sender.Name(), "from", cfg.EmailFrom, "postal_address", cfg.EmailPostal != "")
-		if sender.Name() == "resend" {
+		if n := sender.Name(); n == "resend" || n == "mailjet" {
 			mailSvc.Pace = 600 * time.Millisecond
 		}
 		// Its own loop, so a big blast never holds up auctions or checkout jobs.
