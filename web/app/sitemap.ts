@@ -1,7 +1,7 @@
 import type { MetadataRoute } from "next";
 import { gameHref, nonsportHref, sportHref } from "@/lib/format";
 import { ARTICLES } from "@/lib/help";
-import { API_URL } from "@/lib/api";
+import { API_URL, facets } from "@/lib/api";
 import { getCatalog } from "@/lib/catalog";
 import { SITE_URL } from "@/lib/seo";
 
@@ -28,16 +28,31 @@ async function listingUrls(): Promise<MetadataRoute.Sitemap> {
   return out;
 }
 
-export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+/** Category pages with at least one card for sale (empty ones are left out until they fill). */
+async function categoryUrls(): Promise<string[]> {
   const cat = await getCatalog();
+  const out: string[] = [];
+  for (const [kind, choices, href] of [
+    ["sports", cat.sports, sportHref],
+    ["tcg", cat.games, gameHref],
+    ["nonsport", cat.nonsport, nonsportHref],
+  ] as const) {
+    const f = await facets(`category=${kind}`);
+    if (!f) { // facets unavailable: list everything rather than nothing
+      out.push(`/${kind}`, ...choices.map((c) => href(c.value)));
+      continue;
+    }
+    const counts = new Map(f.game.map((g) => [g.value, g.count]));
+    const live = choices.filter((c) => (counts.get(c.value) ?? 0) > 0);
+    if (live.length) out.push(`/${kind}`, ...live.map((c) => href(c.value)));
+  }
+  return out;
+}
+
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const pages = [
     "/",
-    "/sports",
-    "/tcg",
-    "/nonsport",
-    ...cat.sports.map((s) => sportHref(s.value)),
-    ...cat.games.map((g) => gameHref(g.value)),
-    ...cat.nonsport.map((g) => nonsportHref(g.value)),
+    ...(await categoryUrls()),
     "/help",
     ...ARTICLES.filter((a) => !a.draft).map((a) => `/help/${a.slug}`),
     "/announcements",

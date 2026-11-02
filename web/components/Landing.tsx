@@ -9,6 +9,7 @@ import { SearchView, type SP } from "@/components/SearchView";
 import { categoryInfo, landingHref, slugFor, type CategoryKind } from "@/lib/format";
 import { choicesFor, getCatalog, type Choice } from "@/lib/catalog";
 import { SITE_URL, ldJson } from "@/lib/seo";
+import { search } from "@/lib/api";
 
 // What collectors look for in each, for the intro. Anything not listed gets
 // the general wording for its category.
@@ -80,14 +81,19 @@ export async function landingMetadata(kind: CategoryKind, slug: string | undefin
   const title = choice ? subjectHeading(kind, choice) : KIND[kind].heading;
   const description = introText(kind, choice).slice(0, 300);
   const url = SITE_URL + landingHref(kind, choice?.value);
-  // Sorting or filtering this page makes a variant that shouldn't compete with it.
+  // Sorting or filtering this page makes a variant that shouldn't compete with
+  // it. An empty page is kept out of the index too (search engines call it a
+  // "soft 404"); it's indexed again once cards are listed there.
   const extra = Object.keys(sansFilters(sp)).length > 0;
+  const qs = `category=${kind}${choice ? `&game=${encodeURIComponent(choice.value)}` : ""}&limit=1`;
+  const found = await search(qs);
+  const empty = !found.failed && found.total === 0;
   return {
     title,
     description,
     alternates: { canonical: url },
     openGraph: { type: "website", url, title, description },
-    ...(extra ? { robots: { index: false, follow: true } } : {}),
+    ...(extra || empty ? { robots: { index: false, follow: true } } : {}),
   };
 }
 
