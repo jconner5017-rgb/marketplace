@@ -185,12 +185,19 @@ func run(log *slog.Logger) error {
 	if err != nil {
 		return err
 	}
+	shipMode := "test"
+	if strings.HasPrefix(cfg.ShippoAPIKey, "shippo_live_") {
+		shipMode = "live"
+	}
+	if ship != nil && ship.Name() == "shippo" && sellerSvc.Live && shipMode != "live" {
+		// Real card payments with a test shipping key would charge sellers
+		// real money for test labels USPS won't accept. Labels stay off
+		// until SHIPPO_API_KEY is a live key.
+		log.Error("shipping labels off: payments are live but SHIPPO_API_KEY is a test key - set the live Shippo key")
+		ship = nil
+	}
 	if ship != nil {
 		checkoutSvc.Ship = ship
-		shipMode := "test"
-		if strings.HasPrefix(cfg.ShippoAPIKey, "shippo_live_") {
-			shipMode = "live"
-		}
 		log.Info("shipping labels", "provider", ship.Name(), "mode", shipMode, "card_payments", checkoutSvc.Platform != nil,
 			"tracking_webhook", cfg.ShippingWebhookToken != "")
 	}
