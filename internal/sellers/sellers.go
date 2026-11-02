@@ -159,6 +159,21 @@ func (s *Service) RetireOtherModeSellers(ctx context.Context) (int, error) {
 	return int(n), nil
 }
 
+// ClearOtherModeLabelCards runs at startup: a saved label card made under the
+// other Stripe key (the sandbox, once the live key is in) can't be charged or
+// added to, so it's dropped; the seller saves a card again in Shipping.
+func (s *Service) ClearOtherModeLabelCards(ctx context.Context) (int, error) {
+	res, err := s.DB.ExecContext(ctx, `
+		UPDATE seller_profiles SET stripe_customer_id = NULL, label_payment_method = NULL, label_card = NULL,
+			stripe_customer_livemode = $1, updated_at = now()
+		WHERE stripe_customer_id IS NOT NULL AND stripe_customer_livemode <> $1`, s.Live)
+	if err != nil {
+		return 0, err
+	}
+	n, _ := res.RowsAffected()
+	return int(n), nil
+}
+
 func (s *Service) ensureAccount(ctx context.Context, userID, email string) (string, error) {
 	tx, err := s.DB.BeginTx(ctx, nil)
 	if err != nil {

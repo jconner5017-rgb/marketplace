@@ -204,6 +204,11 @@ func run(log *slog.Logger) error {
 		} else if n > 0 {
 			log.Info("sellers set up in the other Stripe mode sent back to set up payments", "count", n, "live", sellerSvc.Live)
 		}
+		if n, err := sellerSvc.ClearOtherModeLabelCards(ctx); err != nil {
+			log.Error("clear other-mode label cards", "err", err)
+		} else if n > 0 {
+			log.Info("saved label cards from the other Stripe mode removed", "count", n, "live", sellerSvc.Live)
+		}
 	}
 	fcmSvc := &fcm.Service{DB: database}
 	feedbackSvc := &feedback.Service{DB: database, Rep: reputation}

@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"database/sql"
 	"github.com/jconner5017-rgb/marketplace/internal/demo"
 	"strings"
 	"testing"
@@ -150,5 +151,27 @@ func TestSandboxSellersRetiredOnLiveKey(t *testing.T) {
 	// Running again changes nothing.
 	if n, _ := e.srv.sellers.RetireOtherModeSellers(context.Background()); n != 0 {
 		t.Fatalf("second retire: %d", n)
+	}
+
+	// A label card saved under the sandbox key is dropped once live...
+	e.db.Exec(`UPDATE seller_profiles sp SET stripe_customer_id = 'cus_sandbox', label_payment_method = 'pm_sandbox',
+		label_card = 'Visa ending 4242', stripe_customer_livemode = false FROM users u WHERE u.id = sp.user_id AND u.username = 'sandbox_sam'`)
+	if n, err := e.srv.sellers.ClearOtherModeLabelCards(context.Background()); err != nil || n != 1 {
+		t.Fatalf("clear label cards: %d %v", n, err)
+	}
+	var cus, pm sql.NullString
+	e.db.QueryRow(`SELECT stripe_customer_id, label_payment_method FROM seller_profiles sp JOIN users u ON u.id = sp.user_id
+		WHERE u.username = 'sandbox_sam'`).Scan(&cus, &pm)
+	if cus.Valid || pm.Valid {
+		t.Fatalf("sandbox label card kept: %v %v", cus, pm)
+	}
+	// ...and a card saved now is recorded as live, so it isn't dropped again.
+	var sellerID string
+	e.db.QueryRow(`SELECT id FROM users WHERE username = 'sandbox_sam'`).Scan(&sellerID)
+	if _, err := e.co.StartCardSetup(context.Background(), sellerID, "sam@example.test"); err != nil {
+		t.Fatalf("card setup: %v", err)
+	}
+	if n, _ := e.srv.sellers.ClearOtherModeLabelCards(context.Background()); n != 0 {
+		t.Fatalf("live card dropped: %d", n)
 	}
 }

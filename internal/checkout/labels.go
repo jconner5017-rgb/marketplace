@@ -91,7 +91,8 @@ func (s *Service) StartCardSetup(ctx context.Context, sellerID, email string) (s
 		if err != nil {
 			return "", err
 		}
-		if _, err := s.DB.ExecContext(ctx, `UPDATE seller_profiles SET stripe_customer_id = $2 WHERE user_id = $1`, sellerID, id); err != nil {
+		if _, err := s.DB.ExecContext(ctx, `UPDATE seller_profiles SET stripe_customer_id = $2, stripe_customer_livemode = $3 WHERE user_id = $1`,
+			sellerID, id, s.Sellers != nil && s.Sellers.Live); err != nil {
 			return "", err
 		}
 		cus.String = id
