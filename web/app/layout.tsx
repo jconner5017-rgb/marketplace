@@ -1,9 +1,13 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import { Archivo } from "next/font/google";
 import "./globals.css";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { SITE_NAME } from "@/lib/format";
+
+/** Google Analytics measurement ID (public; it appears in the page source). */
+const GA_ID = "G-CX195187X0";
 
 const archivo = Archivo({
   subsets: ["latin"],
@@ -23,6 +27,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={archivo.variable}>
       <body className="min-h-screen font-sans text-[15px] leading-normal">
+        {/* Google Analytics (gtag.js) on every page. Page changes inside the
+            site are counted by GA4's enhanced measurement (history changes). */}
+        <Script src={`https://www.googletagmanager.com/gtag/js?id=${GA_ID}`} strategy="afterInteractive" />
+        <Script id="google-analytics" strategy="afterInteractive">
+          {`window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', '${GA_ID}');`}
+        </Script>
         <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:bg-paper focus:px-3 focus:py-2">
           Skip to content
         </a>
