@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Script from "next/script";
 import { search } from "@/lib/api";
 import { ListingTile } from "@/components/CardBits";
 import type { Listing } from "@/lib/types";
@@ -8,6 +9,9 @@ import { SITE_URL, ldJson } from "@/lib/seo";
 import { SITE_NAME } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
+
+/** Google Analytics measurement ID (public; it appears in the page source). */
+const GA_ID = "G-CX195187X0";
 
 /** Every shelf but Newly listed is shuffled on each visit, so no card holds a fixed, favoured spot. */
 function shuffle<T>(xs: T[]): T[] {
@@ -44,6 +48,14 @@ export default async function Home() {
   return (
     <div className="pt-6">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: ldJson(site) }} />
+      {/* Google Analytics (gtag.js), home page only. */}
+      <Script src={`https://www.googletagmanager.com/gtag/js?id=${GA_ID}`} strategy="afterInteractive" />
+      <Script id="google-analytics" strategy="afterInteractive">
+        {`window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', '${GA_ID}');`}
+      </Script>
       {/* Opening band: what the place is, in one line, plus the two ways in. */}
       <section className="grid gap-4 lg:grid-cols-[1.1fr_1fr]">
         <div className="rounded-lg bg-ink px-6 py-7 text-white">
