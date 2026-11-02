@@ -24,7 +24,8 @@ var Sports = []string{
 var Games = []string{
 	"Pokemon", "Magic", "Yu-Gi-Oh!", "One Piece", "Lorcana", "Dragon Ball",
 	"Digimon", "Weiss Schwarz", "Flesh and Blood", "Final Fantasy", "Star Wars",
-	"Lord of the Rings", "Naruto", "UniVersus", "Cardfight!! Vanguard", OtherTCG,
+	"Lord of the Rings", "Naruto", "UniVersus", "Cardfight!! Vanguard", "Sorcery", "MetaZoo",
+	"Riftbound", "Netrunner", "World of Warcraft", "My Little Pony", OtherTCG,
 }
 
 const OtherTCG = "Other TCG"
@@ -77,6 +78,12 @@ var gameAliases = map[string]string{
 	"naruto ccg": "Naruto", "naruto tcg": "Naruto",
 	"universal fighting system": "UniVersus", "ufs": "UniVersus", "universus ccg": "UniVersus",
 	"cardfight vanguard": "Cardfight!! Vanguard", "cardfight!! vanguard tcg": "Cardfight!! Vanguard", "vanguard": "Cardfight!! Vanguard",
+	"sorcery: contested realm": "Sorcery", "sorcery contested realm": "Sorcery", "sorcery tcg": "Sorcery",
+	"metazoo ccg": "MetaZoo", "metazoo tcg": "MetaZoo",
+	"riftbound: league of legends tcg": "Riftbound", "riftbound tcg": "Riftbound", "league of legends tcg": "Riftbound",
+	"android netrunner": "Netrunner", "android: netrunner": "Netrunner", "netrunner lcg": "Netrunner",
+	"world of warcraft tcg": "World of Warcraft", "wow tcg": "World of Warcraft",
+	"my little pony ccg": "My Little Pony", "mlp ccg": "My Little Pony",
 	"other": OtherTCG, "other tcg": OtherTCG,
 }
 
@@ -97,6 +104,10 @@ var defaultLabels = map[string][2]string{
 	"Naruto":               {"Naruto CCG", "Naruto"},
 	"UniVersus":            {"UniVersus (UFS)", "UniVersus"},
 	"Cardfight!! Vanguard": {"Cardfight!! Vanguard", "Vanguard"},
+	"Sorcery":              {"Sorcery: Contested Realm", "Sorcery"},
+	"Riftbound":            {"Riftbound: League of Legends TCG", "Riftbound"},
+	"World of Warcraft":    {"World of Warcraft TCG", "World of Warcraft"},
+	"My Little Pony":       {"My Little Pony CCG", "My Little Pony"},
 	"Superheroes":          {"Superheroes (Marvel, DC)", "Superheroes"},
 	"Sci-Fi":               {"Sci-Fi", "Sci-Fi"},
 	"Entertainment":        {"Movies & TV", "Movies & TV"},

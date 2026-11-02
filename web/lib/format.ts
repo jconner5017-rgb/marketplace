@@ -68,6 +68,12 @@ export const GAMES: { value: string; label: string; short: string }[] = [
   { value: "Naruto", label: "Naruto CCG", short: "Naruto" },
   { value: "UniVersus", label: "UniVersus (UFS)", short: "UniVersus" },
   { value: "Cardfight!! Vanguard", label: "Cardfight!! Vanguard", short: "Vanguard" },
+  { value: "Sorcery", label: "Sorcery: Contested Realm", short: "Sorcery" },
+  { value: "MetaZoo", label: "MetaZoo", short: "MetaZoo" },
+  { value: "Riftbound", label: "Riftbound: League of Legends TCG", short: "Riftbound" },
+  { value: "Netrunner", label: "Netrunner", short: "Netrunner" },
+  { value: "World of Warcraft", label: "World of Warcraft TCG", short: "World of Warcraft" },
+  { value: "My Little Pony", label: "My Little Pony CCG", short: "My Little Pony" },
   { value: "Other TCG", label: "Other trading card games", short: "Other TCG" },
 ];
 

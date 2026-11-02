@@ -21,7 +21,8 @@ func TestNormalizeGameOrSport(t *testing.T) {
 		{"tcg", "vanguard", "Cardfight!! Vanguard"},
 		{"tcg", "SWU", "Star Wars"},
 		{"tcg", "other", "Other TCG"},
-		{"tcg", "Sorcery Contested Realm", "Sorcery Contested Realm"}, // unknown: rejected by validate
+		{"tcg", "Sorcery Contested Realm", "Sorcery"},
+		{"tcg", "Gloomhaven Duel Masters", "Gloomhaven Duel Masters"}, // unknown: rejected by validate
 	}
 	for _, c := range cases {
 		if got := normalizeGameOrSport(c.cat, c.in); got != c.want {
@@ -53,7 +54,7 @@ func TestSportsAreRequiredToBeKnown(t *testing.T) {
 			t.Errorf("%s rejected: %v", g, err)
 		}
 	}
-	in.GameOrSport = "Sorcery Contested Realm"
+	in.GameOrSport = "Gloomhaven Duel Masters"
 	if err := in.validate(100000); err == nil {
 		t.Error("unknown game accepted; it should go under Other TCG")
 	}
