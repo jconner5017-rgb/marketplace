@@ -187,7 +187,11 @@ func run(log *slog.Logger) error {
 	}
 	if ship != nil {
 		checkoutSvc.Ship = ship
-		log.Info("shipping labels", "provider", ship.Name(), "card_payments", checkoutSvc.Platform != nil,
+		shipMode := "test"
+		if strings.HasPrefix(cfg.ShippoAPIKey, "shippo_live_") {
+			shipMode = "live"
+		}
+		log.Info("shipping labels", "provider", ship.Name(), "mode", shipMode, "card_payments", checkoutSvc.Platform != nil,
 			"tracking_webhook", cfg.ShippingWebhookToken != "")
 	}
 	log.Info("checkout", "enabled", checkoutSvc.Ready(), "return_to", cfg.WebURL)
