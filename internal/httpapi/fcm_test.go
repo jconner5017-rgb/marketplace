@@ -24,7 +24,9 @@ func api(t *testing.T, e *env, key, method, path string, body any, idem string) 
 		rdr = bytes.NewReader(b)
 	}
 	req, _ := http.NewRequest(method, e.ts.URL+path, rdr)
-	req.Header.Set("Content-Type", "application/json")
+	if body != nil { // like FireCardManager: no Content-Type on bodyless calls
+		req.Header.Set("Content-Type", "application/json")
+	}
 	if key != "" {
 		req.Header.Set("Authorization", "Bearer "+key)
 	}
@@ -92,6 +94,12 @@ func TestFCMListingsAPI(t *testing.T) {
 	code, p, _ := api(t, e, key, "PATCH", "/v1/listings/FCM-2", map[string]any{"price_cents": 450, "quantity": 3}, "")
 	if code != 200 || p["listing"].(map[string]any)["price_cents"].(float64) != 450 {
 		t.Fatalf("patch: %d %v", code, p)
+	}
+	// Without an API key, a bodyless DELETE is still refused (CSRF guard).
+	if req, _ := http.NewRequest("DELETE", e.ts.URL+"/v1/listings/FCM-2", nil); true {
+		if res, err := http.DefaultClient.Do(req); err != nil || res.StatusCode != http.StatusUnsupportedMediaType {
+			t.Fatalf("keyless bodyless DELETE: %v %v", err, res.StatusCode)
+		}
 	}
 	if code, _, _ := api(t, e, key, "DELETE", "/v1/listings/FCM-2", nil, ""); code != 204 {
 		t.Fatalf("delete: %d", code)

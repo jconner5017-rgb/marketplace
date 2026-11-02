@@ -66,8 +66,16 @@ func requestLogger(log *slog.Logger, next http.Handler) http.Handler {
 // a CORS preflight, so together with SameSite cookies this blocks CSRF.
 func requireJSONForWrites(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// A request signed with an API key (FireCardManager) can't be forged
+		// cross-site: a browser can't attach an Authorization header to
+		// another site without a preflight. Bodyless calls like DELETE send
+		// no Content-Type, so they're let through here.
+		apiKey := strings.HasPrefix(r.Header.Get("Authorization"), "Bearer ")
 		switch r.Method {
 		case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
+			if apiKey && (r.Method == http.MethodDelete || r.ContentLength == 0) {
+				break
+			}
 			// text/csv (bulk import) and image/* (photo uploads) also force a
 			// preflight; form posts and text/plain don't.
 			mt, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type"))
