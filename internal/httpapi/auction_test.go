@@ -353,8 +353,9 @@ func TestBestOffer(t *testing.T) {
 	if gusStatus != "declined" {
 		t.Fatalf("other offers should close: %s", gusStatus)
 	}
-	if code, _ := do(t, client(t), "GET", e.ts.URL+"/v1/listings/"+id, nil); code != 404 {
-		t.Fatalf("sold-out listing should be gone: %d", code)
+	// Its page stays up, marked sold (see TestSoldListingStaysViewable).
+	if code, b := do(t, client(t), "GET", e.ts.URL+"/v1/listings/"+id, nil); code != 200 || b["listing"].(map[string]any)["status"] != "sold_out" {
+		t.Fatalf("sold-out listing page: %d %v", code, b)
 	}
 	_, sh := do(t, sc, "GET", e.ts.URL+"/v1/holds?side=selling", nil)
 	if len(sh["holds"].([]any)) != 2 {

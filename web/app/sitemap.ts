@@ -32,9 +32,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const cat = await getCatalog();
   const pages = [
     "/",
-    "/search?category=sports",
-    "/search?category=tcg",
-    "/search?category=nonsport",
+    "/sports",
+    "/tcg",
+    "/nonsport",
     ...cat.sports.map((s) => sportHref(s.value)),
     ...cat.games.map((g) => gameHref(g.value)),
     ...cat.nonsport.map((g) => nonsportHref(g.value)),

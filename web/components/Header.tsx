@@ -95,9 +95,9 @@ export default async function Header() {
       {/* Category menus + shortcuts. <details> menus work without JavaScript. */}
       <nav aria-label="Categories" className="mx-auto max-w-[1280px] px-4">
         <ul className="flex flex-wrap items-center gap-x-5 gap-y-1 pb-2 text-[13px] text-muted">
-          <li><Menu label="Sports cards" allHref="/search?category=sports" items={cat.sports.map((s) => ({ label: s.label, href: sportHref(s.value) }))} /></li>
-          <li><Menu label="Trading card games" allHref="/search?category=tcg" items={cat.games.map((g) => ({ label: g.label, href: gameHref(g.value) }))} /></li>
-          <li><Menu label="Non-sport cards" allHref="/search?category=nonsport" items={cat.nonsport.map((g) => ({ label: g.label, href: nonsportHref(g.value) }))} /></li>
+          <li><Menu label="Sports cards" allHref="/sports" items={cat.sports.map((s) => ({ label: s.label, href: sportHref(s.value) }))} /></li>
+          <li><Menu label="Trading card games" allHref="/tcg" items={cat.games.map((g) => ({ label: g.label, href: gameHref(g.value) }))} /></li>
+          <li><Menu label="Non-sport cards" allHref="/nonsport" items={cat.nonsport.map((g) => ({ label: g.label, href: nonsportHref(g.value) }))} /></li>
           {QUICK_LINKS.map((c) => (
             <li key={c.label}>
               <Link href={c.href} className="hover:text-ink hover:underline">{c.label}</Link>

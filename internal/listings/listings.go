@@ -514,12 +514,15 @@ const publicJoin = `
 	  AND l.price_cents <= CASE sp.tier WHEN 1 THEN 2000 WHEN 2 THEN 25000 ELSE 100000 END`
 
 // viewJoin is publicJoin plus finished auctions, so bidders and winners can
-// still open an auction's page after it ends.
+// still open an auction's page after it ends, and sold-out fixed-price cards,
+// whose pages stay up marked "Sold" (they keep any search ranking and links
+// they earned, and point visitors to similar cards). Buying still checks Open().
 const viewJoin = `
 	JOIN users u ON u.id = l.seller_id AND u.status = 'active'
 	JOIN seller_profiles sp ON sp.user_id = l.seller_id AND sp.charges_enabled AND sp.review_status <> 'rejected'
 	WHERE ((l.status = 'active' AND l.quantity > 0 AND (l.format = 'fixed' OR l.auction_state = 'live'))
-	       OR (l.format = 'auction' AND l.status = 'ended'))`
+	       OR (l.format = 'auction' AND l.status = 'ended')
+	       OR (l.format = 'fixed' AND l.status = 'sold_out'))`
 
 // Update applies a patch to the seller's listing.
 func (s *Service) Update(ctx context.Context, sellerID, id string, p Patch) (Listing, error) {

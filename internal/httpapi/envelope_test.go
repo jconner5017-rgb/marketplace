@@ -135,3 +135,27 @@ func TestSampleShopCheckout(t *testing.T) {
 		t.Fatalf("sample shop left behind %d rows", left)
 	}
 }
+
+// A sold fixed-price card's page stays up (marked sold) but can't be bought
+// or asked about.
+func TestSoldListingStaysViewable(t *testing.T) {
+	e := setupEnv(t)
+	sc, _ := newSeller(t, e, "sold_sally", true)
+	id := createListing(t, e, &httpClientT{sc}, rawCard("SOLD1", 900))["id"].(string)
+	e.db.Exec(`UPDATE listings SET status = 'sold_out', quantity = 0 WHERE id = $1`, id)
+
+	anon := client(t)
+	code, body := do(t, anon, "GET", e.ts.URL+"/v1/listings/"+id, nil)
+	if code != 200 || body["listing"].(map[string]any)["status"] != "sold_out" {
+		t.Fatalf("sold page: %d %v", code, body)
+	}
+	// Not in search results.
+	_, body = do(t, anon, "GET", e.ts.URL+"/v1/listings?seller=sold_sally", nil)
+	if body["total"].(float64) != 0 {
+		t.Fatalf("sold card in search: %v", body["total"])
+	}
+	b := buyer(t, e, "late_larry")
+	if code, _ := do(t, b.c, "PUT", e.ts.URL+"/v1/cart/"+id, map[string]int{"quantity": 1}); code < 400 {
+		t.Fatalf("sold card added to cart: %d", code)
+	}
+}

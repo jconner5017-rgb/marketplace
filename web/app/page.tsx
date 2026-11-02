@@ -2,7 +2,7 @@ import Link from "next/link";
 import { search } from "@/lib/api";
 import { ListingTile } from "@/components/CardBits";
 import type { Listing } from "@/lib/types";
-import { gameHref, sportHref, nonsportHref } from "@/lib/format";
+import { gameHref, sportHref, nonsportHref, landingHref } from "@/lib/format";
 import { getCatalog } from "@/lib/catalog";
 import { SITE_URL, ldJson } from "@/lib/seo";
 import { SITE_NAME } from "@/lib/format";
@@ -67,7 +67,7 @@ export default async function Home() {
           {SHELVES.map((s) => (
             <div key={s.title} className="rounded-lg border border-line p-4">
               <h2 className="font-bold">
-                <Link href={`/search?category=${s.category}`} className="hover:underline">{s.title}</Link>
+                <Link href={landingHref(s.category)} className="hover:underline">{s.title}</Link>
               </h2>
               <ul className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[14px]">
                 {s.items.map((g) => (

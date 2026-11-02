@@ -103,18 +103,28 @@ export function gameLabel(value: string): string {
   return LABELS[value] ?? value;
 }
 
+/** URL slug for a sport, game or theme: "Auto Racing" -> "auto-racing", "Yu-Gi-Oh!" -> "yu-gi-oh". */
+export function slugFor(v: string): string {
+  return v
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase().replace(/&/g, " and ").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+}
+/** The clean category page: /sports, /tcg/pokemon, /nonsport/superheroes. */
+export function landingHref(category: string, v?: string | null): string {
+  return v ? `/${category}/${slugFor(v)}` : `/${category}`;
+}
 export function sportHref(v: string) {
-  return `/search?category=sports&game=${encodeURIComponent(v)}`;
+  return landingHref("sports", v);
 }
 export function gameHref(v: string) {
-  return `/search?category=tcg&game=${encodeURIComponent(v)}`;
+  return landingHref("tcg", v);
 }
 export function nonsportHref(v: string) {
-  return `/search?category=nonsport&game=${encodeURIComponent(v)}`;
+  return landingHref("nonsport", v);
 }
-/** Search link for one sport, game or theme within its category. */
+/** Link for one sport, game or theme within its category. */
 export function subjectHref(category: string, v: string) {
-  return `/search?category=${encodeURIComponent(category)}&game=${encodeURIComponent(v)}`;
+  return landingHref(category, v);
 }
 
 /** Quick links shown next to the Sports and Trading cards menus. */

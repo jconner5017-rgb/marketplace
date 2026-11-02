@@ -57,6 +57,9 @@ func (s *Service) AskSeller(ctx context.Context, buyerID, buyerName, listingID, 
 	if err != nil {
 		return "", err
 	}
+	if l.Status == "sold_out" { // sold cards' pages stay up, but they can't be asked about
+		return "", ErrNotAvailable
+	}
 	if l.SellerID == buyerID {
 		return "", ErrOwnListing
 	}

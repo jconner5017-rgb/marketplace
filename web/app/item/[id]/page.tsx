@@ -10,7 +10,7 @@ import ContactSeller from "@/components/ContactSeller";
 import ReportButton from "@/components/ReportButton";
 import { GradeBadge, ListingTile } from "@/components/CardBits";
 import Gallery from "@/components/Gallery";
-import { CONDITIONS, categoryInfo, gradeLabel, money } from "@/lib/format";
+import { CONDITIONS, categoryInfo, gradeLabel, landingHref, money } from "@/lib/format";
 import { getCatalog, labelFor } from "@/lib/catalog";
 import { SITE_URL, describeListing, ldJson, productJsonLd } from "@/lib/seo";
 
@@ -21,7 +21,8 @@ type Props = { params: Promise<{ id: string }> };
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const [l, cat] = await Promise.all([getListing((await params).id), getCatalog()]);
   if (!l) return { title: "Listing not found", robots: { index: false } };
-  const title = l.format === "auction" ? `${l.title} — auction, ${money(l.price_cents)}` : `${l.title} — ${money(l.price_cents)}`;
+  const sold = l.status === "sold_out";
+  const title = sold ? `${l.title} — sold` : l.format === "auction" ? `${l.title} — auction, ${money(l.price_cents)}` : `${l.title} — ${money(l.price_cents)}`;
   const description = describeListing(l, labelFor(cat, l.game_or_sport));
   const url = `${SITE_URL}/item/${l.id}`;
   return {
@@ -31,7 +32,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     openGraph: { type: "website", url, title, description, images: l.photo_urls.slice(0, 1) },
     twitter: { card: "summary_large_image", title, description, images: l.photo_urls.slice(0, 1) },
     // Finished auctions stay viewable for bidders but leave search results.
-    ...(l.status !== "active" ? { robots: { index: false, follow: true } } : {}),
+    // Sold cards stay indexed: their pages keep earned rankings and point to similar cards.
+    ...(l.status !== "active" && !sold ? { robots: { index: false, follow: true } } : {}),
   };
 }
 
@@ -40,15 +42,24 @@ export default async function ItemPage({ params }: Props) {
   if (!l) notFound();
 
   const isAuction = l.format === "auction" && !!l.auction;
-  const [more, me, bids, catalog, rep] = await Promise.all([
+  const sold = l.status === "sold_out";
+  const game = encodeURIComponent(l.game_or_sport);
+  const [more, me, bids, catalog, rep, bySet, byGame] = await Promise.all([
     search(`seller=${encodeURIComponent(l.seller_username)}&limit=7`),
     getSummary(),
     isAuction ? getBids(l.id) : Promise.resolve(null),
     getCatalog(),
     apiGet<{ summary: FeedbackSummary }>(`/v1/members/${encodeURIComponent(l.seller_username)}/feedback?role=seller&limit=1`),
+    // A sold card's page points to similar cards still for sale: same set first, then the same sport or game.
+    sold && l.set_name ? search(`category=${l.category}&game=${game}&set=${encodeURIComponent(l.set_name)}&limit=12`) : Promise.resolve(null),
+    sold ? search(`category=${l.category}&game=${game}&limit=12`) : Promise.resolve(null),
   ]);
+  const similar = [...(bySet?.listings ?? []), ...(byGame?.listings ?? [])]
+    .filter((x, i, all) => x.id !== l.id && all.findIndex((y) => y.id === x.id) === i)
+    .slice(0, 6);
   const others = more.listings.filter((x) => x.id !== l.id).slice(0, 6);
-  const gameHref = `/search?category=${l.category}&game=${encodeURIComponent(l.game_or_sport)}`;
+  const gameHref = landingHref(l.category, l.game_or_sport);
+  const setHref = `/search?category=${l.category}&game=${encodeURIComponent(l.game_or_sport)}&set=${encodeURIComponent(l.set_name)}`;
 
   const specifics: [string, string | null][] = [
     ["Category", categoryInfo(l.category)?.one ?? "Card"],
@@ -70,13 +81,13 @@ export default async function ItemPage({ params }: Props) {
       <nav aria-label="Breadcrumb" className="text-[13px] text-muted">
         <Link href="/" className="hover:underline">Home</Link>
         <span className="mx-1.5">›</span>
-        <Link href={`/search?category=${l.category}`} className="hover:underline">
+        <Link href={landingHref(l.category)} className="hover:underline">
           {categoryInfo(l.category)?.label ?? "Cards"}
         </Link>
         <span className="mx-1.5">›</span>
         <Link href={gameHref} className="hover:underline">{l.game_or_sport}</Link>
         <span className="mx-1.5">›</span>
-        <Link href={`${gameHref}&set=${encodeURIComponent(l.set_name)}`} className="hover:underline">{l.set_name}</Link>
+        <Link href={setHref} className="hover:underline">{l.set_name}</Link>
       </nav>
 
       <div className="mt-4 grid gap-8 lg:grid-cols-[minmax(0,1fr)_420px]">
@@ -95,7 +106,15 @@ export default async function ItemPage({ params }: Props) {
             )}
           </div>
 
-          {isAuction && bids ? (
+          {sold ? (
+            <div className="mt-4 rounded-lg border border-line bg-wash p-4">
+              <p className="text-[20px] font-bold">This card has sold</p>
+              <p className="num mt-1 text-[14px] text-muted">Last listed at {money(l.price_cents)}</p>
+              <Link href={gameHref} className="mt-3 inline-block rounded-full bg-ink px-4 py-2 text-[14px] font-semibold text-white hover:opacity-90">
+                Shop {labelFor(catalog, l.game_or_sport)} cards
+              </Link>
+            </div>
+          ) : isAuction && bids ? (
             <>
               <AuctionPanel l={l} history={bids} signedIn={!!me} />
               <p className="mt-2 text-[14px] text-ship">Free shipping · USPS</p>
@@ -122,7 +141,7 @@ export default async function ItemPage({ params }: Props) {
             ) : (
               <p className="mt-1 text-muted">Raw cards ship sleeved and protected.</p>
             )}
-            <ContactSeller id={l.id} seller={l.seller_username} signedIn={!!me} />
+            {!sold && <ContactSeller id={l.id} seller={l.seller_username} signedIn={!!me} />}
           </div>
           <div className="mt-3">
             <ReportButton type="listing" id={l.id} label="Report this listing" signedIn={!!me} next={`/item/${l.id}`} />
@@ -152,6 +171,18 @@ export default async function ItemPage({ params }: Props) {
           {isAuction && bids && <BidList history={bids} auction={l.auction!} />}
         </div>
       </section>
+
+      {similar.length > 0 && (
+        <section className="mt-12">
+          <div className="flex items-baseline justify-between border-b border-line pb-2">
+            <h2 className="text-[20px] font-bold">Similar cards for sale</h2>
+            <Link href={gameHref} className="text-[14px] text-link hover:underline">See all</Link>
+          </div>
+          <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+            {similar.map((x) => <ListingTile key={x.id} l={x} />)}
+          </div>
+        </section>
+      )}
 
       {others.length > 0 && (
         <section className="mt-12">
