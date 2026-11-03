@@ -14,14 +14,14 @@ type ShipEstimate = { method: "stamp" | "label"; cost_cents: number; label_cents
 /** Stripe's US card fee on a payment, taken from the seller's Stripe balance. */
 const stripeFee = (cents: number) => (cents > 0 ? Math.round((cents * 290) / 10000) + 30 : 0);
 /** Used until the live quote arrives. */
-const FALLBACK: Record<string, number> = { envelope: 82, bubble: 525, box: 700 };
+const FALLBACK: Record<string, number> = { envelope: 131, bubble: 525, box: 700 };
 
 /** What each package choice means; sizes match how labels are bought (internal/shipping ParcelFor). */
 const PACKAGES: Record<string, { size: string; adds: string; carrier: string; pack: string }> = {
   envelope: {
     size: "#10 or #6¾ letter envelope",
     adds: "",
-    carrier: "USPS First-Class letter with a Forever stamp (82¢). Print a tracked envelope from the order for USPS scans.",
+    carrier: "USPS First-Class letter. With a toploader inside, use a $1.31 nonmachinable stamp (82¢ Forever stamp without one). Print a tracked envelope from the order for USPS scans.",
     pack: "One raw card in a penny sleeve and a toploader (recommended for thin, non-relic cards). Thick or relic/memorabilia cards ship by envelope at your own risk. No slabs.",
   },
   bubble: {
@@ -385,7 +385,7 @@ export default function NewListingForm({ capCents, catalog, fees, initial }: {
               <dt>Card processing (Stripe, 2.9% + 30¢)</dt><dd className="text-right">−{money(stripe)}</dd>
               <dt>{preset !== "envelope" || graded
                 ? `Shipping label${ship?.service ? ` (${ship.carrier ? ship.carrier + " " : ""}${ship.service})` : " (estimate)"}`
-                : "Forever stamp"}</dt><dd className="text-right">−{money(shipCost)}</dd>
+                : "Nonmachinable stamp (toploader)"}</dt><dd className="text-right">−{money(shipCost)}</dd>
               <dt className="font-bold">You receive about</dt><dd className="text-right font-bold">{money(Math.max(0, net ?? 0))}</dd>
             </dl>
           ) : (
@@ -393,7 +393,7 @@ export default function NewListingForm({ capCents, catalog, fees, initial }: {
           )}
           <p className="mt-2 text-[12px] text-muted">
             {preset === "envelope" && !graded
-              ? "Shipping is one 82¢ Forever stamp. Stripe's fee comes out of your Stripe balance."
+              ? "Shipping is a $1.31 nonmachinable stamp, needed with a toploader (82¢ Forever stamp without one). Stripe's fee comes out of your Stripe balance."
               : ship?.live
                 ? `Label quoted from ${ship.from_set ? "your ship-from address" : "the middle of the US (add your ship-from address under Sell → Shipping for your own quote)"} to the far side of the country, including 2.9% + 30¢ card processing on the label. Nearer buyers cost less.`
                 : "Typical label price, including card processing on the label. Stripe's fee comes out of your Stripe balance."}

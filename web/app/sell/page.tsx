@@ -33,7 +33,7 @@ function SellingCosts({ fees }: { fees: FeeSchedule }) {
         <li><strong>Card processing:</strong> Stripe&apos;s fee, usually 2.9% + 30¢ per order, comes out of your Stripe balance.</li>
         <li>
           <strong>Shipping:</strong> buyers never pay it, so it&apos;s yours. One raw card up to $20 can go in an envelope with a
-          Forever stamp (82¢). Everything else ships with a tracked label you buy from the order at the carrier&apos;s price, plus
+          $1.31 nonmachinable stamp (82¢ Forever stamp without a toploader). Everything else ships with a tracked label you buy from the order at the carrier&apos;s price, plus
           2.9% + 30¢ card processing on the label. A bubble mailer by USPS Ground Advantage is usually about $5–7.
         </li>
       </ul>

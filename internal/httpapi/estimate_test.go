@@ -16,7 +16,7 @@ func TestShippingEstimate(t *testing.T) {
 		}
 		return body["estimate"].(map[string]any)
 	}
-	if est := get("preset=envelope&weight_oz=1&price_cents=500"); est["method"] != "stamp" || est["cost_cents"].(float64) != 82 {
+	if est := get("preset=envelope&weight_oz=1&price_cents=500"); est["method"] != "stamp" || est["cost_cents"].(float64) != 131 {
 		t.Fatalf("envelope: %v", est)
 	}
 	// Before a ship-from address is saved, the quote comes from the middle of the country.

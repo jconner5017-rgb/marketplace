@@ -14,8 +14,13 @@ import (
 	"github.com/jconner5017-rgb/marketplace/internal/shipping"
 )
 
-// StampCents is a USPS Forever stamp, used for envelope listings.
+// StampCents is a USPS Forever stamp (1 oz letter).
 const StampCents = 82
+
+// NonmachinableStampCents is the stamp for a letter USPS can't run through
+// its machines, such as one with a rigid toploader inside: the Forever rate
+// plus the 49¢ nonmachinable surcharge. USPS sells $1.31 stamps for this.
+const NonmachinableStampCents = 131
 
 // Stripe's US card pricing, charged on each order and taken from the
 // seller's Stripe balance.
@@ -77,7 +82,7 @@ var (
 // yet), falling back to a typical price when no quote can be had.
 func (s *Service) EstimateShipping(ctx context.Context, sellerID, preset string, weightOz float64, graded bool, priceCents int) (ShippingEstimate, error) {
 	if preset == "envelope" && !graded {
-		return ShippingEstimate{Method: "stamp", CostCents: StampCents, LabelCents: StampCents, Service: "Forever stamp", Live: true}, nil
+		return ShippingEstimate{Method: "stamp", CostCents: NonmachinableStampCents, LabelCents: NonmachinableStampCents, Service: "Nonmachinable stamp", Live: true}, nil
 	}
 	if preset != "bubble" && preset != "box" {
 		preset = "bubble"
