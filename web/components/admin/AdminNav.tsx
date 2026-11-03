@@ -24,6 +24,7 @@ export const ADMIN_NAV: { group: string; items: { href: string; label: string; p
     { href: "/admin/shipping", label: "Shipping", perm: "orders.view" },
     { href: "/admin/refunds", label: "Refunds and chargebacks", perm: "orders.view" },
     { href: "/admin/fees", label: "Fees", perm: "orders.view" },
+    { href: "/admin/promos", label: "Promo codes", perm: "orders.view" },
   ] },
   { group: "Disputes", items: [
     { href: "/admin/cases", label: "Cases", perm: "cases.manage" },

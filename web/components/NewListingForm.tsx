@@ -91,6 +91,10 @@ export default function NewListingForm({ capCents, catalog, fees, initial }: {
   const [weight, setWeight] = useState(String(initial?.weight_oz ?? 1));
   const [ship, setShip] = useState<ShipEstimate | null>(null);
   const [thick, setThick] = useState(false);
+  const [freeLeft, setFreeLeft] = useState(0);
+  useEffect(() => {
+    send<{ fee_free_sales_left: number }>("GET", "/v1/seller/promos").then((r) => { if (r.ok) setFreeLeft(r.data.fee_free_sales_left); });
+  }, []);
   // Real shipping cost: a stamp, or a label quote from the seller's ship-from address.
   useEffect(() => {
     const t = setTimeout(async () => {
@@ -102,7 +106,8 @@ export default function NewListingForm({ capCents, catalog, fees, initial }: {
   }, [preset, weight, graded, thick, cents]);
   const shipCost = ship?.cost_cents ?? (graded && preset === "envelope" ? FALLBACK.box : preset === "envelope" && thick ? 131 : FALLBACK[preset] ?? 0);
   const stripe = cents != null ? stripeFee(cents) : 0;
-  const net = cents != null ? cents - FEE(cents) - stripe - shipCost : null;
+  const fee = cents != null && freeLeft === 0 ? FEE(cents) : 0;
+  const net = cents != null ? cents - fee - stripe - shipCost : null;
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -388,7 +393,8 @@ export default function NewListingForm({ capCents, catalog, fees, initial }: {
           {cents != null ? (
             <dl className="num mt-2 grid grid-cols-[1fr_auto] gap-y-1">
               <dt>{format === "auction" ? "If it sells at the starting bid" : "Sale price"}</dt><dd className="text-right">{money(cents)}</dd>
-              <dt>Marketplace fee</dt><dd className="text-right">−{money(FEE(cents))}</dd>
+              <dt>Marketplace fee{freeLeft > 0 && <span className="text-ship"> (promo: {freeLeft} fee-free {freeLeft === 1 ? "sale" : "sales"} left)</span>}</dt>
+              <dd className="text-right">{freeLeft > 0 ? <><s className="text-muted">{money(FEE(cents))}</s> $0.00</> : `−${money(fee)}`}</dd>
               <dt>Card processing (Stripe, 2.9% + 30¢)</dt><dd className="text-right">−{money(stripe)}</dd>
               <dt>{preset !== "envelope" || graded
                 ? `Shipping label${ship?.service ? ` (${ship.carrier ? ship.carrier + " " : ""}${ship.service})` : " (estimate)"}`

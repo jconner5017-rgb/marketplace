@@ -8,6 +8,8 @@ import { GradeBadge, Photo } from "@/components/CardBits";
 import ListingActions from "@/components/ListingActions";
 import BundleDiscountForm from "@/components/BundleDiscountForm";
 import TaxToggle from "@/components/TaxToggle";
+import PromoBox from "@/components/PromoBox";
+import type { Redemption } from "@/lib/promos";
 import { feeFor, feeSentence, getFees, labelCharge, stripeFee, type FeeSchedule } from "@/lib/catalog";
 
 export const dynamic = "force-dynamic";
@@ -52,9 +54,16 @@ function SellingCosts({ fees }: { fees: FeeSchedule }) {
   );
 }
 
-export default async function SellPage() {
-  const me = await requireUser("/sell");
-  const [{ status, seller }, fees] = await Promise.all([getSeller(), getFees()]);
+export default async function SellPage({ searchParams }: { searchParams: Promise<{ promo?: string }> }) {
+  const { promo } = await searchParams;
+  const code = typeof promo === "string" ? promo.slice(0, 32) : "";
+  const me = await requireUser(code ? `/sell?promo=${encodeURIComponent(code)}` : "/sell");
+  const [{ status, seller }, fees, promosR] = await Promise.all([
+    getSeller(), getFees(), apiGet<{ fee_free_sales_left: number; redemptions: Redemption[] }>("/v1/seller/promos"),
+  ]);
+  const promoBox = (
+    <PromoBox left={promosR.data?.fee_free_sales_left ?? 0} redemptions={promosR.data?.redemptions ?? []} initial={code} />
+  );
 
   if (status === 404 || !seller) {
     return (
@@ -69,6 +78,7 @@ export default async function SellPage() {
           <li>New sellers can list cards up to $20 each, rising to $250 and then $1,000 as you build feedback.</li>
         </ul>
         <SellingCosts fees={fees} />
+        <div className="mt-6">{promoBox}</div>
         <div className="mt-6"><OnboardButton label="Set up payments with Stripe" /></div>
       </div>
     );
@@ -94,6 +104,7 @@ export default async function SellPage() {
           <p className="mt-3 text-[14px] text-muted">Stripe is checking: {Array.from(new Set(seller.stripe_verifying.map(stripeNeed))).join(", ")}.</p>
         )}
         {(!seller.details_submitted || (seller.stripe_needs?.length ?? 0) > 0) && <div className="mt-6"><OnboardButton label="Continue Stripe setup" /></div>}
+        <div className="mt-6">{promoBox}</div>
       </div>
     );
   }
@@ -130,6 +141,8 @@ export default async function SellPage() {
         </div>
       </div>
 
+      {(code || (promosR.data?.fee_free_sales_left ?? 0) > 0) && <div className="mt-6">{promoBox}</div>}
+
       <div className="mt-6 grid gap-4 md:grid-cols-2">
         <div className="rounded-lg border border-line p-4">
           <h2 className="font-bold">Your price limit: {money(current.cap)} per card</h2>
@@ -160,6 +173,7 @@ export default async function SellPage() {
           </p>
           <TaxToggle on={seller.collect_tax} />
         </div>
+        {!(code || (promosR.data?.fee_free_sales_left ?? 0) > 0) && <div className="md:col-span-2">{promoBox}</div>}
       </div>
 
       {seller.review_status === "rejected" && (

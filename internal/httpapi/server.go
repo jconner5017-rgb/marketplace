@@ -46,8 +46,9 @@ type Server struct {
 	inbox      *inbox.Service
 	msgLimiter *rateLimiter
 
-	sales      *sales.Service
-	bidLimiter *rateLimiter
+	sales        *sales.Service
+	bidLimiter   *rateLimiter
+	promoLimiter *rateLimiter
 
 	mfa        *admin.MFA
 	auditLog   *admin.Audit
@@ -131,7 +132,8 @@ func New(o Options) *Server {
 		shippingToken: o.ShippingWebhookToken,
 		ipRules:       &admin.IPRules{DB: o.DB, Audit: o.Audit, Disabled: o.AdminIPAllowlistOff},
 		// 30 bids or offers per user per minute.
-		bidLimiter: newRateLimiter(30, time.Minute),
+		bidLimiter:   newRateLimiter(30, time.Minute),
+		promoLimiter: newRateLimiter(10, 10*time.Minute),
 		// 20 messages per user per 10 minutes.
 		msgLimiter: newRateLimiter(20, 10*time.Minute),
 		// 10 login/signup attempts per IP per 5 minutes.
@@ -202,6 +204,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PUT /v1/admin/catalog/features/{key}", s.requireStaff(admin.CatalogEdit, s.handleAdminSaveFeature))
 	mux.HandleFunc("DELETE /v1/admin/catalog/features/{key}", s.requireStaff(admin.CatalogEdit, s.handleAdminDeleteFeature))
 	mux.HandleFunc("GET /v1/admin/fees", s.requireStaff(admin.OrdersView, s.handleAdminFees))
+	mux.HandleFunc("GET /v1/admin/promos", s.requireStaff(admin.OrdersView, s.handleAdminPromos))
+	mux.HandleFunc("GET /v1/admin/promos/{id}", s.requireStaff(admin.OrdersView, s.handleAdminPromo))
+	mux.HandleFunc("POST /v1/admin/promos", s.requireStaff(admin.FeesEdit, s.handleAdminSavePromo))
+	mux.HandleFunc("PATCH /v1/admin/promos/{id}", s.requireStaff(admin.FeesEdit, s.handleAdminSavePromo))
 	mux.HandleFunc("POST /v1/admin/fees", s.requireStaff(admin.FeesEdit, s.handleAdminAddFees))
 	mux.HandleFunc("DELETE /v1/admin/fees/{id}", s.requireStaff(admin.FeesEdit, s.handleAdminCancelFees))
 	mux.HandleFunc("PATCH /v1/admin/fees/upgrades/{key}", s.requireStaff(admin.FeesEdit, s.handleAdminUpgrade))
@@ -270,6 +276,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("DELETE /v1/listings/{externalID}", s.sellerAPI(s.handleAPIDeleteListing))
 	mux.HandleFunc("GET /v1/seller/shipping", requireUser(s.handleShippingSettings))
 	mux.HandleFunc("GET /v1/seller/shipping/estimate", requireUser(s.handleShippingEstimate))
+	mux.HandleFunc("GET /v1/seller/promos", requireUser(s.handleSellerPromos))
+	mux.HandleFunc("POST /v1/seller/promos", requireUser(s.handleRedeemPromo))
 	mux.HandleFunc("PUT /v1/seller/shipping/from", requireUser(s.handleShipFrom))
 	mux.HandleFunc("POST /v1/seller/shipping/card", requireUser(s.handleLabelCard))
 	mux.HandleFunc("POST /v1/seller/shipping/card/finish", requireUser(s.handleLabelCardFinish))

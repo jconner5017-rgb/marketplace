@@ -20,6 +20,7 @@ import (
 	"github.com/jconner5017-rgb/marketplace/internal/blocklist"
 	"github.com/jconner5017-rgb/marketplace/internal/fees"
 	"github.com/jconner5017-rgb/marketplace/internal/inbox"
+	"github.com/jconner5017-rgb/marketplace/internal/promos"
 	"github.com/jconner5017-rgb/marketplace/internal/sellers"
 	"github.com/jconner5017-rgb/marketplace/internal/shipping"
 	"github.com/jconner5017-rgb/marketplace/internal/shopping"
@@ -193,6 +194,20 @@ func (s *Service) start(ctx context.Context, buyerID, buyerEmail string, req Req
 	if s.FeeFree != nil && s.FeeFree(sellerEmail) {
 		fee = 0 // the site's owner selling their own cards would only pay themselves
 	}
+	// Promo codes: each card uses one of the seller's fee-free sales.
+	var waiver promos.Waiver
+	if fee > 0 && !test {
+		var unit []int
+		for _, l := range lines {
+			for range l.qty {
+				unit = append(unit, sched.For(l.unit))
+			}
+		}
+		if waiver, err = promos.Reserve(ctx, tx, s.now(), sellerID, unit); err != nil {
+			return "", "", err
+		}
+		fee = max(fee-waiver.FeeCents, 0)
+	}
 	var schedID any
 	if sched.ID > 0 {
 		schedID = sched.ID
@@ -210,6 +225,9 @@ func (s *Service) start(ctx context.Context, buyerID, buyerEmail string, req Req
 			fee_schedule_id, ship_method, stripe_account, test)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id, number`,
 		buyerID, sellerID, subtotal, discount, total, fee, schedID, method, acct, test).Scan(&orderID, &number); err != nil {
+		return "", "", err
+	}
+	if err := waiver.Record(ctx, tx, orderID); err != nil {
 		return "", "", err
 	}
 	for _, l := range lines {
@@ -619,6 +637,9 @@ func (s *Service) cancel(ctx context.Context, orderID, reason string) error {
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
 		return nil
+	}
+	if err := promos.Release(ctx, tx, orderID); err != nil {
+		return err
 	}
 	if _, err := tx.ExecContext(ctx, `
 		UPDATE listings l SET quantity = l.quantity + oi.quantity,

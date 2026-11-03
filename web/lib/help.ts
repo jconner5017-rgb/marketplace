@@ -136,6 +136,8 @@ export const ARTICLES: Article[] = [
         "Cards over {fee.threshold}: {fee.percent} of the sale price, never less than {fee.flat} and capped at {fee.cap}.",
         "The fee applies to the final auction price or the accepted offer, the same way.",
       ] },
+      { h: "Promo codes" },
+      { p: "A promo code gives you a number of sales with no marketplace fee. Enter it in the seller hub (Sell). Each card sold uses one fee-free sale, so a 3-card order uses 3. Your remaining fee-free sales show in the seller hub and on the listing form. Stripe's card processing still applies. If a buyer doesn't finish paying, the fee-free sales come back to you." },
       { h: "Stripe's fee" },
       { p: "Stripe charges its card processing fee on each sale, usually 2.9% + 30¢ per order for US cards. It comes out of your own Stripe balance, not through us." },
       { h: "Shipping" },
