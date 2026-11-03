@@ -299,6 +299,7 @@ func Remove(ctx context.Context, db *sql.DB) error {
 		`DELETE FROM oversells WHERE order_id IN (` + demoOrders + `)`,
 		`DELETE FROM order_promo_uses WHERE order_id IN (` + demoOrders + `)`,
 		`DELETE FROM promo_redemptions WHERE seller_id = $1`,
+		`DELETE FROM trusted_buyers WHERE seller_id = $1 OR buyer_id = $1`,
 	}
 	if ledgerLines > 0 {
 		steps = append(steps,

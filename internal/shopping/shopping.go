@@ -158,6 +158,9 @@ type SellerGroup struct {
 	DiscountLabel  string     `json:"discount_label,omitempty"`
 	TotalCents     int        `json:"total_cents"`
 	ShipMethod     string     `json:"ship_method"` // envelope or label
+	// EnvelopeChoice: the seller trusts this buyer and the order (one raw
+	// card up to $100) could ship in a stamped envelope if they choose.
+	EnvelopeChoice bool `json:"envelope_choice"`
 }
 
 type Cart struct {
@@ -243,6 +246,14 @@ func (s *Service) GetCart(ctx context.Context, userID string) (Cart, error) {
 		}
 		g.TotalCents = g.SubtotalCents - g.DiscountCents
 		g.ShipMethod = ShipMethod(*g)
+		if g.ShipMethod == "label" && TrustedEnvelopeEligible(*g) {
+			var trusted bool
+			if err := s.DB.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM trusted_buyers WHERE seller_id = $1 AND buyer_id = $2)`,
+				sellerID, userID).Scan(&trusted); err != nil {
+				return Cart{}, err
+			}
+			g.EnvelopeChoice = trusted
+		}
 		cart.CardCount += g.CardCount
 		cart.TotalCents += g.TotalCents
 		cart.Groups = append(cart.Groups, *g)

@@ -98,11 +98,24 @@ type Order struct {
 	StripeRefundURL string `json:"stripe_payment_url,omitempty"`
 	// Test: placed by an admin with no payment taken (before checkout opened).
 	Test bool `json:"test"`
+	// EnvelopeTrusted: a trusted buyer agreed to a stamped envelope over $20.
+	EnvelopeTrusted bool `json:"envelope_trusted"`
+	// EnvelopeOffer: the seller offered an envelope after the sale
+	// (offered, accepted, declined), or "".
+	EnvelopeOffer string `json:"envelope_offer"`
+	// CanOfferEnvelope (seller): this order could switch to an envelope.
+	CanOfferEnvelope bool `json:"can_offer_envelope"`
 }
 
 const orderCols = `o.id, o.number, o.status, bu.username, su.username, o.subtotal_cents, o.discount_cents,
 	o.total_cents, o.fee_cents, o.refunded_cents, o.ship_method, o.ship_to, o.ship_by, o.created_at, o.paid_at,
-	o.shipped_at, o.delivered_at, o.buyer_id = $1, coalesce(o.stripe_payment_intent, ''), o.tax_cents, o.test`
+	o.shipped_at, o.delivered_at, o.buyer_id = $1, coalesce(o.stripe_payment_intent, ''), o.tax_cents, o.test,
+	o.envelope_trusted, coalesce(o.envelope_offer, ''),
+	(o.status = 'paid' AND o.ship_method = 'label' AND o.envelope_offer IS NULL AND NOT o.test AND o.total_cents <= 10000
+	 AND (SELECT coalesce(sum(oi.quantity), 0) FROM order_items oi WHERE oi.order_id = o.id) = 1
+	 AND NOT EXISTS (SELECT 1 FROM order_items oi JOIN listings l ON l.id = oi.listing_id
+	                 WHERE oi.order_id = o.id AND (l.grader IS NOT NULL OR l.package_preset = 'box'))
+	 AND NOT EXISTS (SELECT 1 FROM shipments sh WHERE sh.order_id = o.id AND sh.provider IS NOT NULL AND sh.voided_at IS NULL))`
 
 const orderFrom = ` FROM orders o JOIN users bu ON bu.id = o.buyer_id JOIN users su ON su.id = o.seller_id `
 
@@ -114,13 +127,14 @@ func scanOrder(row interface{ Scan(...any) error }) (Order, error) {
 	var pi string
 	if err := row.Scan(&o.ID, &o.Number, &o.Status, &o.Buyer, &o.Seller, &o.SubtotalCents, &o.DiscountCents,
 		&o.TotalCents, &fee, &o.RefundedCents, &o.ShipMethod, &o.ShipTo, &shipBy, &o.CreatedAt, &paid,
-		&shipped, &deliv, &buying, &pi, &o.TaxCents, &o.Test); err != nil {
+		&shipped, &deliv, &buying, &pi, &o.TaxCents, &o.Test, &o.EnvelopeTrusted, &o.EnvelopeOffer, &o.CanOfferEnvelope); err != nil {
 		return o, err
 	}
 	o.ShipBy, o.PaidAt, o.ShippedAt, o.DeliveredAt = nt(shipBy), nt(paid), nt(shipped), nt(deliv)
 	o.Side = "selling"
 	if buying {
 		o.Side = "buying"
+		o.CanOfferEnvelope = false
 	} else {
 		o.FeeCents = &fee
 		if strings.HasPrefix(pi, "pi_") {
@@ -299,9 +313,10 @@ func (s *Service) MarkShipped(ctx context.Context, sellerID, orderID, carrier, t
 	defer tx.Rollback()
 	var id, buyer, status, method string
 	var number int64
-	err = tx.QueryRowContext(ctx, `SELECT id, buyer_id, status, ship_method, number FROM orders
+	var trusted bool
+	err = tx.QueryRowContext(ctx, `SELECT id, buyer_id, status, ship_method, number, envelope_trusted FROM orders
 		WHERE (id::text = $2 OR number::text = $2) AND seller_id = $1 FOR UPDATE`, sellerID, orderID).
-		Scan(&id, &buyer, &status, &method, &number)
+		Scan(&id, &buyer, &status, &method, &number, &trusted)
 	if errors.Is(err, sql.ErrNoRows) {
 		return ErrNotFound
 	}
@@ -317,6 +332,11 @@ func (s *Service) MarkShipped(ctx context.Context, sellerID, orderID, carrier, t
 		}
 		if !trackingRe.MatchString(tracking) {
 			return &FieldError{"tracking_number", "enter the tracking number (8 to 40 letters and digits)"}
+		}
+	}
+	if trusted && method == "envelope" && tracking == "" {
+		if _, ok := envelopeBarcode(ctx, tx, id); !ok {
+			return ErrPrintEnvelope
 		}
 	}
 	var c, t, svc any
@@ -377,13 +397,14 @@ func (s *Service) ReportProblem(ctx context.Context, buyerID, orderID, kind, sum
 		return 0, err
 	}
 	defer tx.Rollback()
-	var id, seller, status, email string
+	var id, seller, status, email, method string
 	var number int64
 	var shipBy sql.NullTime
-	err = tx.QueryRowContext(ctx, `SELECT o.id, o.seller_id, o.status, o.number, o.ship_by, u.email FROM orders o
+	var trusted bool
+	err = tx.QueryRowContext(ctx, `SELECT o.id, o.seller_id, o.status, o.number, o.ship_by, u.email, o.ship_method, o.envelope_trusted FROM orders o
 		JOIN users u ON u.id = o.buyer_id
 		WHERE (o.id::text = $2 OR o.number::text = $2) AND o.buyer_id = $1 FOR UPDATE OF o`, buyerID, orderID).
-		Scan(&id, &seller, &status, &number, &shipBy, &email)
+		Scan(&id, &seller, &status, &number, &shipBy, &email, &method, &trusted)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, ErrNotFound
 	}
@@ -392,6 +413,11 @@ func (s *Service) ReportProblem(ctx context.Context, buyerID, orderID, kind, sum
 	}
 	if status != "paid" && status != "shipped" && status != "delivered" {
 		return 0, ErrState
+	}
+	// A trusted buyer who chose an envelope accepted that a missing one isn't
+	// covered once it's sent. Before it ships, they can still report it.
+	if kind == "inr" && trusted && method == "envelope" && status != "paid" {
+		return 0, ErrNotCoveredINR
 	}
 	if kind == "inr" && status == "paid" && shipBy.Valid && s.now().Before(shipBy.Time) {
 		return 0, &FieldError{"kind", "the seller has until " + shipBy.Time.Format("Mon Jan 2") + " to ship"}

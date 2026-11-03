@@ -6,6 +6,7 @@ import type { Order } from "@/lib/types";
 import OrderView, { StatusPill, day } from "@/components/orders/OrderView";
 import BuyerActions from "@/components/orders/BuyerActions";
 import ShipForm from "@/components/orders/ShipForm";
+import { AnswerEnvelope } from "@/components/orders/EnvelopeOffer";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Order", robots: { index: false } };
@@ -31,6 +32,13 @@ export default async function PurchaseOrder({ params }: { params: Promise<{ id: 
           <p className="mt-1 text-[13px] text-muted">Nobody can sign in as the sample shop, so ship it from here. Then use &ldquo;I got it&rdquo; and leave feedback as the buyer.</p>
           <div className="mt-3"><ShipForm orderId={o.id} method={o.ship_method} /></div>
         </div>
+      )}
+      {o.envelope_offer === "offered" && o.status === "paid" && o.ship_method === "label" && <AnswerEnvelope orderId={o.id} seller={o.seller} />}
+      {o.envelope_trusted && (
+        <p className="mt-4 max-w-[560px] rounded-lg bg-wash p-3 text-[13px] text-muted">
+          You chose a stamped envelope for this order (you&apos;re on {o.seller}&apos;s trusted buyer list). It gets USPS sorting scans but
+          no delivery confirmation, and a missing envelope isn&apos;t covered by Slabs &amp; Singles.
+        </p>
       )}
       <BuyerActions o={o} />
       <div className="mt-6"><OrderView o={o} /></div>

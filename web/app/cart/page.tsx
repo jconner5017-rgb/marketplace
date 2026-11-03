@@ -37,7 +37,7 @@ export default async function CartPage() {
               <header className="flex flex-wrap items-baseline justify-between gap-2 border-b border-line bg-wash px-4 py-2.5 text-[14px]">
                 <span>Seller <Link href={`/search?seller=${encodeURIComponent(g.seller_username)}`} className="font-semibold text-link hover:underline">{g.seller_username}</Link></span>
                 <span className="text-muted">
-                  {g.ship_method === "envelope" ? "Ships in a stamped envelope" : "Ships together in one package with tracking"} · Free
+                  {g.ship_method === "envelope" ? "Ships in a stamped envelope" : g.envelope_choice ? "Tracked package, or an envelope if you choose" : "Ships together in one package with tracking"} · Free
                 </span>
               </header>
               <ul>
@@ -62,7 +62,7 @@ export default async function CartPage() {
               {canPay && sellers > 1 && g.card_count > 0 && (
                 <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line px-4 py-3">
                   <span className="num text-[15px] font-semibold">{money(g.total_cents)} from {g.seller_username}</span>
-                  <PayButton seller={g.seller_username} label={mode === "test" ? `Test order from ${g.seller_username}` : `Pay ${g.seller_username}`} test={mode === "test"} className="w-full sm:w-auto" />
+                  <PayButton seller={g.seller_username} label={mode === "test" ? `Test order from ${g.seller_username}` : `Pay ${g.seller_username}`} test={mode === "test"} className="w-full sm:w-auto" envelopeChoice={g.envelope_choice} />
                 </div>
               )}
             </section>
@@ -80,7 +80,8 @@ export default async function CartPage() {
           </dl>
           {canPay && sellers === 1 && cart.problems === 0 ? (
             <>
-              <PayButton seller={cart.groups.find((g) => g.card_count > 0)!.seller_username} label={mode === "test" ? "Complete test order" : "Go to checkout"} test={mode === "test"} className="mt-5" />
+              <PayButton seller={cart.groups.find((g) => g.card_count > 0)!.seller_username} label={mode === "test" ? "Complete test order" : "Go to checkout"} test={mode === "test"} className="mt-5"
+                envelopeChoice={cart.groups.find((g) => g.card_count > 0)!.envelope_choice} />
               <p className="mt-2 text-center text-[13px] text-muted">{mode === "test" ? "Admin test mode: no payment is taken. Checkout opens to everyone once Stripe is set up." : "Secure payment by Stripe. US addresses only."}</p>
             </>
           ) : canPay && sellers > 1 ? (

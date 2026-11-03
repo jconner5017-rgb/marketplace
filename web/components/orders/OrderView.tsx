@@ -90,7 +90,7 @@ export default function OrderView({ o }: { o: Order }) {
               {o.ship_to.city}, {o.ship_to.state} {o.ship_to.zip}
             </address>
           ) : <p className="mt-1 text-muted">Address on file with Stripe.</p>}
-          <p className="mt-2 text-muted">{o.ship_method === "envelope" ? "Stamped envelope" : "Package with tracking"}</p>
+          <p className="mt-2 text-muted">{o.ship_method === "envelope" ? (o.envelope_trusted ? "Stamped envelope (trusted buyer)" : "Stamped envelope") : "Package with tracking"}</p>
           {o.status === "paid" && o.ship_by && <p className="mt-1">Ships by <strong>{day(o.ship_by)}</strong></p>}
         </div>
         {o.shipment && (

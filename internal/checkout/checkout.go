@@ -78,6 +78,9 @@ func (s *Service) Ready() bool { return s.Enabled && s.Pay != nil }
 type Request struct {
 	Seller  string   `json:"seller"`   // seller username, for the cart
 	HoldIDs []string `json:"hold_ids"` // auction wins / accepted offers, all from one seller
+	// Envelope: a trusted buyer chose a stamped envelope for one raw card
+	// up to $100, accepting there's no delivery confirmation.
+	Envelope bool `json:"envelope"`
 }
 
 type line struct {
@@ -90,6 +93,8 @@ type line struct {
 	unit      int
 	qty       int
 	envelope  bool // raw card set up to ship in a plain envelope
+	graded    bool
+	preset    string
 }
 
 // Start creates the order, sets the cards aside and opens a Stripe Checkout
@@ -214,17 +219,32 @@ func (s *Service) start(ctx context.Context, buyerID, buyerEmail string, req Req
 	}
 	// Same rule as the cart: a plain envelope only for one raw card at $20 or less.
 	method := "label"
-	if cards == 1 && total <= 2000 && lines[0].envelope {
+	if cards == 1 && total <= EnvelopeMaxCents && lines[0].envelope {
 		method = "envelope"
+	}
+	// Up to $100, a buyer the seller trusts may choose an envelope instead.
+	trustedEnvelope := false
+	if req.Envelope && method == "label" {
+		if !TrustedEnvelopeEligible(cards, total, lines[0].graded, lines[0].preset) {
+			return "", "", ErrNoEnvelope
+		}
+		ok, err := IsTrusted(ctx, tx, sellerID, buyerID)
+		if err != nil {
+			return "", "", err
+		}
+		if !ok {
+			return "", "", ErrNotTrusted
+		}
+		method, trustedEnvelope = "envelope", true
 	}
 
 	var orderID string
 	var number int64
 	if err := tx.QueryRowContext(ctx, `
 		INSERT INTO orders (buyer_id, seller_id, subtotal_cents, discount_cents, total_cents, fee_cents,
-			fee_schedule_id, ship_method, stripe_account, test)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id, number`,
-		buyerID, sellerID, subtotal, discount, total, fee, schedID, method, acct, test).Scan(&orderID, &number); err != nil {
+			fee_schedule_id, ship_method, stripe_account, test, envelope_trusted)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id, number`,
+		buyerID, sellerID, subtotal, discount, total, fee, schedID, method, acct, test, trustedEnvelope).Scan(&orderID, &number); err != nil {
 		return "", "", err
 	}
 	if err := waiver.Record(ctx, tx, orderID); err != nil {
@@ -390,7 +410,8 @@ func (s *Service) cartLines(ctx context.Context, tx *sql.Tx, buyerID, seller str
 	}
 	rows, err := tx.QueryContext(ctx, `
 		SELECT l.id, l.seller_id, l.version, l.title, coalesce(l.photo_urls[1], ''), l.price_cents, c.quantity,
-		       l.quantity, l.status = 'active' AND l.format = 'fixed', l.grader IS NULL AND l.package_preset = 'envelope'
+		       l.quantity, l.status = 'active' AND l.format = 'fixed', l.grader IS NULL AND l.package_preset = 'envelope',
+		       l.grader IS NOT NULL, l.package_preset
 		FROM cart_items c
 		JOIN listings l ON l.id = c.listing_id
 		JOIN users su ON su.id = l.seller_id
@@ -408,7 +429,7 @@ func (s *Service) cartLines(ctx context.Context, tx *sql.Tx, buyerID, seller str
 		var l line
 		var have int
 		var open bool
-		if err := rows.Scan(&l.listingID, &sellerID, &l.version, &l.title, &l.photo, &l.unit, &l.qty, &have, &open, &l.envelope); err != nil {
+		if err := rows.Scan(&l.listingID, &sellerID, &l.version, &l.title, &l.photo, &l.unit, &l.qty, &have, &open, &l.envelope, &l.graded, &l.preset); err != nil {
 			return "", nil, err
 		}
 		if !open || l.qty > have {
@@ -436,7 +457,7 @@ func (s *Service) holdLines(ctx context.Context, tx *sql.Tx, buyerID string, ids
 	}
 	rows, err := tx.QueryContext(ctx, `
 		SELECT h.id, h.seller_id, h.listing_id, l.version, l.title, coalesce(l.photo_urls[1], ''), h.unit_cents,
-		       h.quantity, h.source, l.grader IS NULL AND l.package_preset = 'envelope'
+		       h.quantity, h.source, l.grader IS NULL AND l.package_preset = 'envelope', l.grader IS NOT NULL, l.package_preset
 		FROM holds h JOIN listings l ON l.id = h.listing_id
 		WHERE h.buyer_id = $1 AND h.id::text = ANY($2) AND h.status = 'awaiting_payment' AND h.due_at > now()
 		  AND NOT EXISTS (SELECT 1 FROM order_items oi JOIN orders o ON o.id = oi.order_id
@@ -452,7 +473,7 @@ func (s *Service) holdLines(ctx context.Context, tx *sql.Tx, buyerID string, ids
 	for rows.Next() {
 		var l line
 		var seller string
-		if err := rows.Scan(&l.holdID, &seller, &l.listingID, &l.version, &l.title, &l.photo, &l.unit, &l.qty, &l.source, &l.envelope); err != nil {
+		if err := rows.Scan(&l.holdID, &seller, &l.listingID, &l.version, &l.title, &l.photo, &l.unit, &l.qty, &l.source, &l.envelope, &l.graded, &l.preset); err != nil {
 			return "", nil, err
 		}
 		if sellerID != "" && seller != sellerID {

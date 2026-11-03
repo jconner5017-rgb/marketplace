@@ -175,6 +175,7 @@ export type SellerGroup = {
   discount_label?: string;
   total_cents: number;
   ship_method: "envelope" | "label";
+  envelope_choice?: boolean;
 };
 export type Cart = { groups: SellerGroup[]; card_count: number; total_cents: number; problems: number };
 
@@ -267,6 +268,9 @@ export interface Order {
   tax_cents: number;
   test?: boolean;
   stripe_payment_url?: string;
+  envelope_trusted?: boolean;
+  envelope_offer?: "" | "offered" | "accepted" | "declined";
+  can_offer_envelope?: boolean;
 }
 
 export interface FeedbackSummary {

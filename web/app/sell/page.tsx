@@ -37,6 +37,7 @@ function SellingCosts({ fees }: { fees: FeeSchedule }) {
           <strong>Shipping:</strong> buyers never pay it, so it&apos;s yours. One raw card up to $20 can go in an envelope with an
           82¢ Forever stamp, or a $1.31 nonmachinable stamp for thick cards and very rigid toploaders. Everything else ships with a tracked label you buy from the order at the carrier&apos;s price, plus
           2.9% + 30¢ card processing on the label. A bubble mailer by USPS Ground Advantage is usually about $5–7.
+          Buyers on your <Link href="/sell/trusted" className="text-link underline">trusted buyer list</Link> can choose an envelope for one raw card up to $100.
         </li>
       </ul>
       <div className="mt-3 rounded-md bg-wash p-3">
@@ -135,6 +136,7 @@ export default async function SellPage({ searchParams }: { searchParams: Promise
           <Link href="/sell/reports" className="rounded-full border border-link px-5 py-2 font-semibold text-link hover:bg-wash">Reports</Link>
           <Link href="/sell/connect" className="rounded-full border border-link px-5 py-2 font-semibold text-link hover:bg-wash">Connect FCM</Link>
           <Link href="/sell/shipping" className="rounded-full border border-link px-5 py-2 font-semibold text-link hover:bg-wash">Shipping</Link>
+          <Link href="/sell/trusted" className="rounded-full border border-link px-5 py-2 font-semibold text-link hover:bg-wash">Trusted buyers</Link>
           <Link href="/sell/feedback" className="rounded-full border border-link px-5 py-2 font-semibold text-link hover:bg-wash">Feedback</Link>
           <Link href="/sell/import" className="rounded-full border border-link px-5 py-2 font-semibold text-link hover:bg-wash">Upload a CSV</Link>
           <Link href="/sell/new" className="rounded-full bg-link px-5 py-2 font-semibold text-white hover:bg-link-dark">List a card</Link>

@@ -8,6 +8,7 @@ import ShipForm from "@/components/orders/ShipForm";
 import BuyerActions from "@/components/orders/BuyerActions";
 import BuyerRecord from "@/components/feedback/BuyerRecord";
 import { BuyLabel, VoidLabel } from "@/components/orders/LabelBuyer";
+import { OfferEnvelope } from "@/components/orders/EnvelopeOffer";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Order", robots: { index: false } };
@@ -34,8 +35,9 @@ export default async function SellerOrder({ params }: { params: Promise<{ id: st
           {o.ship_method === "envelope" ? (
             <>
               <p className="text-[14px] text-muted">
-                One raw card: a stamped envelope is fine. Print a tracked envelope so the buyer can follow it, add a stamp, then
-                mark it shipped below.
+                {o.envelope_trusted
+                  ? `Envelope (trusted buyer): ${o.buyer} chose a stamped envelope for this card. Print the tracked envelope first, since envelope orders over $20 need its barcode, add a stamp, then mark it shipped below.`
+                  : "One raw card: a stamped envelope is fine. Print a tracked envelope so the buyer can follow it, add a stamp, then mark it shipped below."}
               </p>
               <Link href={`/sell/orders/${o.id}/envelope`} className="mt-3 inline-block rounded-full bg-link px-4 py-2 text-[14px] font-semibold text-white hover:bg-link-dark">
                 Print tracked envelope
@@ -46,6 +48,11 @@ export default async function SellerOrder({ params }: { params: Promise<{ id: st
             <>
               <p className="text-[14px] text-muted">Ship in one package with tracking. Buy the label here, or enter tracking from a label you bought elsewhere.</p>
               <BuyLabel orderId={o.id} />
+              {o.envelope_offer === "offered" && (
+                <p className="mt-3 rounded-lg bg-wash p-3 text-[13px]">You offered {o.buyer} a stamped envelope. Waiting for them to accept; ship by label if they don&apos;t answer before your ship-by date.</p>
+              )}
+              {o.envelope_offer === "declined" && <p className="mt-3 text-[13px] text-muted">{o.buyer} chose to keep the tracked package.</p>}
+              {o.can_offer_envelope && <OfferEnvelope orderId={o.id} buyer={o.buyer} />}
               <p className="mt-4 text-[13px] font-semibold">Already have a label?</p>
             </>
           )}

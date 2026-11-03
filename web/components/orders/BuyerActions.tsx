@@ -49,7 +49,9 @@ export default function BuyerActions({ o }: { o: Order }) {
   const [rating, setRating] = useState<1 | 0 | -1>(1);
   const [subs, setSubs] = useState<Record<string, number>>({ item_rating: 0, shipping_rating: 0, communication_rating: 0 });
   const [comment, setComment] = useState("");
-  const [kind, setKind] = useState(o.status === "paid" ? "other" : "inr");
+  // A trusted buyer's envelope order: a missing envelope isn't covered once sent.
+  const noInr = !!o.envelope_trusted && o.ship_method === "envelope" && o.status !== "paid";
+  const [kind, setKind] = useState(o.status === "paid" || noInr ? "other" : "inr");
   const [summary, setSummary] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
@@ -204,12 +206,13 @@ export default function BuyerActions({ o }: { o: Order }) {
           <fieldset className="mt-3">
             <legend className="font-semibold">What&apos;s wrong?</legend>
             <div className="mt-2 flex flex-wrap gap-4">
-              {KINDS.map((k) => (
+              {KINDS.filter((k) => !(noInr && k.value === "inr")).map((k) => (
                 <label key={k.value} className="flex items-center gap-1.5">
                   <input type="radio" name="kind" checked={kind === k.value} onChange={() => setKind(k.value)} /> {k.label}
                 </label>
               ))}
             </div>
+            {noInr && <p className="mt-2 text-[13px] text-muted">You chose a stamped envelope for this order, so a missing envelope isn&apos;t covered. Message the seller about it.</p>}
           </fieldset>
           <label className="mt-3 block">
             <span className="font-semibold">Tell us what happened</span>

@@ -45,6 +45,21 @@ func ShipMethod(g SellerGroup) string {
 	return "label"
 }
 
+// TrustedEnvelopeEligible: one raw card, not set up to ship in a box, up to
+// $100. A buyer the seller trusts may choose a stamped envelope for it
+// (checkout.TrustedEnvelopeEligible is the same rule).
+func TrustedEnvelopeEligible(g SellerGroup) bool {
+	if g.CardCount != 1 || g.TotalCents <= 0 || g.TotalCents > 10000 {
+		return false
+	}
+	for _, l := range g.Lines {
+		if l.Available {
+			return l.Listing.Grader == nil && l.Listing.PackagePreset != "box"
+		}
+	}
+	return false
+}
+
 func trimZero(f float64) string {
 	s := strconv.FormatFloat(f, 'f', 2, 64)
 	for len(s) > 0 && s[len(s)-1] == '0' {

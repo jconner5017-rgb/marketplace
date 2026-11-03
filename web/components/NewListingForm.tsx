@@ -108,6 +108,8 @@ export default function NewListingForm({ capCents, catalog, fees, initial }: {
   const stripe = cents != null ? stripeFee(cents) : 0;
   const fee = cents != null && freeLeft === 0 ? FEE(cents) : 0;
   const net = cents != null ? cents - fee - stripe - shipCost : null;
+  // Over $20, buyers on the seller's trusted list may choose an envelope (up to $100).
+  const trustedEnv = cents != null && cents > 2000 && cents <= 10000 && !graded && preset === "bubble";
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -364,7 +366,7 @@ export default function NewListingForm({ capCents, catalog, fees, initial }: {
         )}
         <Field label="Package" name="package_preset" error={fields.package_preset}>
           <select id="package_preset" value={preset} onChange={(e) => setPreset(e.target.value)} className={select}>
-            <option value="envelope">Stamped envelope (one raw card up to $20)</option>
+            <option value="envelope">Stamped envelope (one raw card up to $20; up to $100 for trusted buyers)</option>
             <option value="bubble">Bubble mailer (7¼ × 5¼ in)</option>
             <option value="box">Small box (8 × 6 × 2 in)</option>
           </select>
@@ -400,6 +402,12 @@ export default function NewListingForm({ capCents, catalog, fees, initial }: {
                 ? `Shipping label${ship?.service ? ` (${ship.carrier ? ship.carrier + " " : ""}${ship.service})` : " (estimate)"}`
                 : thick ? "Nonmachinable stamp" : "Forever stamp"}</dt><dd className="text-right">−{money(shipCost)}</dd>
               <dt className="font-bold">You receive about</dt><dd className="text-right font-bold">{money(Math.max(0, net ?? 0))}</dd>
+              {trustedEnv && (
+                <>
+                  <dt className="mt-1 border-t border-line pt-1 text-muted">To a trusted buyer who picks an envelope (82¢ stamp)</dt>
+                  <dd className="mt-1 border-t border-line pt-1 text-right text-muted">{money(Math.max(0, (cents ?? 0) - fee - stripe - 82))}</dd>
+                </>
+              )}
             </dl>
           ) : (
             <p className="mt-1 text-muted">Enter a {format === "auction" ? "starting bid" : "price"} to see what you&apos;ll receive.</p>

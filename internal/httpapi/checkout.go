@@ -31,6 +31,11 @@ func (s *Server) checkoutError(w http.ResponseWriter, r *http.Request, err error
 	case errors.Is(err, checkout.ErrEmpty), errors.Is(err, checkout.ErrChanged), errors.Is(err, checkout.ErrSellerClosed),
 		errors.Is(err, checkout.ErrOwn), errors.Is(err, checkout.ErrState), errors.Is(err, checkout.ErrSample):
 		writeError(w, http.StatusConflict, "cannot_checkout", err.Error(), nil)
+	case errors.Is(err, checkout.ErrNotTrusted), errors.Is(err, checkout.ErrNoEnvelope), errors.Is(err, checkout.ErrOfferNotOpen),
+		errors.Is(err, checkout.ErrAlreadyOffered), errors.Is(err, checkout.ErrHasLabel), errors.Is(err, checkout.ErrTrustSelf):
+		writeError(w, http.StatusConflict, "envelope_unavailable", err.Error(), nil)
+	case errors.Is(err, checkout.ErrBadInvite):
+		writeError(w, http.StatusNotFound, "bad_invite", err.Error(), nil)
 	case errors.Is(err, checkout.ErrEnvelopeOff):
 		writeError(w, http.StatusServiceUnavailable, "envelope_off", err.Error(), nil)
 	case errors.Is(err, checkout.ErrNotEnvelope), errors.Is(err, checkout.ErrNoShipToZIP):
