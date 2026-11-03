@@ -378,7 +378,7 @@ func (s *Server) handleShippingEstimate(w http.ResponseWriter, r *http.Request) 
 	q := r.URL.Query()
 	weight, _ := strconv.ParseFloat(q.Get("weight_oz"), 64)
 	price, _ := strconv.Atoi(q.Get("price_cents"))
-	est, err := s.checkout.EstimateShipping(r.Context(), u.ID, q.Get("preset"), weight, q.Get("graded") == "true", price)
+	est, err := s.checkout.EstimateShipping(r.Context(), u.ID, q.Get("preset"), weight, q.Get("graded") == "true", q.Get("nonmachinable") == "true", price)
 	if err != nil {
 		s.checkoutError(w, r, err)
 		return

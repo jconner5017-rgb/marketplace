@@ -108,7 +108,7 @@ export default async function EnvelopePage({ params, searchParams }: {
         <Link href={`/sell/orders/${e.order_id}`} className="text-[14px] text-link hover:underline">← Order #{e.order_number}</Link>
         <h1 className="mt-2 text-[24px] font-bold">Print a tracked envelope</h1>
         <p className="mt-1 max-w-[680px] text-[14px] text-muted">
-          Print this, put on a $1.31 nonmachinable stamp (needed with a toploader inside; an 82¢ Forever stamp otherwise), and mail it. Then mark the order shipped: the barcode becomes its tracking, and
+          Print this, put on an 82¢ Forever stamp (a $1.31 nonmachinable stamp for thick cards or very rigid toploaders), and mail it. Then mark the order shipped: the barcode becomes its tracking, and
           the buyer sees each USPS scan. Pack the card in a penny sleeve and a toploader (recommended for thin, non-relic cards);
           thick or relic/memorabilia cards go by envelope at your own risk, and lumpy envelopes may be hand-sorted and get few scans.{" "}
           <Link href="/help/tracked-envelopes" className="text-link underline">Printing tips</Link>

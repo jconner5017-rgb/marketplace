@@ -14,14 +14,14 @@ type ShipEstimate = { method: "stamp" | "label"; cost_cents: number; label_cents
 /** Stripe's US card fee on a payment, taken from the seller's Stripe balance. */
 const stripeFee = (cents: number) => (cents > 0 ? Math.round((cents * 290) / 10000) + 30 : 0);
 /** Used until the live quote arrives. */
-const FALLBACK: Record<string, number> = { envelope: 131, bubble: 525, box: 700 };
+const FALLBACK: Record<string, number> = { envelope: 82, bubble: 525, box: 700 };
 
 /** What each package choice means; sizes match how labels are bought (internal/shipping ParcelFor). */
 const PACKAGES: Record<string, { size: string; adds: string; carrier: string; pack: string }> = {
   envelope: {
     size: "#10 or #6¾ letter envelope",
     adds: "",
-    carrier: "USPS First-Class letter. With a toploader inside, use a $1.31 nonmachinable stamp (82¢ Forever stamp without one). Print a tracked envelope from the order for USPS scans.",
+    carrier: "USPS First-Class letter with an 82¢ Forever stamp, or a $1.31 nonmachinable stamp for thick cards and very rigid toploaders. Print a tracked envelope from the order for USPS scans.",
     pack: "One raw card in a penny sleeve and a toploader (recommended for thin, non-relic cards). Thick or relic/memorabilia cards ship by envelope at your own risk. No slabs.",
   },
   bubble: {
@@ -90,16 +90,17 @@ export default function NewListingForm({ capCents, catalog, fees, initial }: {
   const cents = format === "auction" ? toCents(start) : toCents(price);
   const [weight, setWeight] = useState(String(initial?.weight_oz ?? 1));
   const [ship, setShip] = useState<ShipEstimate | null>(null);
+  const [thick, setThick] = useState(false);
   // Real shipping cost: a stamp, or a label quote from the seller's ship-from address.
   useEffect(() => {
     const t = setTimeout(async () => {
-      const q = new URLSearchParams({ preset, weight_oz: String(Number(weight) || 1), graded: String(graded), price_cents: String(cents ?? 0) });
+      const q = new URLSearchParams({ preset, weight_oz: String(Number(weight) || 1), graded: String(graded), nonmachinable: String(thick), price_cents: String(cents ?? 0) });
       const res = await send<{ estimate: ShipEstimate }>("GET", `/v1/seller/shipping/estimate?${q}`);
       setShip(res.ok ? res.data.estimate : null);
     }, 400);
     return () => clearTimeout(t);
-  }, [preset, weight, graded, cents]);
-  const shipCost = ship?.cost_cents ?? (graded && preset === "envelope" ? FALLBACK.box : FALLBACK[preset] ?? 0);
+  }, [preset, weight, graded, thick, cents]);
+  const shipCost = ship?.cost_cents ?? (graded && preset === "envelope" ? FALLBACK.box : preset === "envelope" && thick ? 131 : FALLBACK[preset] ?? 0);
   const stripe = cents != null ? stripeFee(cents) : 0;
   const net = cents != null ? cents - FEE(cents) - stripe - shipCost : null;
 
@@ -370,6 +371,12 @@ export default function NewListingForm({ capCents, catalog, fees, initial }: {
             <p><span className="font-semibold">Size:</span> {PACKAGES[preset].size}{PACKAGES[preset].adds ? `. ${PACKAGES[preset].adds}` : ""}</p>
             <p className="mt-1"><span className="font-semibold">Shipping:</span> {PACKAGES[preset].carrier}{ship?.method === "label" ? ` About ${money(ship.cost_cents)} for one card.` : ""}</p>
             <p className="mt-1"><span className="font-semibold">Packing:</span> {PACKAGES[preset].pack}</p>
+            {preset === "envelope" && !graded && (
+              <label className="mt-2 flex items-center gap-2">
+                <input type="checkbox" checked={thick} onChange={(e) => setThick(e.target.checked)} />
+                Thick card or very rigid toploader: I&apos;ll use a $1.31 nonmachinable stamp
+              </label>
+            )}
             <p className="mt-1 text-muted">Graded cards and orders of two or more cards always go by label; an order with any box item ships in a box.{" "}
               <a href="/help/packing" target="_blank" className="text-link underline">Packing guide</a></p>
           </div>
@@ -385,7 +392,7 @@ export default function NewListingForm({ capCents, catalog, fees, initial }: {
               <dt>Card processing (Stripe, 2.9% + 30¢)</dt><dd className="text-right">−{money(stripe)}</dd>
               <dt>{preset !== "envelope" || graded
                 ? `Shipping label${ship?.service ? ` (${ship.carrier ? ship.carrier + " " : ""}${ship.service})` : " (estimate)"}`
-                : "Nonmachinable stamp (toploader)"}</dt><dd className="text-right">−{money(shipCost)}</dd>
+                : thick ? "Nonmachinable stamp" : "Forever stamp"}</dt><dd className="text-right">−{money(shipCost)}</dd>
               <dt className="font-bold">You receive about</dt><dd className="text-right font-bold">{money(Math.max(0, net ?? 0))}</dd>
             </dl>
           ) : (
@@ -393,7 +400,7 @@ export default function NewListingForm({ capCents, catalog, fees, initial }: {
           )}
           <p className="mt-2 text-[12px] text-muted">
             {preset === "envelope" && !graded
-              ? "Shipping is a $1.31 nonmachinable stamp, needed with a toploader (82¢ Forever stamp without one). Stripe's fee comes out of your Stripe balance."
+              ? (thick ? "Shipping is a $1.31 nonmachinable stamp (82¢ Forever rate plus USPS's 49¢ nonmachinable surcharge)." : "Shipping is one 82¢ Forever stamp.") + " Stripe's fee comes out of your Stripe balance."
               : ship?.live
                 ? `Label quoted from ${ship.from_set ? "your ship-from address" : "the middle of the US (add your ship-from address under Sell → Shipping for your own quote)"} to the far side of the country, including 2.9% + 30¢ card processing on the label. Nearer buyers cost less.`
                 : "Typical label price, including card processing on the label. Stripe's fee comes out of your Stripe balance."}

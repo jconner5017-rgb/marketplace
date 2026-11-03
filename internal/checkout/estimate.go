@@ -18,7 +18,7 @@ import (
 const StampCents = 82
 
 // NonmachinableStampCents is the stamp for a letter USPS can't run through
-// its machines, such as one with a rigid toploader inside: the Forever rate
+// its machines, such as a thick card or a very rigid toploader: the Forever rate
 // plus the 49¢ nonmachinable surcharge. USPS sells $1.31 stamps for this.
 const NonmachinableStampCents = 131
 
@@ -80,9 +80,12 @@ var (
 // envelope is a Forever stamp; anything else is a live label quote from the
 // seller's ship-from address (or the middle of the country when it isn't set
 // yet), falling back to a typical price when no quote can be had.
-func (s *Service) EstimateShipping(ctx context.Context, sellerID, preset string, weightOz float64, graded bool, priceCents int) (ShippingEstimate, error) {
+func (s *Service) EstimateShipping(ctx context.Context, sellerID, preset string, weightOz float64, graded, nonmachinable bool, priceCents int) (ShippingEstimate, error) {
 	if preset == "envelope" && !graded {
-		return ShippingEstimate{Method: "stamp", CostCents: NonmachinableStampCents, LabelCents: NonmachinableStampCents, Service: "Nonmachinable stamp", Live: true}, nil
+		if nonmachinable {
+			return ShippingEstimate{Method: "stamp", CostCents: NonmachinableStampCents, LabelCents: NonmachinableStampCents, Service: "Nonmachinable stamp", Live: true}, nil
+		}
+		return ShippingEstimate{Method: "stamp", CostCents: StampCents, LabelCents: StampCents, Service: "Forever stamp", Live: true}, nil
 	}
 	if preset != "bubble" && preset != "box" {
 		preset = "bubble"

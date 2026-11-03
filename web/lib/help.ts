@@ -141,7 +141,7 @@ export const ARTICLES: Article[] = [
       { h: "Shipping" },
       { p: "Every listing ships free to the buyer, so shipping is part of your price." },
       { list: [
-        "Stamped envelope: one raw card up to $20, with your own stamp: a $1.31 nonmachinable stamp with a toploader inside, or an 82¢ Forever stamp without one. Tracked envelopes print free from the order.",
+        "Stamped envelope: one raw card up to $20, with your own stamp: an 82¢ Forever stamp, or a $1.31 nonmachinable stamp for thick cards and very rigid toploaders. Tracked envelopes print free from the order.",
         "Labels: bought from the order at the carrier's price, charged to the card saved under Sell → Shipping, plus 2.9% + 30¢ card processing. For example, a $5.86 USPS Ground Advantage label costs $6.35.",
         "Typical USPS Ground Advantage prices: a bubble mailer about $5–7, a small box with a slab about $6–9, depending on distance and weight.",
         "You can also buy a label elsewhere and enter its tracking number on the order.",
@@ -199,7 +199,7 @@ export const ARTICLES: Article[] = [
       { h: "Purchased labels" },
       { p: "After a sale, choose Buy label on the order. Graded cards and every order of two or more cards ship with a label and tracking. Orders over $750 require a signature." },
       { h: "Stamped envelope" },
-      { p: "Single-card orders of $20 or less may ship in a plain envelope with your own stamp ($1.31 nonmachinable stamp with a toploader, 82¢ Forever stamp without) and the printed address label, which carries a tracking barcode." },
+      { p: "Single-card orders of $20 or less may ship in a plain envelope with your own stamp (an 82¢ Forever stamp, or a $1.31 nonmachinable stamp for thick cards and very rigid toploaders) and the printed address label, which carries a tracking barcode." },
       { list: [
         "One card per envelope, always.",
         "Use a penny sleeve and a toploader. We recommend a toploader for thin cards that aren't relic or memorabilia cards.",
@@ -250,7 +250,7 @@ export const ARTICLES: Article[] = [
       { list: [
         "One raw card up to $20, in a #10 or #6¾ letter envelope.",
         "Penny sleeve and a toploader. We recommend a toploader for thin cards that aren't relic or memorabilia cards.",
-        "A toploader makes the envelope rigid, so USPS charges its 49¢ nonmachinable surcharge. Use a $1.31 nonmachinable stamp (sold by USPS for exactly this) instead of an 82¢ Forever stamp, or the envelope can come back for more postage.",
+        "Postage: an 82¢ Forever stamp for a thin card in a standard toploader. For thick cards and very rigid toploaders, use a $1.31 nonmachinable stamp, sold by USPS to cover its 49¢ nonmachinable surcharge, so the envelope isn't returned for more postage.",
         "Thick cards and relic or memorabilia cards ship in an envelope at your own risk. A bubble mailer with a label protects them better.",
         "No magnetic holders or slabs in envelopes.",
         "Print a tracked envelope from the order so the buyer gets USPS scans.",
@@ -273,7 +273,7 @@ export const ARTICLES: Article[] = [
       { p: "Enter the weight of each card as you'll pack it: a raw card in a toploader is about 1 oz, a graded slab about 3–4 oz. We add the mailer or box. A kitchen scale is accurate enough; a label bought on too little weight can be charged extra by the carrier." },
       { h: "What shipping costs you" },
       { list: [
-        "Stamped envelope: a $1.31 nonmachinable stamp with a toploader inside, or an 82¢ Forever stamp without one.",
+        "Stamped envelope: an 82¢ Forever stamp, or a $1.31 nonmachinable stamp for thick cards and very rigid toploaders.",
         "Bubble mailer and box: the carrier's label price from our label company (Shippo), plus 2.9% + 30¢ card processing on the label.",
         "Stripe also takes 2.9% + 30¢ of each sale from your Stripe balance.",
       ] },
@@ -319,7 +319,7 @@ export const ARTICLES: Article[] = [
       { list: [
         "Open the order (Sell → Orders) and choose Print tracked envelope.",
         "Pick a size: #10 envelope, #6¾ envelope (fed sideways) or a 4 × 2 in label to stick on any envelope.",
-        "Print, add a $1.31 nonmachinable stamp (with a toploader inside) or an 82¢ Forever stamp, and mail it.",
+        "Print, add an 82¢ Forever stamp (or a $1.31 nonmachinable stamp for thick cards and very rigid toploaders), and mail it.",
         "Back on the order, choose \u201cSent it in a stamped envelope\u201d. The barcode becomes the order's tracking.",
       ] },
       { p: "Reprinting gives the same barcode, so a smudged envelope can simply be printed again. Your ship-from address (Sell → Shipping) prints as the return address." },
