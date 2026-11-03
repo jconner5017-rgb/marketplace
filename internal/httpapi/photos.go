@@ -31,7 +31,11 @@ func (s *Server) handleUploadPhoto(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusRequestEntityTooLarge, "too_large", photos.ErrTooLarge.Error(), nil)
 		return
 	}
-	p, err := s.photos.Upload(r.Context(), u.ID, data)
+	upload := s.photos.Upload
+	if u.IsStaff() {
+		upload = s.photos.UploadUnlimited // the site's own staff aren't limited
+	}
+	p, err := upload(r.Context(), u.ID, data)
 	switch {
 	case errors.Is(err, photos.ErrTooMany):
 		writeError(w, http.StatusTooManyRequests, "too_many_photos", err.Error(), nil)

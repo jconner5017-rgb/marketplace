@@ -12,8 +12,10 @@ import (
 	"time"
 )
 
-// DailyLimit caps uploads per seller per 24 hours.
-const DailyLimit = 400
+// DailyLimit caps uploads per seller per 24 hours: about 1,500 cards with a
+// front and back each, enough for a shop listing a big collection, while
+// still stopping a runaway script. Staff accounts have no limit.
+const DailyLimit = 3000
 
 // Service handles uploads. With S3 nil, photo bytes live in Postgres and
 // are served by the API at BaseURL + /photos/{id}.jpg.
@@ -41,13 +43,24 @@ func (s *Service) Store() string {
 
 // Upload processes and stores one photo for ownerID.
 func (s *Service) Upload(ctx context.Context, ownerID string, data []byte) (Photo, error) {
-	var n int
-	if err := s.DB.QueryRowContext(ctx, `SELECT count(*) FROM photos WHERE owner_id = $1 AND created_at > now() - interval '1 day'`,
-		ownerID).Scan(&n); err != nil {
-		return Photo{}, err
-	}
-	if n >= DailyLimit {
-		return Photo{}, ErrTooMany
+	return s.upload(ctx, ownerID, data, true)
+}
+
+// UploadUnlimited is Upload without the daily limit, for staff accounts.
+func (s *Service) UploadUnlimited(ctx context.Context, ownerID string, data []byte) (Photo, error) {
+	return s.upload(ctx, ownerID, data, false)
+}
+
+func (s *Service) upload(ctx context.Context, ownerID string, data []byte, limited bool) (Photo, error) {
+	if limited {
+		var n int
+		if err := s.DB.QueryRowContext(ctx, `SELECT count(*) FROM photos WHERE owner_id = $1 AND created_at > now() - interval '1 day'`,
+			ownerID).Scan(&n); err != nil {
+			return Photo{}, err
+		}
+		if n >= DailyLimit {
+			return Photo{}, ErrTooMany
+		}
 	}
 	out, w, h, err := process(data)
 	if err != nil {

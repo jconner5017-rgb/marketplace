@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"errors"
 	"image"
 	"image/color"
 	"image/jpeg"
@@ -105,6 +106,21 @@ func TestUploadAndSweep(t *testing.T) {
 		t.Fatalf("get: %v %s %d", err, ct, len(data))
 	}
 	used, _ := s.Upload(ctx, uid, pngOf(600, 600))
+
+	// The daily limit: at the cap, regular uploads stop; staff uploads don't.
+	if _, err := d.Exec(`INSERT INTO photos (id, owner_id, store, url, content_type, width, height, size_bytes, data)
+		SELECT gen_random_uuid(), $1, 'db', 'x' || g, 'image/jpeg', 1, 1, 1, '\x00'::bytea FROM generate_series(1, $2) g`, uid, DailyLimit); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Upload(ctx, uid, pngOf(300, 300)); !errors.Is(err, ErrTooMany) {
+		t.Fatalf("over the limit: %v", err)
+	}
+	staff, err := s.UploadUnlimited(ctx, uid, pngOf(300, 300))
+	if err != nil {
+		t.Fatalf("staff upload: %v", err)
+	}
+	d.Exec(`DELETE FROM photos WHERE owner_id = $1 AND url LIKE 'x%'`, uid)
+	d.Exec(`DELETE FROM photos WHERE id = $1`, staff.ID)
 	// Age both, reference one from a listing row.
 	d.Exec(`UPDATE photos SET created_at = now() - interval '2 days' WHERE owner_id = $1`, uid)
 	if _, err := d.Exec(`INSERT INTO listings (seller_id, category, game_or_sport, set_name, title, condition, photo_urls, price_cents, quantity)
