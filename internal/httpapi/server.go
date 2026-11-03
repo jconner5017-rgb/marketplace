@@ -269,6 +269,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PATCH /v1/listings/{externalID}", s.sellerAPI(s.handleAPIPatchListing))
 	mux.HandleFunc("DELETE /v1/listings/{externalID}", s.sellerAPI(s.handleAPIDeleteListing))
 	mux.HandleFunc("GET /v1/seller/shipping", requireUser(s.handleShippingSettings))
+	mux.HandleFunc("GET /v1/seller/shipping/estimate", requireUser(s.handleShippingEstimate))
 	mux.HandleFunc("PUT /v1/seller/shipping/from", requireUser(s.handleShipFrom))
 	mux.HandleFunc("POST /v1/seller/shipping/card", requireUser(s.handleLabelCard))
 	mux.HandleFunc("POST /v1/seller/shipping/card/finish", requireUser(s.handleLabelCardFinish))

@@ -108,9 +108,9 @@ export default async function EnvelopePage({ params, searchParams }: {
         <Link href={`/sell/orders/${e.order_id}`} className="text-[14px] text-link hover:underline">← Order #{e.order_number}</Link>
         <h1 className="mt-2 text-[24px] font-bold">Print a tracked envelope</h1>
         <p className="mt-1 max-w-[680px] text-[14px] text-muted">
-          Print this, put on a First-Class stamp, and mail it. Then mark the order shipped: the barcode becomes its tracking, and
-          the buyer sees each USPS scan. Keep the envelope flat (penny sleeve and a thin, flexible stiffener) so it runs through the
-          sorting machines; stiff or lumpy envelopes are hand-sorted and don&apos;t get scans.{" "}
+          Print this, put on a Forever stamp (82¢), and mail it. Then mark the order shipped: the barcode becomes its tracking, and
+          the buyer sees each USPS scan. Pack the card in a penny sleeve and a toploader (recommended for thin, non-relic cards);
+          thick or relic/memorabilia cards go by envelope at your own risk, and lumpy envelopes may be hand-sorted and get few scans.{" "}
           <Link href="/help/tracked-envelopes" className="text-link underline">Printing tips</Link>
         </p>
         <div className="mt-4 flex flex-wrap items-center gap-3 text-[14px]">

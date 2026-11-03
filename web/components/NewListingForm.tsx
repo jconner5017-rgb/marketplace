@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { send } from "@/lib/client";
 import { CONDITIONS, categoryInfo, money, toCents } from "@/lib/format";
 import type { FeeSchedule, SiteCatalog } from "@/lib/catalog";
@@ -10,15 +10,19 @@ import Field from "./Field";
 import PhotoUploader from "./sell/PhotoUploader";
 
 const GRADERS = ["PSA", "BGS", "SGC", "CGC", "TAG", "OTHER"];
-const LABEL_ESTIMATE: Record<string, number> = { envelope: 0, bubble: 480, box: 650 };
+type ShipEstimate = { method: "stamp" | "label"; cost_cents: number; label_cents: number; carrier?: string; service?: string; live: boolean; from_set: boolean; signature: boolean };
+/** Stripe's US card fee on a payment, taken from the seller's Stripe balance. */
+const stripeFee = (cents: number) => (cents > 0 ? Math.round((cents * 290) / 10000) + 30 : 0);
+/** Used until the live quote arrives. */
+const FALLBACK: Record<string, number> = { envelope: 82, bubble: 525, box: 700 };
 
 /** What each package choice means; sizes match how labels are bought (internal/shipping ParcelFor). */
 const PACKAGES: Record<string, { size: string; adds: string; carrier: string; pack: string }> = {
   envelope: {
     size: "#10 or #6¾ letter envelope",
     adds: "",
-    carrier: "USPS First-Class letter with your stamp. Print a tracked envelope from the order for USPS scans.",
-    pack: "One raw card in a penny sleeve and a thin, flexible stiffener. No toploaders or slabs.",
+    carrier: "USPS First-Class letter with a Forever stamp (82¢). Print a tracked envelope from the order for USPS scans.",
+    pack: "One raw card in a penny sleeve and a toploader (recommended for thin, non-relic cards). Thick or relic/memorabilia cards ship by envelope at your own risk. No slabs.",
   },
   bubble: {
     size: "7¼ × 5¼ × ¾ in padded mailer",
@@ -84,8 +88,20 @@ export default function NewListingForm({ capCents, catalog, fees, initial }: {
   const [fields, setFields] = useState<Record<string, string>>({});
 
   const cents = format === "auction" ? toCents(start) : toCents(price);
-  const label = LABEL_ESTIMATE[preset] ?? 0;
-  const net = cents != null ? cents - FEE(cents) - label : null;
+  const [weight, setWeight] = useState(String(initial?.weight_oz ?? 1));
+  const [ship, setShip] = useState<ShipEstimate | null>(null);
+  // Real shipping cost: a stamp, or a label quote from the seller's ship-from address.
+  useEffect(() => {
+    const t = setTimeout(async () => {
+      const q = new URLSearchParams({ preset, weight_oz: String(Number(weight) || 1), graded: String(graded), price_cents: String(cents ?? 0) });
+      const res = await send<{ estimate: ShipEstimate }>("GET", `/v1/seller/shipping/estimate?${q}`);
+      setShip(res.ok ? res.data.estimate : null);
+    }, 400);
+    return () => clearTimeout(t);
+  }, [preset, weight, graded, cents]);
+  const shipCost = ship?.cost_cents ?? (graded && preset === "envelope" ? FALLBACK.box : FALLBACK[preset] ?? 0);
+  const stripe = cents != null ? stripeFee(cents) : 0;
+  const net = cents != null ? cents - FEE(cents) - stripe - shipCost : null;
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -347,12 +363,12 @@ export default function NewListingForm({ capCents, catalog, fees, initial }: {
             <option value="box">Small box (8 × 6 × 2 in)</option>
           </select>
         </Field>
-        <Field label="Weight (oz)" name="weight_oz" inputMode="decimal" defaultValue={String(initial?.weight_oz ?? 1)} error={fields.weight_oz}
+        <Field label="Weight (oz)" name="weight_oz" inputMode="decimal" value={weight} onChange={(e) => setWeight(e.target.value)} error={fields.weight_oz}
           hint={preset === "envelope" ? "The card and its sleeve." : "Each card as packed (a raw card in a toploader is about 1 oz, a slab about 3–4 oz)."} />
         {PACKAGES[preset] && (
           <div className="rounded-lg border border-line p-3 text-[13px] sm:col-span-2">
             <p><span className="font-semibold">Size:</span> {PACKAGES[preset].size}{PACKAGES[preset].adds ? `. ${PACKAGES[preset].adds}` : ""}</p>
-            <p className="mt-1"><span className="font-semibold">Shipping:</span> {PACKAGES[preset].carrier}{LABEL_ESTIMATE[preset] ? ` About ${money(LABEL_ESTIMATE[preset])} for one card.` : ""}</p>
+            <p className="mt-1"><span className="font-semibold">Shipping:</span> {PACKAGES[preset].carrier}{ship?.method === "label" ? ` About ${money(ship.cost_cents)} for one card.` : ""}</p>
             <p className="mt-1"><span className="font-semibold">Packing:</span> {PACKAGES[preset].pack}</p>
             <p className="mt-1 text-muted">Graded cards and orders of two or more cards always go by label; an order with any box item ships in a box.{" "}
               <a href="/help/packing" target="_blank" className="text-link underline">Packing guide</a></p>
@@ -366,13 +382,22 @@ export default function NewListingForm({ capCents, catalog, fees, initial }: {
             <dl className="num mt-2 grid grid-cols-[1fr_auto] gap-y-1">
               <dt>{format === "auction" ? "If it sells at the starting bid" : "Sale price"}</dt><dd className="text-right">{money(cents)}</dd>
               <dt>Marketplace fee</dt><dd className="text-right">−{money(FEE(cents))}</dd>
-              <dt>Shipping label (estimate)</dt><dd className="text-right">{label ? `−${money(label)}` : "Your stamp"}</dd>
+              <dt>Card processing (Stripe, 2.9% + 30¢)</dt><dd className="text-right">−{money(stripe)}</dd>
+              <dt>{preset !== "envelope" || graded
+                ? `Shipping label${ship?.service ? ` (${ship.carrier ? ship.carrier + " " : ""}${ship.service})` : " (estimate)"}`
+                : "Forever stamp"}</dt><dd className="text-right">−{money(shipCost)}</dd>
               <dt className="font-bold">You receive about</dt><dd className="text-right font-bold">{money(Math.max(0, net ?? 0))}</dd>
             </dl>
           ) : (
             <p className="mt-1 text-muted">Enter a {format === "auction" ? "starting bid" : "price"} to see what you&apos;ll receive.</p>
           )}
-          <p className="mt-2 text-[12px] text-muted">Before Stripe&apos;s card processing fee, which comes out of your Stripe balance.</p>
+          <p className="mt-2 text-[12px] text-muted">
+            {preset === "envelope" && !graded
+              ? "Shipping is one 82¢ Forever stamp. Stripe's fee comes out of your Stripe balance."
+              : ship?.live
+                ? `Label quoted from ${ship.from_set ? "your ship-from address" : "the middle of the US (add your ship-from address under Sell → Shipping for your own quote)"} to the far side of the country, including 2.9% + 30¢ card processing on the label. Nearer buyers cost less.`
+                : "Typical label price, including card processing on the label. Stripe's fee comes out of your Stripe balance."}
+          </p>
         </div>
       </fieldset>
       )}

@@ -371,6 +371,22 @@ func (s *Server) handleShippingSettings(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, st)
 }
 
+// GET /v1/seller/shipping/estimate?preset=bubble&weight_oz=1&graded=false&price_cents=2500
+// What shipping one card will cost the seller, for the listing form.
+func (s *Server) handleShippingEstimate(w http.ResponseWriter, r *http.Request) {
+	u, _ := currentUser(r)
+	q := r.URL.Query()
+	weight, _ := strconv.ParseFloat(q.Get("weight_oz"), 64)
+	price, _ := strconv.Atoi(q.Get("price_cents"))
+	est, err := s.checkout.EstimateShipping(r.Context(), u.ID, q.Get("preset"), weight, q.Get("graded") == "true", price)
+	if err != nil {
+		s.checkoutError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"estimate": est,
+		"stripe": map[string]int{"percent_bps": checkout.StripePercentBps, "fixed_cents": checkout.StripeFixedCents}})
+}
+
 // PUT /v1/seller/shipping/from {name, line1, line2, city, state, zip, phone}
 func (s *Server) handleShipFrom(w http.ResponseWriter, r *http.Request) {
 	u, _ := currentUser(r)
