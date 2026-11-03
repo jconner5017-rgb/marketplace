@@ -59,3 +59,18 @@ func TestSportsAreRequiredToBeKnown(t *testing.T) {
 		t.Error("unknown game accepted; it should go under Other TCG")
 	}
 }
+
+func TestTidyTitle(t *testing.T) {
+	for in, want := range map[string]string{
+		" 2025 2025-26 Topps Chrome Basketball Nikola Topic ": "2025-26 Topps Chrome Basketball Nikola Topic",
+		"2024 2024-25 Panini Prizm Global Reach":               "2024-25 Panini Prizm Global Reach",
+		"2025 2025 Topps Chrome Future Stars Brice Turang":     "2025 Topps Chrome Future Stars Brice Turang",
+		"2023 2022/23 Bowman University's Best":                "2022/23 Bowman University's Best",
+		"2025 Topps Chrome Update (1985 Topps design)":         "2025 Topps Chrome Update (1985 Topps design)",
+		"1999 Pokemon Base Set Charizard":                      "1999 Pokemon Base Set Charizard",
+	} {
+		if got := TidyTitle(in); got != want {
+			t.Errorf("TidyTitle(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

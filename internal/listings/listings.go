@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"math"
 	"net/url"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -140,6 +141,17 @@ type Listing struct {
 	sale saleFields
 }
 
+// leadingYears: a title that starts with two years, like "2025 2025-26
+// Topps Chrome" or "2024 2024-25 Panini Prizm", from a set name that
+// already starts with its year.
+var leadingYears = regexp.MustCompile(`^(?:19|20)\d{2}\s+((?:19|20)\d{2})`)
+
+// TidyTitle trims a title and drops a repeated year at the start.
+func TidyTitle(t string) string {
+	t = strings.TrimSpace(t)
+	return leadingYears.ReplaceAllString(t, "$1")
+}
+
 func (in *Input) normalize() {
 	trim := func(p **string) {
 		if *p != nil {
@@ -154,7 +166,7 @@ func (in *Input) normalize() {
 	in.Category = strings.ToLower(strings.TrimSpace(in.Category))
 	in.GameOrSport = normalizeGameOrSport(in.Category, strings.TrimSpace(in.GameOrSport))
 	in.SetName = strings.TrimSpace(in.SetName)
-	in.Title = strings.TrimSpace(in.Title)
+	in.Title = TidyTitle(in.Title)
 	in.Description = strings.TrimSpace(in.Description)
 	trim(&in.ExternalID)
 	trim(&in.CardNumber)
