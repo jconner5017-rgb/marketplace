@@ -62,6 +62,21 @@ export default async function Home() {
               Start selling
             </Link>
           </div>
+          {/* The inventory apps that list here in one click. */}
+          <div className="mt-8 border-t border-white/15 pt-6">
+            <h2 className="text-[19px] font-bold leading-snug">
+              Full integration with FireCardManager and FireCardManager TCG
+            </h2>
+            <p className="mt-2 max-w-[52ch] text-[15px] text-white/80">
+              List your cards free and publish them to Slabs &amp; Singles with one click, straight from your
+              inventory. When a card sells here, it comes off eBay automatically.
+            </p>
+            <div className="mt-5">
+              <a href="https://firecardmanager.com" className="inline-block rounded-full bg-white px-5 py-2 font-semibold text-ink hover:bg-wash">
+                Visit FireCardManager.com
+              </a>
+            </div>
+          </div>
         </div>
         <div className="grid gap-4 sm:grid-cols-3">
           {SHELVES.map((s) => (
