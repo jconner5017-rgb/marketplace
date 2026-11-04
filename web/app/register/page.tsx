@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Suspense } from "react";
 import AuthForm from "@/components/AuthForm";
 
@@ -11,6 +12,12 @@ export default function RegisterPage() {
       <Suspense>
         <AuthForm mode="register" />
       </Suspense>
+      <p className="mt-4 text-[13px] text-muted">
+        By creating an account, you agree to the{" "}
+        <Link href="/help/terms" className="text-link hover:underline">Terms of Service</Link>,{" "}
+        <Link href="/help/user-agreement" className="text-link hover:underline">User Agreement</Link> and{" "}
+        <Link href="/help/privacy" className="text-link hover:underline">Privacy Statement</Link>.
+      </p>
     </div>
   );
 }

@@ -28,6 +28,7 @@ export default async function HelpArticle({ params }: Props) {
       if ("list" in b && b.list) return { list: b.list.map(fill) };
       if ("h" in b && b.h != null) return { h: fill(b.h) };
       if ("note" in b && b.note != null) return { note: fill(b.note) };
+      if ("links" in b && b.links) return b;
       return { p: fill((b as { p: string }).p) };
     }),
   };
@@ -61,6 +62,16 @@ export default async function HelpArticle({ params }: Props) {
               <ul key={i} className="list-disc space-y-1.5 pl-6">{b.list.map((li) => <li key={li}>{li}</li>)}</ul>
             )
             : "note" in b ? <p key={i} className="rounded-md bg-wash px-4 py-3 text-[14px]">{b.note}</p>
+            : "links" in b ? (
+              <ul key={i} className="space-y-2">
+                {b.links.map((l) => (
+                  <li key={l.href}>
+                    <Link href={l.href} className="font-semibold text-link hover:underline">{l.label}</Link>
+                    {l.text ? <span>: {l.text}</span> : null}
+                  </li>
+                ))}
+              </ul>
+            )
             : <p key={i}>{b.p}</p>,
           )}
         </div>
