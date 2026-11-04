@@ -1,59 +1,29 @@
 import Link from "next/link";
 import { apiGet, getSeller } from "@/lib/api";
 import { requireUser } from "@/lib/auth";
-import { money, timeLeft } from "@/lib/format";
-import type { Hold, Listing, Offer, Order } from "@/lib/types";
+import { money } from "@/lib/format";
+import type { FeedbackSummary } from "@/lib/types";
 import OnboardButton from "@/components/OnboardButton";
-import { GradeBadge, Photo } from "@/components/CardBits";
-import ListingActions from "@/components/ListingActions";
-import BundleDiscountForm from "@/components/BundleDiscountForm";
-import TaxToggle from "@/components/TaxToggle";
 import PromoBox from "@/components/PromoBox";
 import type { Redemption } from "@/lib/promos";
-import { feeFor, feeSentence, getFees, labelCharge, stripeFee, type FeeSchedule } from "@/lib/catalog";
+import { getFees } from "@/lib/catalog";
+import { CountRow, HubCard, SellingCosts, TIERS, stripeNeed } from "@/components/sell/HubBits";
+import SalesChart from "@/components/sell/SalesChart";
+import { SellerBadge } from "@/components/feedback/Bits";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Seller hub" };
 
-const TIERS = [
-  { tier: 1, cap: 2000, need: "Where every seller starts" },
-  { tier: 2, cap: 25000, need: "50 sales to different buyers, 97% positive, 30 days" },
-  { tier: 3, cap: 100000, need: "150 sales to different buyers, 98% positive, 90 days" },
-];
-
-/** Everything a sale costs the seller, with a worked example. */
-function SellingCosts({ fees }: { fees: FeeSchedule }) {
-  const price = 2500, label = 586;
-  const fee = feeFor(fees, price), stripe = stripeFee(price), lab = labelCharge(label);
-  const row = "flex justify-between gap-4";
-  return (
-    <section className="mt-6 rounded-lg border border-line p-4 text-[14px]">
-      <h2 className="text-[17px] font-bold">What selling costs</h2>
-      <ul className="mt-2 space-y-2">
-        <li><strong>Listing:</strong> free.</li>
-        <li><strong>Our fee:</strong> {feeSentence(fees)}, only when a card sells.</li>
-        <li><strong>Card processing:</strong> Stripe&apos;s fee, usually 2.9% + 30¢ per order, comes out of your Stripe balance.</li>
-        <li>
-          <strong>Shipping:</strong> buyers never pay it, so it&apos;s yours. One raw card up to $20 can go in an envelope with an
-          82¢ Forever stamp, or a $1.31 nonmachinable stamp for thick cards and very rigid toploaders. Everything else ships with a tracked label you buy from the order at the carrier&apos;s price, plus
-          2.9% + 30¢ card processing on the label. A bubble mailer by USPS Ground Advantage is usually about $5–7.
-          Buyers on your <Link href="/sell/trusted" className="text-link underline">trusted buyer list</Link> can choose an envelope for one raw card up to $100.
-        </li>
-      </ul>
-      <div className="mt-3 rounded-md bg-wash p-3">
-        <p className="font-semibold">Example: a {money(price)} card in a bubble mailer</p>
-        <dl className="num mt-1 space-y-0.5">
-          <div className={row}><dt>Buyer pays</dt><dd>{money(price)}</dd></div>
-          <div className={row}><dt>Our fee</dt><dd>−{money(fee)}</dd></div>
-          <div className={row}><dt>Stripe processing (about)</dt><dd>−{money(stripe)}</dd></div>
-          <div className={row}><dt>Label ({money(label)} + processing)</dt><dd>−{money(lab)}</dd></div>
-          <div className={`${row} border-t border-line pt-1 font-bold`}><dt>You keep about</dt><dd>{money(price - fee - stripe - lab)}</dd></div>
-        </dl>
-      </div>
-      <p className="mt-2 text-muted">Set your price with shipping in mind. <Link href="/help/fees" className="text-link underline">Fees in detail</Link></p>
-    </section>
-  );
-}
+type Overview = {
+  listings: Record<string, number>;
+  orders: Record<string, number>;
+  unread_messages: number;
+  offers_to_answer: number;
+  sales: { days: { day: string; cents: number; orders: number }[]; periods: { key: string; cents: number; orders: number }[] };
+  traffic: { views_90d: number; views_31d: number; orders_90d: number; conversion_90d: number };
+  performance: { orders_12m: number; late_12m: number; late_percent: number; tracked_percent: number; chargebacks_12m: number; open_problems: number };
+  feedback_30d: { positive: number; neutral: number; negative: number };
+};
 
 export default async function SellPage({ searchParams }: { searchParams: Promise<{ promo?: string }> }) {
   const { promo } = await searchParams;
@@ -110,174 +80,188 @@ export default async function SellPage({ searchParams }: { searchParams: Promise
     );
   }
 
-  const mine = await apiGet<{ listings: Listing[]; total: number }>("/v1/seller/listings?limit=100");
-  const listings = mine.data?.listings ?? [];
-  const [offersR, holdsR, ordersR] = await Promise.all([
-    apiGet<{ offers: Offer[] }>("/v1/offers?side=selling"),
-    apiGet<{ holds: Hold[] }>("/v1/holds?side=selling"),
-    apiGet<{ orders: Order[] }>("/v1/orders?side=selling&status=to_ship"),
+  const [ovR, repR] = await Promise.all([
+    apiGet<Overview>("/v1/seller/overview"),
+    apiGet<{ summary: FeedbackSummary; feedback: { id: string; rating: number; comment: string; created_at: string; item_title: string }[] }>(
+      `/v1/members/${encodeURIComponent(me.username)}/feedback?role=seller&limit=3`),
   ]);
-  const toShip = ordersR.data?.orders ?? [];
-  const offersWaiting = (offersR.data?.offers ?? []).filter((o) => o.can_respond).length;
-  const awaitingPay = (holdsR.data?.holds ?? []).filter((h) => h.status === "awaiting_payment");
-  const total = mine.data?.total ?? 0;
+  const ov = ovR.data;
+  const rep = repR.data?.summary;
+  const recent = repR.data?.feedback ?? [];
+  const L = ov?.listings ?? {}, O = ov?.orders ?? {};
+  const period = (k: string) => ov?.sales.periods.find((p) => p.key === k) ?? { cents: 0, orders: 0 };
   const current = TIERS.find((t) => t.tier === seller.tier) ?? TIERS[0];
   const nextTier = TIERS.find((t) => t.tier === seller.tier + 1);
+  const leftFree = promosR.data?.fee_free_sales_left ?? 0;
+  const todo = [
+    O.to_ship ? { href: "/sell/orders", text: `${O.to_ship} ${O.to_ship === 1 ? "order" : "orders"} to ship${O.late ? ` (${O.late} late)` : ""}`, urgent: true } : null,
+    ov?.offers_to_answer ? { href: "/offers?side=selling", text: `${ov.offers_to_answer} ${ov.offers_to_answer === 1 ? "offer needs" : "offers need"} a reply`, urgent: false } : null,
+    ov?.unread_messages ? { href: "/messages", text: `${ov.unread_messages} unread ${ov.unread_messages === 1 ? "message" : "messages"}`, urgent: false } : null,
+    O.open_problems ? { href: "/sell/orders?status=", text: `${O.open_problems} open ${O.open_problems === 1 ? "problem" : "problems"} with an order`, urgent: true } : null,
+  ].filter(Boolean) as { href: string; text: string; urgent: boolean }[];
+  const ms = rep?.milestone;
 
   return (
-    <div className="pt-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
+    <div className="pb-10 pt-4">
+      {/* Header strip */}
+      <section className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-line p-4">
         <div>
-          <h1 className="text-[26px] font-bold">Seller hub</h1>
-          <p className="text-muted">{me.username} · {total} {total === 1 ? "listing" : "listings"}</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Link href="/sell/orders" className="rounded-full border border-link px-5 py-2 font-semibold text-link hover:bg-wash">Orders</Link>
-          <Link href="/sell/reports" className="rounded-full border border-link px-5 py-2 font-semibold text-link hover:bg-wash">Reports</Link>
-          <Link href="/sell/connect" className="rounded-full border border-link px-5 py-2 font-semibold text-link hover:bg-wash">Connect FCM</Link>
-          <Link href="/sell/shipping" className="rounded-full border border-link px-5 py-2 font-semibold text-link hover:bg-wash">Shipping</Link>
-          <Link href="/sell/trusted" className="rounded-full border border-link px-5 py-2 font-semibold text-link hover:bg-wash">Trusted buyers</Link>
-          <Link href="/sell/feedback" className="rounded-full border border-link px-5 py-2 font-semibold text-link hover:bg-wash">Feedback</Link>
-          <Link href="/sell/import" className="rounded-full border border-link px-5 py-2 font-semibold text-link hover:bg-wash">Upload a CSV</Link>
-          <Link href="/sell/new" className="rounded-full bg-link px-5 py-2 font-semibold text-white hover:bg-link-dark">List a card</Link>
-        </div>
-      </div>
-
-      {(code || (promosR.data?.fee_free_sales_left ?? 0) > 0) && <div className="mt-6">{promoBox}</div>}
-
-      <div className="mt-6 grid gap-4 md:grid-cols-2">
-        <div className="rounded-lg border border-line p-4">
-          <h2 className="font-bold">Your price limit: {money(current.cap)} per card</h2>
-          <p className="mt-1 text-[14px] text-muted">
-            {nextTier
-              ? `Next: up to ${money(nextTier.cap)} after ${nextTier.need}.`
-              : "You're at the top tier. Cards up to the marketplace limit."}
+          <p className="text-[20px] font-bold">{me.username}</p>
+          <p className="text-[14px] text-muted">
+            {rep?.positive_percent != null ? `${rep.positive_percent.toFixed(1)}% positive` : "No feedback yet"}
+            {" "}(<Link href={`/seller/${encodeURIComponent(me.username)}`} className="text-link hover:underline">{rep?.score ?? 0}</Link>)
           </p>
-          <ol className="mt-3 flex gap-1" aria-label="Seller tiers">
-            {TIERS.map((t) => (
-              <li key={t.tier} className={`flex-1 rounded px-2 py-1 text-center text-[12px] ${t.tier <= seller.tier ? "bg-ink text-white" : "bg-wash text-muted"}`}>
-                {money(t.cap).replace(".00", "")}
-              </li>
-            ))}
-          </ol>
+          {rep && rep.badges.length > 0 && (
+            <ul className="mt-1.5 flex flex-wrap gap-1.5">{rep.badges.map((b) => <li key={b.key}><SellerBadge b={b} /></li>)}</ul>
+          )}
         </div>
-        <div className="rounded-lg border border-line p-4">
-          <h2 className="font-bold">Multi-card discount</h2>
-          <p className="mt-1 text-[14px] text-muted">Buyers who order several cards from you ship in one package, so pass the savings on.</p>
-          <BundleDiscountForm type={seller.bundle_discount_type} value={seller.bundle_discount_val} />
-        </div>
-        <div className="rounded-lg border border-line p-4 md:col-span-2">
-          <h2 className="font-bold">Sales tax</h2>
-          <p className="mt-1 text-[14px] text-muted">
-            You&apos;re responsible for collecting and paying sales tax where your state or the buyer&apos;s state requires it.
-            Stripe Tax can work it out on each sale and add it at checkout; it runs on your own Stripe account and
-            Stripe charges for it. <a href="https://dashboard.stripe.com/tax" target="_blank" rel="noopener noreferrer" className="text-link underline">Set up Stripe Tax</a>
-          </p>
-          <TaxToggle on={seller.collect_tax} />
-        </div>
-        {!(code || (promosR.data?.fee_free_sales_left ?? 0) > 0) && <div className="md:col-span-2">{promoBox}</div>}
-      </div>
+        <dl className="flex flex-wrap items-center gap-6 text-[14px]">
+          <div><dt className="text-muted">Listing views (90d)</dt><dd className="num text-[20px] font-bold">{(ov?.traffic.views_90d ?? 0).toLocaleString()}</dd></div>
+          <div><dt className="text-muted">Sales (90d)</dt><dd className="num text-[20px] font-bold">{money(period("90d").cents)}</dd></div>
+          <div><dt className="text-muted">Orders (90d)</dt><dd className="num text-[20px] font-bold">{period("90d").orders.toLocaleString()}</dd></div>
+          <Link href="/sell/new" className="rounded-full bg-link px-5 py-2.5 font-semibold text-white hover:bg-link-dark">List a card</Link>
+        </dl>
+      </section>
 
       {seller.review_status === "rejected" && (
-        <p role="alert" className="mt-6 rounded-lg border border-slab/40 bg-slab/5 p-4 text-[14px] text-slab">
+        <p role="alert" className="mt-4 rounded-lg border border-slab/40 bg-slab/5 p-4 text-[14px] text-slab">
           Your seller account wasn&apos;t approved, so your listings are hidden and you can&apos;t list new cards.
           See <a href="/help/contact" className="underline">Contact us</a> if you think this is a mistake.
         </p>
       )}
-      {(offersWaiting > 0 || awaitingPay.length > 0 || toShip.length > 0) && (
-        <div className="mt-6 flex flex-wrap gap-3 text-[14px]">
-          {toShip.length > 0 && (
-            <Link href="/sell/orders" className="rounded-lg bg-ink px-4 py-2 font-semibold text-white hover:opacity-90">
-              {toShip.length} {toShip.length === 1 ? "order" : "orders"} to ship
-            </Link>
-          )}
-          {offersWaiting > 0 && (
-            <Link href="/offers?side=selling" className="rounded-lg border border-ink px-4 py-2 font-semibold hover:bg-wash">
-              {offersWaiting} {offersWaiting === 1 ? "offer needs" : "offers need"} a reply
-            </Link>
-          )}
-          {awaitingPay.length > 0 && (
-            <span className="rounded-lg bg-wash px-4 py-2">
-              {awaitingPay.length} sold, awaiting the buyer&apos;s payment ({money(awaitingPay.reduce((s, h) => s + h.unit_cents * h.quantity, 0))})
-            </span>
-          )}
-        </div>
-      )}
 
-      <h2 className="mt-8 border-b border-line pb-2 text-[20px] font-bold">Your listings</h2>
-      {listings.length === 0 ? (
-        <p className="py-10 text-center text-muted">
-          Nothing listed yet. <Link href="/sell/new" className="text-link underline">List your first card</Link> or{" "}
-          <Link href="/sell/import" className="text-link underline">upload a CSV</Link>.
-        </p>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[720px] text-[14px]">
-            <thead>
-              <tr className="border-b border-line text-left text-[13px] text-muted">
-                <th className="py-2 pr-3 font-semibold" colSpan={2}>Card</th>
-                <th className="py-2 pr-3 font-semibold">Grade</th>
-                <th className="py-2 pr-3 text-right font-semibold">Price</th>
-                <th className="py-2 pr-3 text-right font-semibold">Qty</th>
-                <th className="py-2 pr-3 font-semibold">Status</th>
-                <th className="py-2 font-semibold"><span className="sr-only">Actions</span></th>
-              </tr>
-            </thead>
-            <tbody>
-              {listings.map((l) => (
-                <tr key={l.id} className="border-b border-wash align-middle">
-                  <td className="w-12 py-2 pr-3"><Photo l={l} className="h-14 w-10 rounded" /></td>
-                  <td className="py-2 pr-3">
-                    <Link href={`/item/${l.id}`} className="title-tight hover:underline">{l.title}</Link>
-                    <div className="text-[12px] text-muted">{l.external_id ? `SKU ${l.external_id} · ` : ""}{l.set_name}</div>
-                  </td>
-                  <td className="py-2 pr-3"><GradeBadge l={l} /></td>
-                  <td className="num py-2 pr-3 text-right font-semibold">{money(l.price_cents)}</td>
-                  <td className="num py-2 pr-3 text-right">{l.quantity}</td>
-                  <td className="py-2 pr-3">
-                    {l.format === "auction" && l.auction ? (
-                      <span className={l.auction.state === "live" ? "text-ship" : "text-muted"}>
-                        {l.auction.state === "live"
-                          ? <>Auction · {l.auction.bid_count} {l.auction.bid_count === 1 ? "bid" : "bids"} · <span suppressHydrationWarning>{timeLeft(l.auction.ends_at)}</span></>
-                          : l.auction.state === "won" ? "Sold, awaiting payment" : l.auction.state === "unsold" ? "Ended, unsold" : "Ended"}
-                      </span>
-                    ) : (
-                      <span className={l.status === "active" ? "text-ship" : "text-muted"}>
-                        {l.status === "active" ? (l.offers_enabled ? "Active · offers on" : "Active") : l.status === "sold_out" ? "Sold out" : "Hidden"}
-                      </span>
-                    )}
-                  </td>
-                  <td className="py-2 text-right">
-                    <ListingActions id={l.id} status={l.status} auction={l.format === "auction" ? l.auction : undefined} />
-                  </td>
-                </tr>
+      {/* To-do bar */}
+      <section className="mt-4 rounded-xl bg-wash p-4 text-[14px]" aria-label="To do">
+        {todo.length === 0 ? (
+          <p><strong>✓ You&apos;re all caught up!</strong> New tasks, like orders to ship or offers to answer, will show up here.</p>
+        ) : (
+          <ul className="flex flex-wrap gap-2">
+            {todo.map((t) => (
+              <li key={t.href + t.text}>
+                <Link href={t.href} className={`inline-block rounded-lg px-4 py-2 font-semibold ${t.urgent ? "bg-ink text-white hover:opacity-90" : "border border-ink bg-paper hover:bg-wash"}`}>{t.text}</Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      {(code || leftFree > 0) && <div className="mt-4">{promoBox}</div>}
+
+      <div className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <HubCard title="Listings" href="/sell/listings">
+          <p className="mb-1"><Link href="/sell/new" className="font-semibold text-link hover:underline">List a card</Link>{" · "}
+            <Link href="/sell/import" className="text-link hover:underline">Upload a CSV</Link></p>
+          <ul className="text-[14px]">
+            <CountRow href="/sell/listings?show=active" label="Active listings" n={L.active} />
+            <CountRow href="/sell/listings?show=with_offers" label="With open offers from buyers" n={L.with_offers} />
+            <CountRow href="/sell/listings?show=auctions" label="All auctions" n={L.auctions} />
+            <CountRow href="/sell/listings?show=ending_today" label="Auctions ending today" n={L.ending_today} />
+            <CountRow href="/sell/listings?show=auctions" label="With reserve met" n={L.reserve_met} />
+            <CountRow href="/sell/listings?show=unsold" label="Unsold and not relisted" n={L.unsold} />
+            <CountRow href="/sell/listings?show=hidden" label="Hidden" n={L.hidden} />
+            <CountRow href="/sell/listings?show=sold_out" label="Sold out" n={L.sold_out} />
+          </ul>
+        </HubCard>
+
+        <HubCard title="Orders" href="/sell/orders">
+          <ul className="text-[14px]">
+            <CountRow href="/sell/orders" label="Awaiting shipment: print a label" n={O.to_ship} strong />
+            <CountRow href="/sell/orders" label="Past the ship-by date" n={O.late} strong />
+            <CountRow href="/offers?side=selling" label="Awaiting the buyer's payment" n={O.awaiting_payment} />
+            <CountRow href="/sell/orders?status=" label="Open problems" n={O.open_problems} strong />
+            <CountRow href="/sell/orders?status=shipped" label="Shipped and awaiting your feedback" n={O.awaiting_feedback} />
+            <CountRow href="/sell/orders" label="Orders you can ship together" n={O.combinable} />
+            <CountRow href="/sell/orders?status=" label="See all orders" />
+          </ul>
+        </HubCard>
+
+        <HubCard title="Sales" href="/sell/reports">
+          <SalesChart days={ov?.sales.days ?? []} />
+          <dl className="mt-2 text-[14px]">
+            {[["today", "Today"], ["7d", "Last 7 days"], ["31d", "Last 31 days"], ["90d", "Last 90 days"]].map(([k, label]) => (
+              <div key={k} className="flex justify-between border-b border-wash py-1 last:border-0">
+                <dt>{label}</dt><dd className="num font-semibold">{money(period(k).cents)} <span className="font-normal text-muted">· {period(k).orders}</span></dd>
+              </div>
+            ))}
+          </dl>
+          <p className="mt-1 text-[12px] text-muted">Paid orders, less refunds, US Eastern time.</p>
+        </HubCard>
+
+        <HubCard title="Traffic">
+          <dl className="text-[14px]">
+            <div className="flex justify-between border-b border-wash py-1.5"><dt>Listing views, last 31 days</dt><dd className="num font-semibold">{(ov?.traffic.views_31d ?? 0).toLocaleString()}</dd></div>
+            <div className="flex justify-between border-b border-wash py-1.5"><dt>Listing views, last 90 days</dt><dd className="num font-semibold">{(ov?.traffic.views_90d ?? 0).toLocaleString()}</dd></div>
+            <div className="flex justify-between py-1.5"><dt>Views that became orders (90d)</dt><dd className="num font-semibold">{(ov?.traffic.conversion_90d ?? 0).toFixed(1)}%</dd></div>
+          </dl>
+          <p className="mt-1 text-[12px] text-muted">Good photos of the front and back and a fair price turn more views into sales.</p>
+        </HubCard>
+
+        <HubCard title="Seller level" href="/sell/performance">
+          <dl className="text-[14px]">
+            <div className="flex justify-between border-b border-wash py-1.5"><dt>Price limit</dt><dd className="num font-semibold">{money(current.cap)} per card</dd></div>
+            <div className="flex justify-between border-b border-wash py-1.5"><dt>Late shipment rate (12 months)</dt><dd className="num font-semibold">{(ov?.performance.late_percent ?? 0).toFixed(1)}%</dd></div>
+            <div className="flex justify-between border-b border-wash py-1.5"><dt>Label orders with tracking</dt><dd className="num font-semibold">{(ov?.performance.tracked_percent ?? 100).toFixed(0)}%</dd></div>
+            <div className="flex justify-between border-b border-wash py-1.5"><dt>Chargebacks lost (12 months)</dt><dd className="num font-semibold">{ov?.performance.chargebacks_12m ?? 0}</dd></div>
+            <div className="flex justify-between py-1.5"><dt>Open problems</dt><dd className="num font-semibold">{ov?.performance.open_problems ?? 0}</dd></div>
+          </dl>
+          <p className="mt-1 text-[12px] text-muted">{nextTier ? `Next: up to ${money(nextTier.cap)} after ${nextTier.need}.` : "You're at the top level."} Checked daily.</p>
+        </HubCard>
+
+        <HubCard title="Badges" href="/help/seller-badges">
+          {rep && rep.badges.length > 0
+            ? <ul className="flex flex-wrap gap-1.5">{rep.badges.map((b) => <li key={b.key}><SellerBadge b={b} size="lg" /></li>)}</ul>
+            : <p className="text-[14px] text-muted">No badges yet.</p>}
+          {ms && ms.next_key && (
+            <div className="mt-3 text-[14px]">
+              <p>{(rep?.sales ?? 0).toLocaleString()} of {ms.next_sales.toLocaleString()} sales to <strong>{ms.next_label}</strong></p>
+              <div className="mt-1 h-2 overflow-hidden rounded-full bg-wash" role="progressbar" aria-valuemin={0} aria-valuemax={ms.next_sales} aria-valuenow={rep?.sales ?? 0}>
+                <div className="h-full rounded-full bg-ink" style={{ width: `${Math.min(100, ((rep?.sales ?? 0) / ms.next_sales) * 100)}%` }} />
+              </div>
+            </div>
+          )}
+          <p className="mt-2 text-[12px] text-muted">Top Rated: 50+ sales, 98%+ positive, ships on time.</p>
+        </HubCard>
+
+        <HubCard title="Feedback" href={`/seller/${encodeURIComponent(me.username)}`}>
+          <p className="text-[13px] font-semibold text-muted">Last 30 days</p>
+          <dl className="mt-1 flex justify-between text-[14px]">
+            <div><dt className="sr-only">Positive</dt><dd><span aria-hidden className="text-ship">⊕</span> <span className="num">{ov?.feedback_30d.positive ?? 0}</span> Positive</dd></div>
+            <div><dt className="sr-only">Neutral</dt><dd><span aria-hidden className="text-muted">⊙</span> <span className="num">{ov?.feedback_30d.neutral ?? 0}</span> Neutral</dd></div>
+            <div><dt className="sr-only">Negative</dt><dd><span aria-hidden className="text-slab">⊖</span> <span className="num">{ov?.feedback_30d.negative ?? 0}</span> Negative</dd></div>
+          </dl>
+          <p className="mt-3 text-[13px] font-semibold text-muted">Most recent</p>
+          {recent.length === 0 ? <p className="text-[14px] text-muted">No feedback yet.</p> : (
+            <ul className="text-[14px]">
+              {recent.map((f) => (
+                <li key={f.id} className="flex justify-between gap-3 border-b border-wash py-1.5 last:border-0">
+                  <span className="line-clamp-1">{f.rating > 0 ? "⊕" : f.rating < 0 ? "⊖" : "⊙"} {f.comment || f.item_title}</span>
+                  <span className="whitespace-nowrap text-muted">{new Date(f.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
+                </li>
               ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+            </ul>
+          )}
+          <p className="mt-2 text-[14px]"><Link href="/sell/feedback" className="text-link hover:underline">Feedback settings</Link></p>
+        </HubCard>
+
+        <HubCard title="Marketing" href="/sell/marketing">
+          <ul className="text-[14px]">
+            <CountRow href="/sell/marketing" label="Fee-free sales left (promo codes)" n={leftFree} />
+            <CountRow href="/sell/marketing" label={seller.bundle_discount_type && seller.bundle_discount_type !== "none" ? "Multi-card discount: on" : "Multi-card discount: off"} />
+            <CountRow href="/sell/trusted" label="Trusted buyers" />
+          </ul>
+        </HubCard>
+
+        <HubCard title="Selling tools">
+          <ul className="text-[14px]">
+            <CountRow href="/sell/connect" label="Connect FireCardManager" />
+            <CountRow href="/sell/import" label="Upload a CSV" />
+            <CountRow href="/sell/shipping" label="Shipping: ship-from address and label card" />
+            <CountRow href="/sell/payments" label="Payments and sales tax" />
+            <CountRow href="/sell/reports" label="Reports and sales CSV" />
+            <CountRow href="/help/selling" label="Selling help" />
+          </ul>
+        </HubCard>
+      </div>
     </div>
   );
-}
-
-/** Stripe's requirement names, in plain words. */
-function stripeNeed(key: string): string {
-  const k = key.replace(/^(individual|company|representative|person_[^.]+)\./, "");
-  const map: Record<string, string> = {
-    "business_profile.url": "Your website (use your seller page, slabsnsingles.com/seller/your-name)",
-    "business_profile.mcc": "Your industry",
-    "business_profile.product_description": "A description of what you sell",
-    "external_account": "A bank account for payouts",
-    "tos_acceptance.date": "Accepting Stripe's terms",
-    "tos_acceptance.ip": "Accepting Stripe's terms",
-    "verification.document": "A photo of your ID",
-    "verification.additional_document": "A second document (such as a utility bill)",
-    "id_number": "Your full Social Security number",
-    "ssn_last_4": "The last 4 digits of your Social Security number",
-    "dob.day": "Your date of birth", "dob.month": "Your date of birth", "dob.year": "Your date of birth",
-    "address.line1": "Your address", "address.city": "Your address", "address.postal_code": "Your address", "address.state": "Your address",
-    "phone": "Your phone number", "email": "Your email address",
-    "first_name": "Your name", "last_name": "Your name",
-  };
-  return map[key] ?? map[k] ?? key.replace(/[._]/g, " ");
 }

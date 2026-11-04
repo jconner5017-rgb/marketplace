@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -838,15 +839,49 @@ func (s *Service) upsert(ctx context.Context, sellerID string, in Input, noRelis
 
 // ListForSeller returns the seller's own listings, newest first.
 func (s *Service) ListForSeller(ctx context.Context, sellerID string, limit, offset int) ([]Listing, int, error) {
+	return s.ListForSellerFiltered(ctx, sellerID, "", "", limit, offset)
+}
+
+// SellerFilters are the seller hub's listing views (the same groups the
+// hub overview counts).
+var SellerFilters = map[string]string{
+	"":             "",
+	"active":       ` AND l.status = 'active'`,
+	"fixed":        ` AND l.status = 'active' AND l.format = 'fixed'`,
+	"auctions":     ` AND l.auction_state = 'live'`,
+	"ending_today": ` AND l.auction_state = 'live' AND l.ends_at < now() + interval '24 hours'`,
+	"with_offers": ` AND l.status = 'active' AND EXISTS (SELECT 1 FROM offers f WHERE f.listing_id = l.id AND f.status = 'pending'
+		AND f.from_role = 'buyer' AND f.expires_at > now())`,
+	"unsold":   ` AND (l.status = 'ended' OR l.auction_state = 'unsold')`,
+	"hidden":   ` AND l.status = 'hidden'`,
+	"sold_out": ` AND l.status = 'sold_out'`,
+}
+
+// ListForSellerFiltered lists a seller's listings in one hub view, optionally
+// matching q against the title, set or SKU.
+func (s *Service) ListForSellerFiltered(ctx context.Context, sellerID, show, q string, limit, offset int) ([]Listing, int, error) {
+	where, ok := SellerFilters[show]
+	if !ok {
+		where = ""
+	}
+	args := []any{sellerID}
+	if q = strings.TrimSpace(q); q != "" {
+		if len(q) > 100 {
+			q = q[:100]
+		}
+		args = append(args, "%"+strings.NewReplacer(`\`, `\\`, "%", `\%`, "_", `\_`).Replace(q)+"%")
+		where += ` AND (l.title ILIKE $2 OR l.set_name ILIKE $2 OR coalesce(l.external_id, '') ILIKE $2)`
+	}
 	var total int
 	if err := s.DB.QueryRowContext(ctx,
-		`SELECT count(*) FROM listings WHERE seller_id = $1 AND status <> 'removed'`, sellerID).Scan(&total); err != nil {
+		`SELECT count(*) FROM listings l WHERE l.seller_id = $1 AND l.status <> 'removed'`+where, args...).Scan(&total); err != nil {
 		return nil, 0, err
 	}
+	n := len(args)
 	rows, err := s.DB.QueryContext(ctx, `
 		SELECT `+listingCols+` FROM listings l JOIN users u ON u.id = l.seller_id
-		WHERE l.seller_id = $1 AND l.status <> 'removed'
-		ORDER BY l.created_at DESC, l.id LIMIT $2 OFFSET $3`, sellerID, limit, offset)
+		WHERE l.seller_id = $1 AND l.status <> 'removed'`+where+`
+		ORDER BY l.created_at DESC, l.id LIMIT $`+strconv.Itoa(n+1)+` OFFSET $`+strconv.Itoa(n+2), append(args, limit, offset)...)
 	if err != nil {
 		return nil, 0, err
 	}
