@@ -30,3 +30,20 @@ func TestExtortion(t *testing.T) {
 		t.Fatal(Mask("collector"), Mask("ab"))
 	}
 }
+
+func TestMilestoneFor(t *testing.T) {
+	cases := []struct {
+		sales     int
+		key, next string
+		nextSales int
+	}{
+		{0, "", "bronze", 10}, {9, "", "bronze", 10}, {10, "bronze", "silver", 50},
+		{249, "silver", "gold", 250}, {1000, "platinum", "diamond", 5000}, {9000, "diamond", "", 0},
+	}
+	for _, c := range cases {
+		m := MilestoneFor(c.sales)
+		if m.Key != c.key || m.NextKey != c.next || m.NextSales != c.nextSales {
+			t.Errorf("%d sales: got %+v", c.sales, m)
+		}
+	}
+}

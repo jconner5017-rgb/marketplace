@@ -32,6 +32,7 @@ type Summary struct {
 	MemberSince   time.Time `json:"member_since"`
 	Sales         int       `json:"sales"`
 	Badges        []Badge   `json:"badges"`
+	Milestone     Milestone `json:"milestone"`
 	Outside       []Outside `json:"outside"`
 }
 
@@ -40,6 +41,49 @@ type Badge struct {
 	Label string `json:"label"`
 	Hint  string `json:"hint"`
 }
+
+// Milestones are the sales badges: a seller holds the highest one reached.
+var Milestones = []struct {
+	Key, Label string
+	Sales      int
+}{
+	{"bronze", "Bronze seller", 10},
+	{"silver", "Silver seller", 50},
+	{"gold", "Gold seller", 250},
+	{"platinum", "Platinum seller", 1000},
+	{"diamond", "Diamond seller", 5000},
+}
+
+// Milestone is where a seller stands on the sales badge ladder.
+type Milestone struct {
+	Key       string `json:"key"` // "" until the first badge
+	Label     string `json:"label"`
+	NextKey   string `json:"next_key"` // "" at Diamond
+	NextLabel string `json:"next_label"`
+	NextSales int    `json:"next_sales"` // sales needed for the next badge (total, not remaining)
+}
+
+// MilestoneFor is the sales badge for a number of completed sales.
+func MilestoneFor(sales int) Milestone {
+	var m Milestone
+	for _, x := range Milestones {
+		if sales >= x.Sales {
+			m.Key, m.Label = x.Key, x.Label
+			continue
+		}
+		m.NextKey, m.NextLabel, m.NextSales = x.Key, x.Label, x.Sales
+		break
+	}
+	return m
+}
+
+// Top Rated standards, over the last 12 months.
+const (
+	TopRatedSales     = 50   // completed sales, lifetime
+	TopRatedPercent   = 98.0 // positive feedback
+	TopRatedLatePct   = 5.0  // at most this share of orders shipped late
+	TopRatedChargePct = 1.0  // at most this share of orders lost to a chargeback
+)
 
 // Outside is feedback verified on another platform.
 type Outside struct {
@@ -104,8 +148,24 @@ func (s *Service) SummaryFor(ctx context.Context, userID, role string) (Summary,
 		sm.Badges = append(sm.Badges, Badge{"verified_new_seller", "Verified new seller",
 			"Completed starter orders on time with no problems reported"})
 	}
-	if sm.Sales >= 50 && sm.Percent != nil && *sm.Percent >= 99 {
-		sm.Badges = append(sm.Badges, Badge{"top_rated", "Top rated", "50+ sales and 99% or better positive in the last year"})
+	sm.Milestone = MilestoneFor(sm.Sales)
+	if sm.Milestone.Key != "" {
+		sm.Badges = append(sm.Badges, Badge{sm.Milestone.Key, sm.Milestone.Label,
+			fmt.Sprintf("%s+ completed sales", commas(salesFor(sm.Milestone.Key)))})
+	}
+	if sm.Sales >= TopRatedSales && (sm.Percent == nil || *sm.Percent >= TopRatedPercent) {
+		var orders, late, lost int
+		if err := s.DB.QueryRowContext(ctx, `SELECT
+			  count(*),
+			  count(*) FILTER (WHERE o.ship_by IS NOT NULL AND coalesce(o.shipped_at, CASE WHEN o.status IN ('shipped', 'delivered') THEN NULL ELSE now() END) > o.ship_by),
+			  (SELECT count(*) FROM ledger_entries WHERE seller_id = $1 AND kind = 'chargeback_lost' AND created_at > now() - interval '12 months')
+			FROM orders o WHERE o.seller_id = $1 AND o.paid_at > now() - interval '12 months'`, userID).Scan(&orders, &late, &lost); err != nil {
+			return sm, err
+		}
+		if orders == 0 || (float64(late)*100 <= TopRatedLatePct*float64(orders) && float64(lost)*100 <= TopRatedChargePct*float64(orders)) {
+			sm.Badges = append(sm.Badges, Badge{"top_rated", "Top Rated",
+				"50+ sales, 98%+ positive feedback, ships on time and few problems in the last year"})
+		}
 	}
 	rows, err := s.DB.QueryContext(ctx, `SELECT platform, profile_url, feedback_count, positive_percent::float8, reviewed_at
 		FROM external_reputation WHERE user_id = $1 AND status = 'verified' ORDER BY feedback_count DESC`, userID)
@@ -121,6 +181,23 @@ func (s *Service) SummaryFor(ctx context.Context, userID, role string) (Summary,
 		sm.Outside = append(sm.Outside, o)
 	}
 	return sm, rows.Err()
+}
+
+func salesFor(key string) int {
+	for _, x := range Milestones {
+		if x.Key == key {
+			return x.Sales
+		}
+	}
+	return 0
+}
+
+func commas(n int) string {
+	t := fmt.Sprint(n)
+	for i := len(t) - 3; i > 0; i -= 3 {
+		t = t[:i] + "," + t[i:]
+	}
+	return t
 }
 
 func nf(v sql.NullFloat64) *float64 {

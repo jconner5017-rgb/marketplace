@@ -288,6 +288,7 @@ export interface FeedbackSummary {
   member_since: string;
   sales: number;
   badges: { key: string; label: string; hint: string }[];
+  milestone?: { key: string; label: string; next_key: string; next_label: string; next_sales: number };
   outside: { platform: string; profile_url: string; feedback_count: number; positive_percent: number; verified_at: string }[];
 }
 
