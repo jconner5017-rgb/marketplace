@@ -30,6 +30,13 @@ export default async function SellerMarketing() {
           </p>
           <Link href="/sell/trusted" className="mt-3 inline-block rounded-lg border border-ink px-4 py-2 text-[14px] font-semibold hover:bg-wash">Manage trusted buyers</Link>
         </section>
+        <section className="rounded-xl border border-line p-4 md:col-span-2">
+          <h2 className="font-bold">Store sales and followers</h2>
+          <p className="mt-1 text-[14px] text-muted">
+            Business stores can run store-wide sales up to 50% off and send weekly updates to their followers. Stores are free for registered businesses.
+          </p>
+          <Link href="/sell/store" className="mt-3 inline-block rounded-lg border border-ink px-4 py-2 text-[14px] font-semibold hover:bg-wash">Go to your store</Link>
+        </section>
         <div className="md:col-span-2">
           <PromoBox left={promosR.data?.fee_free_sales_left ?? 0} redemptions={promosR.data?.redemptions ?? []} initial="" />
         </div>

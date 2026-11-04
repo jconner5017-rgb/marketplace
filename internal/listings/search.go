@@ -30,11 +30,14 @@ type SearchParams struct {
 	Conditions []string
 	Attributes []string
 	Seller     string // username
-	MinCents   int
-	MaxCents   int
-	Discount   bool   // seller offers a multi-card discount
-	Format     string // auction, fixed (Buy It Now) or offers (accepts offers)
-	Sort       string // newest (default), price_asc, price_desc, relevance
+	// StoreCategory keeps one of the seller's store categories (with Seller).
+	StoreCategory int
+	OnSale        bool // in a store sale right now
+	MinCents      int
+	MaxCents      int
+	Discount      bool   // seller offers a multi-card discount
+	Format        string // auction, fixed (Buy It Now) or offers (accepts offers)
+	Sort          string // newest (default), price_asc, price_desc, relevance
 	// ListedAfter keeps cards listed after this time (saved-search alerts).
 	ListedAfter time.Time
 	Limit       int
@@ -242,6 +245,12 @@ func buildFilter(p SearchParams, skip ...string) filter {
 	}
 	if p.Seller != "" {
 		where = append(where, "lower(u.username) = lower("+arg(p.Seller)+")")
+	}
+	if p.StoreCategory > 0 {
+		where = append(where, "l.store_category_id = "+arg(p.StoreCategory))
+	}
+	if p.OnSale {
+		where = append(where, "l.format = 'fixed' AND store_sale_percent(l.seller_id, l.store_category_id) > 0")
 	}
 	if p.MinCents > 0 {
 		where = append(where, "l.price_cents >= "+arg(p.MinCents))

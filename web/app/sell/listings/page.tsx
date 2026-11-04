@@ -2,7 +2,8 @@ import Link from "next/link";
 import { apiGet } from "@/lib/api";
 import { requireUser } from "@/lib/auth";
 import { money, timeLeft } from "@/lib/format";
-import type { Listing } from "@/lib/types";
+import type { Listing, Store } from "@/lib/types";
+import { StoreCategoryPicker } from "@/components/sell/StoreForms";
 import { GradeBadge, Photo } from "@/components/CardBits";
 import ListingActions from "@/components/ListingActions";
 
@@ -30,7 +31,11 @@ export default async function SellerListings({ searchParams }: { searchParams: P
   const qs = new URLSearchParams({ limit: String(PAGE), offset: String((page - 1) * PAGE) });
   if (show) qs.set("show", show);
   if (q) qs.set("q", q);
-  const r = await apiGet<{ listings: Listing[]; total: number }>(`/v1/seller/listings?${qs}`);
+  const [r, storeR] = await Promise.all([
+    apiGet<{ listings: Listing[]; total: number }>(`/v1/seller/listings?${qs}`),
+    apiGet<{ store: Store | null }>("/v1/seller/store"),
+  ]);
+  const cats = storeR.data?.store?.status === "active" ? storeR.data.store.categories : [];
   const listings = r.data?.listings ?? [];
   const total = r.data?.total ?? 0;
   const href = (p: Record<string, string | number>) => {
@@ -82,6 +87,7 @@ export default async function SellerListings({ searchParams }: { searchParams: P
                 <th className="py-2 pr-3 text-right font-semibold">Price</th>
                 <th className="py-2 pr-3 text-right font-semibold">Qty</th>
                 <th className="py-2 pr-3 font-semibold">Status</th>
+                {cats.length > 0 && <th className="py-2 pr-3 font-semibold">Store category</th>}
                 <th className="py-2 font-semibold"><span className="sr-only">Actions</span></th>
               </tr>
             </thead>
@@ -94,7 +100,9 @@ export default async function SellerListings({ searchParams }: { searchParams: P
                     <div className="text-[12px] text-muted">{l.external_id ? `SKU ${l.external_id} · ` : ""}{l.set_name}</div>
                   </td>
                   <td className="py-2 pr-3"><GradeBadge l={l} /></td>
-                  <td className="num py-2 pr-3 text-right font-semibold">{money(l.price_cents)}</td>
+                  <td className="num py-2 pr-3 text-right font-semibold">
+                    {l.sale_price_cents != null && l.sale_percent ? <><span className="text-slab">{money(l.sale_price_cents)}</span><div className="text-[12px] font-normal text-muted"><s>{money(l.price_cents)}</s></div></> : money(l.price_cents)}
+                  </td>
                   <td className="num py-2 pr-3 text-right">{l.quantity}</td>
                   <td className="py-2 pr-3">
                     {l.format === "auction" && l.auction ? (
@@ -109,6 +117,9 @@ export default async function SellerListings({ searchParams }: { searchParams: P
                       </span>
                     )}
                   </td>
+                  {cats.length > 0 && (
+                    <td className="py-2 pr-3"><StoreCategoryPicker listingId={l.id} value={l.store_category_id} categories={cats} /></td>
+                  )}
                   <td className="py-2 text-right">
                     <ListingActions id={l.id} status={l.status} auction={l.format === "auction" ? l.auction : undefined} />
                   </td>

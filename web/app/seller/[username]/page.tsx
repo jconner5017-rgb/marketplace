@@ -37,8 +37,12 @@ export default async function SellerProfile({ params, searchParams }: Props) {
   const sp = await searchParams;
   const role = sp.as === "buyer" ? "buyer" : "seller";
   const filter = FILTERS.some(([v]) => v === sp.filter) ? sp.filter ?? "" : "";
-  const d = await load(username, new URLSearchParams({ role, filter, limit: "100" }).toString());
+  const [d, storeR] = await Promise.all([
+    load(username, new URLSearchParams({ role, filter, limit: "100" }).toString()),
+    apiGet<{ store: { slug: string; name: string } | null }>(`/v1/stores/by-seller/${encodeURIComponent(username)}`),
+  ]);
   if (!d) notFound();
+  const store = storeR.data?.store ?? null;
   const s = d.summary;
   const since = new Date(s.member_since).toLocaleDateString("en-US", { month: "long", year: "numeric" });
   const href = (f: string, as = role) => `/seller/${encodeURIComponent(s.username)}?${new URLSearchParams({ ...(f ? { filter: f } : {}), ...(as === "buyer" ? { as } : {}) })}`;
@@ -52,7 +56,9 @@ export default async function SellerProfile({ params, searchParams }: Props) {
           {role === "seller" && <BadgeList s={s} />}
         </div>
         {role === "seller" && (
-          <Link href={`/search?seller=${encodeURIComponent(s.username)}`} className="rounded-full bg-link px-5 py-2 font-semibold text-white hover:bg-link-dark">See their cards</Link>
+          store
+            ? <Link href={`/store/${store.slug}`} className="rounded-full bg-link px-5 py-2 font-semibold text-white hover:bg-link-dark">Visit {store.name}</Link>
+            : <Link href={`/search?seller=${encodeURIComponent(s.username)}`} className="rounded-full bg-link px-5 py-2 font-semibold text-white hover:bg-link-dark">See their cards</Link>
         )}
       </div>
 

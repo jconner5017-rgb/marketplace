@@ -409,7 +409,8 @@ func (s *Service) cartLines(ctx context.Context, tx *sql.Tx, buyerID, seller str
 		return "", nil, ErrEmpty
 	}
 	rows, err := tx.QueryContext(ctx, `
-		SELECT l.id, l.seller_id, l.version, l.title, coalesce(l.photo_urls[1], ''), l.price_cents, c.quantity,
+		SELECT l.id, l.seller_id, l.version, l.title, coalesce(l.photo_urls[1], ''),
+		       l.price_cents - l.price_cents * store_sale_percent(l.seller_id, l.store_category_id) / 100, c.quantity,
 		       l.quantity, l.status = 'active' AND l.format = 'fixed', l.grader IS NULL AND l.package_preset = 'envelope',
 		       l.grader IS NOT NULL, l.package_preset
 		FROM cart_items c

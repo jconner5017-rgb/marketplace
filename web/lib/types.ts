@@ -16,6 +16,9 @@ export type Listing = {
   attributes: string[];
   photo_urls: string[];
   price_cents: number;
+  sale_percent?: number;
+  sale_price_cents?: number;
+  store_category_id?: number;
   quantity: number;
   package_preset: string;
   weight_oz: number;
@@ -307,3 +310,16 @@ export interface FeedbackEntry {
   created_at: string;
   verified_purchase: boolean;
 }
+
+export type StoreCategory = { id: number; name: string; listings: number };
+export type StoreSale = {
+  id: number; name: string; percent: number; category_id: number | null; category?: string;
+  starts_at: string; ends_at: string; cancelled_at?: string;
+};
+export type Store = {
+  username: string; slug: string; name: string; tagline: string; about: string; policies: string;
+  logo_url: string; banner_url: string; status: "pending" | "active" | "rejected" | "suspended";
+  legal_name?: string; business_type?: string; website?: string; business_note?: string; review_note?: string;
+  followers: number; listings: number; categories: StoreCategory[]; sale: StoreSale | null; following: boolean;
+  last_update_at?: string; created_at: string; reviewed_at?: string;
+};

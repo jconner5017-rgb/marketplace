@@ -108,31 +108,35 @@ type Patch struct {
 }
 
 type Listing struct {
-	ID             string    `json:"id"`
-	SellerID       string    `json:"-"`
-	SellerUsername string    `json:"seller_username"`
-	ExternalID     *string   `json:"external_id,omitempty"`
-	Category       string    `json:"category"`
-	GameOrSport    string    `json:"game_or_sport"`
-	SetName        string    `json:"set_name"`
-	Year           *int      `json:"year"`
-	CardNumber     *string   `json:"card_number"`
-	Title          string    `json:"title"`
-	Description    string    `json:"description"`
-	Condition      *string   `json:"condition"`
-	Grader         *string   `json:"grader"`
-	Grade          *float64  `json:"grade"`
-	CertNumber     *string   `json:"cert_number"`
-	Attributes     []string  `json:"attributes"`
-	PhotoURLs      []string  `json:"photo_urls"`
-	PriceCents     int       `json:"price_cents"`
-	Quantity       int       `json:"quantity"`
-	PackagePreset  string    `json:"package_preset"`
-	WeightOz       float64   `json:"weight_oz"`
-	Status         string    `json:"status"`
-	Version        int       `json:"version"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
+	ID             string   `json:"id"`
+	SellerID       string   `json:"-"`
+	SellerUsername string   `json:"seller_username"`
+	ExternalID     *string  `json:"external_id,omitempty"`
+	Category       string   `json:"category"`
+	GameOrSport    string   `json:"game_or_sport"`
+	SetName        string   `json:"set_name"`
+	Year           *int     `json:"year"`
+	CardNumber     *string  `json:"card_number"`
+	Title          string   `json:"title"`
+	Description    string   `json:"description"`
+	Condition      *string  `json:"condition"`
+	Grader         *string  `json:"grader"`
+	Grade          *float64 `json:"grade"`
+	CertNumber     *string  `json:"cert_number"`
+	Attributes     []string `json:"attributes"`
+	PhotoURLs      []string `json:"photo_urls"`
+	PriceCents     int      `json:"price_cents"`
+	// Store sale: percent off right now and the price buyers pay (fixed price only).
+	SalePercent     int       `json:"sale_percent,omitempty"`
+	SalePriceCents  int       `json:"sale_price_cents,omitempty"`
+	StoreCategoryID *int      `json:"store_category_id,omitempty"`
+	Quantity        int       `json:"quantity"`
+	PackagePreset   string    `json:"package_preset"`
+	WeightOz        float64   `json:"weight_oz"`
+	Status          string    `json:"status"`
+	Version         int       `json:"version"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
 
 	Format        string         `json:"format"`
 	Auction       *AuctionView   `json:"auction,omitempty"`
@@ -333,7 +337,27 @@ type Service struct {
 const listingCols = `l.id, l.seller_id, u.username, l.external_id, l.category, l.game_or_sport, l.set_name,
 	l.year, l.card_number, l.title, l.description, l.condition, l.grader, l.grade, l.cert_number,
 	l.attributes, l.photo_urls, l.price_cents, l.quantity, l.package_preset, l.weight_oz,
-	l.status, l.version, l.created_at, l.updated_at` + saleCols
+	l.status, l.version, l.created_at, l.updated_at` + saleCols + storeCols
+
+// storeCols: the listing's store category and its store sale right now.
+const storeCols = `, l.store_category_id,
+	CASE WHEN l.format = 'fixed' THEN store_sale_percent(l.seller_id, l.store_category_id) ELSE 0 END`
+
+// SalePrice is a price with a store sale's percent off (rounded in the buyer's favor by at most a cent).
+func SalePrice(cents, percent int) int {
+	if percent <= 0 {
+		return cents
+	}
+	return cents - cents*percent/100
+}
+
+// BuyPrice is what a buyer pays for one of this listing at checkout.
+func (l Listing) BuyPrice() int {
+	if l.SalePercent > 0 {
+		return SalePrice(l.PriceCents, l.SalePercent)
+	}
+	return l.PriceCents
+}
 
 func scanListing(row interface{ Scan(...any) error }) (Listing, error) {
 	var l Listing
@@ -341,14 +365,22 @@ func scanListing(row interface{ Scan(...any) error }) (Listing, error) {
 	var year sql.NullInt64
 	var grade sql.NullFloat64
 	var sc saleScan
+	var storeCat sql.NullInt64
 	dest := []any{&l.ID, &l.SellerID, &l.SellerUsername, &ext, &l.Category, &l.GameOrSport, &l.SetName,
 		&year, &cardNo, &l.Title, &l.Description, &cond, &grader, &grade, &cert,
 		pq.Array(&l.Attributes), pq.Array(&l.PhotoURLs), &l.PriceCents, &l.Quantity, &l.PackagePreset,
 		&l.WeightOz, &l.Status, &l.Version, &l.CreatedAt, &l.UpdatedAt}
-	if err := row.Scan(append(dest, sc.dest()...)...); err != nil {
+	if err := row.Scan(append(append(dest, sc.dest()...), &storeCat, &l.SalePercent)...); err != nil {
 		return l, err
 	}
 	sc.apply(&l)
+	if storeCat.Valid {
+		c := int(storeCat.Int64)
+		l.StoreCategoryID = &c
+	}
+	if l.SalePercent > 0 {
+		l.SalePriceCents = SalePrice(l.PriceCents, l.SalePercent)
+	}
 	str := func(n sql.NullString) *string {
 		if !n.Valid {
 			return nil

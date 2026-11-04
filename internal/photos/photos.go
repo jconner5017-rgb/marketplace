@@ -112,6 +112,7 @@ func (s *Service) Sweep(ctx context.Context) (int, error) {
 		SELECT p.id, p.store, coalesce(p.object_key, '') FROM photos p
 		WHERE p.created_at < now() - interval '1 day'
 		  AND NOT EXISTS (SELECT 1 FROM listings l WHERE l.photo_urls @> ARRAY[p.url])
+		  AND NOT EXISTS (SELECT 1 FROM stores st WHERE st.logo_url = p.url OR st.banner_url = p.url)
 		LIMIT 500`)
 	if err != nil {
 		return 0, err

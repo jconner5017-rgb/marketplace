@@ -8,6 +8,7 @@ export const HUB_TABS = [
   { href: "/sell/orders", label: "Orders" },
   { href: "/sell/listings", label: "Listings" },
   { href: "/sell/marketing", label: "Marketing" },
+  { href: "/sell/store", label: "Store" },
   { href: "/sell/performance", label: "Performance" },
   { href: "/sell/payments", label: "Payments" },
   { href: "/sell/reports", label: "Reports" },

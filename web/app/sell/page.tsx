@@ -248,6 +248,7 @@ export default async function SellPage({ searchParams }: { searchParams: Promise
             <CountRow href="/sell/marketing" label="Fee-free sales left (promo codes)" n={leftFree} />
             <CountRow href="/sell/marketing" label={seller.bundle_discount_type && seller.bundle_discount_type !== "none" ? "Multi-card discount: on" : "Multi-card discount: off"} />
             <CountRow href="/sell/trusted" label="Trusted buyers" />
+            <CountRow href="/sell/store" label="Business store: sales, categories, followers" />
           </ul>
         </HubCard>
 

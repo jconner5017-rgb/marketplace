@@ -25,7 +25,7 @@ async function shrink(file: File): Promise<Blob> {
   return new Promise((ok, fail) => canvas.toBlob((b) => (b ? ok(b) : fail(new Error("encode"))), "image/jpeg", 0.88));
 }
 
-async function upload(file: File): Promise<string> {
+export async function upload(file: File): Promise<string> {
   let blob: Blob;
   try {
     blob = await shrink(file);

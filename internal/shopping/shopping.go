@@ -222,7 +222,7 @@ func (s *Service) GetCart(ctx context.Context, userID string) (Cart, error) {
 			line.Available = false
 		}
 		if line.Available {
-			line.LineCents = l.PriceCents * line.Quantity
+			line.LineCents = l.BuyPrice() * line.Quantity
 		}
 		g, ok := groups[l.SellerID]
 		if !ok {

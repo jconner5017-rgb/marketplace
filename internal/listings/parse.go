@@ -37,6 +37,7 @@ func ParseSearch(q url.Values) (p SearchParams, bad map[string]string) {
 		Conditions: list("condition"),
 		Attributes: list("attribute"),
 		Seller:     q.Get("seller"),
+		OnSale:     q.Get("on_sale") == "1",
 		Discount:   q.Get("discount") == "1" || q.Get("discount") == "true",
 		Sort:       q.Get("sort"),
 		Format:     q.Get("format"),
@@ -86,6 +87,13 @@ func ParseSearch(q url.Values) (p SearchParams, bad map[string]string) {
 	case "", "newest", "price_asc", "price_desc", "relevance", "ending", "random":
 	default:
 		bad["sort"] = "newest, price_asc, price_desc, relevance, ending or random"
+	}
+	if v := q.Get("store_category"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n <= 0 {
+			bad["store_category"] = "must be a store category number"
+		}
+		p.StoreCategory = n
 	}
 	switch p.Format {
 	case "", "auction", "fixed", "offers":

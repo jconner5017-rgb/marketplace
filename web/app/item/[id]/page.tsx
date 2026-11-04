@@ -8,7 +8,7 @@ import ItemActions from "@/components/ItemActions";
 import AuctionPanel, { BidList } from "@/components/AuctionPanel";
 import ContactSeller from "@/components/ContactSeller";
 import ReportButton from "@/components/ReportButton";
-import { GradeBadge, ListingTile } from "@/components/CardBits";
+import { GradeBadge, ListingTile, Price } from "@/components/CardBits";
 import Gallery from "@/components/Gallery";
 import { CONDITIONS, categoryInfo, gradeLabel, landingHref, money } from "@/lib/format";
 import { getCatalog, labelFor } from "@/lib/catalog";
@@ -44,7 +44,7 @@ export default async function ItemPage({ params }: Props) {
   const isAuction = l.format === "auction" && !!l.auction;
   const sold = l.status === "sold_out";
   const game = encodeURIComponent(l.game_or_sport);
-  const [more, me, bids, catalog, rep, bySet, byGame] = await Promise.all([
+  const [more, me, bids, catalog, rep, bySet, byGame, storeR] = await Promise.all([
     search(`seller=${encodeURIComponent(l.seller_username)}&limit=7`),
     getSummary(),
     isAuction ? getBids(l.id) : Promise.resolve(null),
@@ -53,7 +53,9 @@ export default async function ItemPage({ params }: Props) {
     // A sold card's page points to similar cards still for sale: same set first, then the same sport or game.
     sold && l.set_name ? search(`category=${l.category}&game=${game}&set=${encodeURIComponent(l.set_name)}&limit=12`) : Promise.resolve(null),
     sold ? search(`category=${l.category}&game=${game}&limit=12`) : Promise.resolve(null),
+    apiGet<{ store: { slug: string; name: string } | null }>(`/v1/stores/by-seller/${encodeURIComponent(l.seller_username)}`),
   ]);
+  const store = storeR.data?.store ?? null;
   const similar = [...(bySet?.listings ?? []), ...(byGame?.listings ?? [])]
     .filter((x, i, all) => x.id !== l.id && all.findIndex((y) => y.id === x.id) === i)
     .slice(0, 6);
@@ -121,7 +123,7 @@ export default async function ItemPage({ params }: Props) {
             </>
           ) : (
             <>
-              <p className="num mt-4 text-[32px] font-extrabold leading-none">{money(l.price_cents)}</p>
+              <Price l={l} className="num mt-4 text-[32px] font-extrabold leading-none" />
               <p className="mt-1 text-[14px] text-muted">{l.offers_enabled ? "Buy It Now or Best Offer" : "Buy It Now"}</p>
               <p className="mt-1 text-[14px] text-ship">Free shipping · USPS</p>
               <ItemActions id={l.id} signedIn={!!me} quantity={l.quantity} price={l.price_cents} offers={l.offers_enabled} />
@@ -135,6 +137,9 @@ export default async function ItemPage({ params }: Props) {
               )}
             </p>
             {rep.data && <BadgeList s={rep.data.summary} />}
+            {store && (
+              <p className="mt-2"><Link href={`/store/${store.slug}`} className="font-semibold text-link hover:underline">Visit {store.name}</Link></p>
+            )}
             <p className="mt-1 text-muted">Ships from the United States. Delivery to US addresses only.</p>
             {l.grader ? (
               <p className="mt-1 text-muted">Graded cards ship in a padded mailer with tracking.</p>

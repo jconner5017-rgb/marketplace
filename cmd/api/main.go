@@ -230,6 +230,7 @@ func run(log *slog.Logger) error {
 			AccessKey: cfg.S3AccessKey, SecretKey: cfg.S3SecretKey, PublicURL: cfg.PhotoPublicURL}
 	}
 	log.Info("photo storage", "store", photoSvc.Store())
+	storeSvc := httpapi.NewStores(database, mailSvc)
 	api := httpapi.New(httpapi.Options{
 		DB:           database,
 		Auth:         authSvc,
@@ -254,6 +255,7 @@ func run(log *slog.Logger) error {
 		FCM:      fcmSvc,
 		Feedback: feedbackSvc,
 		Photos:   photoSvc,
+		Stores:   storeSvc,
 		Mail:     mailSvc,
 
 		ShippingWebhookToken: cfg.ShippingWebhookToken,
@@ -356,6 +358,11 @@ func run(log *slog.Logger) error {
 				}
 				if err := fcmSvc.PurgeIdempotency(ctx); err != nil {
 					log.Error("purge idempotency keys", "err", err)
+				}
+				if n, err := storeSvc.NotifyNewListings(ctx); err != nil {
+					log.Error("store follower notices", "err", err)
+				} else if n > 0 {
+					log.Info("store follower notices", "count", n)
 				}
 				if n, err := reputation.RunNightly(ctx); err != nil {
 					log.Error("reputation job", "err", err)

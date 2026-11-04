@@ -2,7 +2,7 @@ import Link from "next/link";
 import { apiGet } from "@/lib/api";
 import { requireUser } from "@/lib/auth";
 import type { WatchItem } from "@/lib/types";
-import { GradeBadge, Photo, SaleLine } from "@/components/CardBits";
+import { GradeBadge, Photo, Price, SaleLine } from "@/components/CardBits";
 import { money } from "@/lib/format";
 import WatchRowActions from "@/components/WatchRowActions";
 
@@ -32,7 +32,7 @@ export default async function WatchlistPage() {
                 <Link href={`/item/${l.id}`} className="title-tight text-[17px] hover:underline">{l.title}</Link>
                 <p className="mt-1 text-[13px] text-muted">{[l.year, l.set_name].filter(Boolean).join(" ")} · {l.game_or_sport} · {l.seller_username}</p>
                 <div className="mt-2"><GradeBadge l={l} /></div>
-                <p className="num mt-2 text-[20px] font-bold">{money(l.price_cents)}</p>
+                <Price l={l} className="num mt-2 text-[20px] font-bold" />
                 <SaleLine l={l} className="text-[13px] text-muted" />
                 {available ? <p className="text-[13px] text-ship">Free shipping</p> : <p className="text-[13px] font-semibold text-slab">No longer available</p>}
               </div>

@@ -3,6 +3,19 @@ import HeartButton from "./HeartButton";
 import type { Listing } from "@/lib/types";
 import { CONDITIONS, gradeLabel, money, timeLeft } from "@/lib/format";
 
+/** The price a buyer pays: a store sale shows the sale price, the old price struck through, and the percent off. */
+export function Price({ l, className = "" }: { l: Listing; className?: string }) {
+  if (l.sale_percent && l.sale_price_cents != null) {
+    return (
+      <p className={className}>
+        <span className="text-slab">{money(l.sale_price_cents)}</span>{" "}
+        <span className="text-[0.6em] font-normal text-muted"><s>{money(l.price_cents)}</s> · {l.sale_percent}% off</span>
+      </p>
+    );
+  }
+  return <p className={className}>{money(l.price_cents)}</p>;
+}
+
 /** "3 bids · 2d 4h left" for auctions; "Buy It Now" or "or Best Offer" otherwise. */
 export function SaleLine({ l, className = "" }: { l: Listing; className?: string }) {
   if (l.format === "auction" && l.auction) {
@@ -78,7 +91,7 @@ export function ListingTile({ l }: { l: Listing }) {
         <GradeBadge l={l} />
       </div>
       <p className="mt-0.5 line-clamp-1 text-[12px] text-muted">{subtitle(l)}</p>
-      <p className="num mt-1 text-[18px] font-bold">{money(l.price_cents)}</p>
+      <Price l={l} className="num mt-1 text-[18px] font-bold" />
       <SaleLine l={l} className="text-[12px] text-muted" />
       <p className="text-[12px] text-ship">Free shipping</p>
     </Link>
@@ -112,7 +125,7 @@ export function ListingRow({ l }: { l: Listing }) {
             <span className="text-[13px] text-muted">{CONDITIONS[l.condition ?? ""] ?? "Raw"}</span>
           )}
         </div>
-        <p className="num mt-3 text-[22px] font-bold leading-none">{money(l.price_cents)}</p>
+        <Price l={l} className="num mt-3 text-[22px] font-bold leading-none" />
         <SaleLine l={l} className="mt-1 text-[13px]" />
         <p className="text-[13px] text-ship">Free shipping</p>
         <p className="mt-2 text-[12px] text-muted">

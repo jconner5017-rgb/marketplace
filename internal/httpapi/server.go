@@ -23,6 +23,7 @@ import (
 	"github.com/jconner5017-rgb/marketplace/internal/sales"
 	"github.com/jconner5017-rgb/marketplace/internal/sellers"
 	"github.com/jconner5017-rgb/marketplace/internal/shopping"
+	"github.com/jconner5017-rgb/marketplace/internal/stores"
 )
 
 const sessionCookie = "mp_session"
@@ -65,6 +66,7 @@ type Server struct {
 	fcm        *fcm.Service
 	feedback   *feedback.Service
 	photos     *photos.Service
+	stores     *stores.Service
 	// shippingToken guards the carrier tracking webhook URL.
 	shippingToken string
 }
@@ -93,7 +95,8 @@ type Options struct {
 	FCM      *fcm.Service
 	Feedback *feedback.Service
 	Photos   *photos.Service
-	Mail     *email.Service // nil or without a sender: no mail, no confirmation required
+	Stores   *stores.Service // nil: built here
+	Mail     *email.Service  // nil or without a sender: no mail, no confirmation required
 	// ShippingWebhookToken must be in the tracking webhook URL (?token=).
 	ShippingWebhookToken string
 	// AdminIPAllowlistOff turns off the admin IP allowlist (break-glass).
@@ -140,6 +143,10 @@ func New(o Options) *Server {
 		authLimiter: newRateLimiter(10, 5*time.Minute),
 	}
 	s.standing = &admin.Standing{DB: o.DB, Audit: o.Audit, Users: s.users, Mod: s.moderation}
+	s.stores = o.Stores
+	if s.stores == nil {
+		s.stores = NewStores(o.DB, o.Mail)
+	}
 	return s
 }
 
@@ -319,6 +326,22 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/seller/onboarding", s.verified(s.handleStartOnboarding))
 	mux.HandleFunc("GET /v1/seller", requireUser(s.handleGetSeller))
 	mux.HandleFunc("GET /v1/seller/overview", requireUser(s.handleSellerOverview))
+
+	// Business stores.
+	mux.HandleFunc("GET /v1/stores/by-seller/{username}", s.handleStoreBySeller)
+	mux.HandleFunc("GET /v1/stores/{slug}", s.handleStore)
+	mux.HandleFunc("POST /v1/stores/{slug}/follow", s.verified(s.handleFollowStore))
+	mux.HandleFunc("DELETE /v1/stores/{slug}/follow", requireUser(s.handleFollowStore))
+	mux.HandleFunc("GET /v1/me/stores", requireUser(s.handleFollowedStores))
+	mux.HandleFunc("GET /v1/seller/store", requireUser(s.handleMyStore))
+	mux.HandleFunc("PUT /v1/seller/store", s.verified(s.handleSaveStore))
+	mux.HandleFunc("PUT /v1/seller/store/categories", requireUser(s.handleStoreCategories))
+	mux.HandleFunc("POST /v1/seller/store/categorize", requireUser(s.handleCategorize))
+	mux.HandleFunc("POST /v1/seller/store/sales", requireUser(s.handleCreateSale))
+	mux.HandleFunc("DELETE /v1/seller/store/sales/{id}", requireUser(s.handleEndSale))
+	mux.HandleFunc("POST /v1/seller/store/updates", s.verified(s.handleStoreUpdate))
+	mux.HandleFunc("GET /v1/admin/stores", s.requireStaff(admin.SellersReview, s.handleAdminStores))
+	mux.HandleFunc("POST /v1/admin/stores/{username}/review", s.requireStaff(admin.SellersReview, s.handleAdminReviewStore))
 	mux.HandleFunc("PATCH /v1/seller/settings", requireUser(s.handleSellerSettings))
 	mux.HandleFunc("PATCH /v1/seller/tax", requireUser(s.handleSellerTax))
 	mux.HandleFunc("GET /v1/seller/reports/sales.csv", requireUser(s.handleSalesCSV))
