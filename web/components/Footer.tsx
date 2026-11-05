@@ -55,6 +55,7 @@ export const FOOTER: { title: string; links: { label: string; href: string }[] }
     links: [
       { label: "About us", href: "/help/about" },
       { label: "News", href: "/announcements" },
+      { label: "Blog", href: "/blog" },
       { label: "Policies", href: "/help/policies" },
       { label: "Terms of Service", href: "/help/terms" },
       { label: "User Agreement", href: "/help/user-agreement" },

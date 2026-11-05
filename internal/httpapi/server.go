@@ -12,6 +12,7 @@ import (
 	"github.com/jconner5017-rgb/marketplace/internal/admin"
 	"github.com/jconner5017-rgb/marketplace/internal/auth"
 	"github.com/jconner5017-rgb/marketplace/internal/blocklist"
+	"github.com/jconner5017-rgb/marketplace/internal/blog"
 	"github.com/jconner5017-rgb/marketplace/internal/checkout"
 	"github.com/jconner5017-rgb/marketplace/internal/email"
 	"github.com/jconner5017-rgb/marketplace/internal/fcm"
@@ -67,6 +68,7 @@ type Server struct {
 	feedback   *feedback.Service
 	photos     *photos.Service
 	stores     *stores.Service
+	blog       *blog.Service
 	// shippingToken guards the carrier tracking webhook URL.
 	shippingToken string
 }
@@ -143,6 +145,7 @@ func New(o Options) *Server {
 		authLimiter: newRateLimiter(10, 5*time.Minute),
 	}
 	s.standing = &admin.Standing{DB: o.DB, Audit: o.Audit, Users: s.users, Mod: s.moderation}
+	s.blog = &blog.Service{DB: o.DB}
 	s.stores = o.Stores
 	if s.stores == nil {
 		s.stores = NewStores(o.DB, o.Mail)
@@ -326,6 +329,15 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/seller/onboarding", s.verified(s.handleStartOnboarding))
 	mux.HandleFunc("GET /v1/seller", requireUser(s.handleGetSeller))
 	mux.HandleFunc("GET /v1/seller/overview", requireUser(s.handleSellerOverview))
+
+	// Blog.
+	mux.HandleFunc("GET /v1/blog", s.handleBlog)
+	mux.HandleFunc("GET /v1/blog/{slug}", s.handleBlogPost)
+	mux.HandleFunc("GET /v1/admin/blog", s.requireStaff(admin.Announce, s.handleAdminBlog))
+	mux.HandleFunc("POST /v1/admin/blog", s.requireStaff(admin.Announce, s.handleAdminSaveBlog))
+	mux.HandleFunc("GET /v1/admin/blog/{id}", s.requireStaff(admin.Announce, s.handleAdminBlogPost))
+	mux.HandleFunc("PATCH /v1/admin/blog/{id}", s.requireStaff(admin.Announce, s.handleAdminSaveBlog))
+	mux.HandleFunc("DELETE /v1/admin/blog/{id}", s.requireStaff(admin.Announce, s.handleAdminDeleteBlog))
 
 	// Business stores.
 	mux.HandleFunc("GET /v1/stores/by-seller/{username}", s.handleStoreBySeller)

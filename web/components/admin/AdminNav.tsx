@@ -37,7 +37,7 @@ export const ADMIN_NAV: { group: string; items: { href: string; label: string; p
     { href: "/admin/audit", label: "Audit log", perm: "audit.view" },
     { href: "/admin/security", label: "Network allowlist", perm: "staff.manage" },
   ] },
-  { group: "Site", items: [{ href: "/admin/announce", label: "Announcements", perm: "announce" }, { href: "/admin/email", label: "Email members", perm: "announce" }] },
+  { group: "Site", items: [{ href: "/admin/announce", label: "Announcements", perm: "announce" }, { href: "/admin/email", label: "Email members", perm: "announce" }, { href: "/admin/blog", label: "Blog", perm: "announce" }] },
 ];
 
 const ROLE: Record<string, string> = {

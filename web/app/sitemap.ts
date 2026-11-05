@@ -49,6 +49,18 @@ async function categoryUrls(): Promise<string[]> {
   return out;
 }
 
+/** Live blog posts. */
+async function blogUrls(): Promise<string[]> {
+  try {
+    const res = await fetch(`${API_URL}/v1/blog`, { next: { revalidate: 3600 } });
+    if (!res.ok) return [];
+    const d = (await res.json()) as { posts: { slug: string }[] };
+    return d.posts.map((p) => `/blog/${p.slug}`);
+  } catch {
+    return [];
+  }
+}
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const pages = [
     "/",
@@ -56,6 +68,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     "/help",
     ...ARTICLES.filter((a) => !a.draft).map((a) => `/help/${a.slug}`),
     "/announcements",
+    "/blog",
+    ...(await blogUrls()),
     "/site-map",
   ].map((p) => ({ url: esc(p), changeFrequency: "daily" as const, priority: p === "/" ? 1 : 0.8 }));
   return [...pages, ...(await listingUrls())];
