@@ -20,12 +20,15 @@ function shuffle<T>(xs: T[]): T[] {
 }
 
 export default async function Home() {
-  const [ending, fresh, graded, cheap, cat] = await Promise.all([
+  const [ending, fresh, graded, cheap, sportsMix, tcgMix, cat] = await Promise.all([
     // Six picked at random from the 24 auctions ending soonest.
     search("format=auction&sort=ending&limit=24"),
     search("sort=newest&limit=12"),
     search("min_grade=1&sort=random&limit=6"),
     search("max_price=20&sort=random&limit=6"),
+    // Two rows each of sports and TCG singles, a different random pick every visit.
+    search("category=sports&sort=random&limit=12"),
+    search("category=tcg&sort=random&limit=12"),
     getCatalog(),
   ]);
   const SHELVES = [
@@ -102,6 +105,8 @@ export default async function Home() {
       <Shelf title="Newly listed" href="/search?sort=newest" items={fresh.listings} />
       <Shelf title="Graded slabs" href="/search?min_grade=1" items={graded.listings} />
       <Shelf title="Singles under $20" href="/search?max_price=20&sort=price_asc" items={cheap.listings} />
+      <Shelf title="Sports card singles" href="/sports" items={sportsMix.listings} />
+      <Shelf title="Trading card singles" href="/tcg" items={tcgMix.listings} />
 
       {fresh.failed && (
         <p role="alert" className="mt-10 rounded-lg border border-line p-6 text-center text-muted">
