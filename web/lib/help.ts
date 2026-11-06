@@ -557,6 +557,9 @@ export const ARTICLES: Article[] = [
         { label: "Privacy Statement", href: "/help/privacy", text: "what information we collect, why, and the choices you have." },
         { label: "Community guidelines", href: "/help/community", text: "how we expect members to treat each other." },
       ] },
+      { h: "Returns" },
+      { p: "A buyer can return a card that isn't as described for a full refund of the price paid. Report it to the seller from the order within 30 days of delivery, with photos. The seller pays for the return: they send a prepaid return label, or refund without asking for the card back. The seller refunds in full within 3 business days of receiving the card." },
+      { p: "Not as described means a different card, a different grade or condition than listed, damage the photos didn't show, or a counterfeit or altered card. Returns for other reasons, such as a change of mind, are up to each seller." },
       { h: "Prohibited items" },
       { p: "Counterfeit or unlicensed reproductions, reprints sold as originals, altered cards sold as unaltered, cards priced over $1,000, and anything that isn't a trading card." },
       { h: "Messages" },
@@ -678,6 +681,7 @@ export const ARTICLES: Article[] = [
       { h: "7. Problems with an order" },
       { list: [
         "Buyers: message the seller first from the order. Most problems are solved that way.",
+        "A card that isn't as described can be returned for a full refund: report it from the order within 30 days of delivery. The seller pays the return postage and refunds in full within 3 business days of receiving the card (see Returns on the Policies page).",
         "Sellers issue refunds from their own Stripe account. Slabs & Singles doesn't hold payments, so we can't issue refunds ourselves, except that we may automatically refund a buyer when a card sold twice and can't ship.",
         "If a seller doesn't resolve a real problem, the buyer may dispute the charge with their card issuer. The seller answers with the order record, tracking and messages.",
         "Sellers must answer problems and disputes honestly and promptly. Chargebacks, unshipped orders and cards not as described can lower a seller's level or lead to account limits.",
