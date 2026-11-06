@@ -66,6 +66,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     "/",
     ...(await categoryUrls()),
     "/help",
+    "/mobile",
     ...ARTICLES.filter((a) => !a.draft).map((a) => `/help/${a.slug}`),
     "/announcements",
     "/blog",

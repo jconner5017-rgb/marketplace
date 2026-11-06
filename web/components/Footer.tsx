@@ -8,7 +8,7 @@ const SOCIAL = [
   { label: "Instagram", href: process.env.NEXT_PUBLIC_INSTAGRAM_URL || "" },
 ].filter((s) => s.href);
 
-export const FOOTER: { title: string; links: { label: string; href: string }[] }[] = [
+export const FOOTER: { title: string; links: { label: string; href: string; bold?: boolean }[] }[] = [
   {
     title: "Buy",
     links: [
@@ -67,6 +67,7 @@ export const FOOTER: { title: string; links: { label: string; href: string }[] }
   {
     title: "Tools & apps",
     links: [
+      { label: "Mobile Account Management", href: "/mobile", bold: true },
       { label: "Developers", href: "/help/developers" },
       { label: "Security center", href: "/help/security" },
       { label: "Site map", href: "/site-map" },
@@ -86,7 +87,7 @@ export default function Footer() {
               <ul className="mt-3 space-y-2 text-[13px]">
                 {col.links.map((l) => (
                   <li key={l.label}>
-                    <Link href={l.href} className="text-muted hover:text-ink hover:underline">{l.label}</Link>
+                    <Link href={l.href} className={l.bold ? "font-bold text-ink hover:underline" : "text-muted hover:text-ink hover:underline"}>{l.label}</Link>
                   </li>
                 ))}
               </ul>

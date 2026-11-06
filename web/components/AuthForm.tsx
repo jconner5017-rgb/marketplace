@@ -69,9 +69,9 @@ export default function AuthForm({ mode }: { mode: "signin" | "register" }) {
         hint={register ? "At least 10 characters." : undefined}
       />
       {!register && (
-        <p className="-mt-2 text-right text-[13px]"><Link href="/forgot-password" className="text-link underline">Forgot password?</Link></p>
+        <p className="-mt-2 text-right text-[15px] sm:text-[13px]"><Link href="/forgot-password" className="inline-block py-2 text-link underline">Forgot password?</Link></p>
       )}
-      <button type="submit" disabled={busy} className="w-full rounded-full bg-link py-2.5 font-semibold text-white hover:bg-link-dark disabled:opacity-60">
+      <button type="submit" disabled={busy} className="w-full rounded-full bg-link py-3.5 text-[17px] font-semibold sm:py-2.5 sm:text-[15px] text-white hover:bg-link-dark disabled:opacity-60">
         {busy ? (register ? "Creating account…" : "Signing in…") : register ? "Create account" : "Sign in"}
       </button>
       <p className="text-center text-[14px] text-muted">

@@ -18,7 +18,7 @@ export default function Field({ label, name, error, hint, children, className, .
           name={name}
           aria-invalid={error ? true : undefined}
           aria-describedby={describedBy}
-          className={`mt-1 w-full rounded-md border px-3 py-2 ${error ? "border-slab" : "border-line focus:border-ink"}`}
+          className={`mt-1 w-full rounded-md border px-3 py-2.5 text-[16px] sm:py-2 sm:text-[15px] ${error ? "border-slab" : "border-line focus:border-ink"}`}
           {...input}
         />
       )}

@@ -90,6 +90,14 @@ export default async function Header() {
             <span className="text-[#c9961f]">es</span>
           </span>
         </Link>
+        {!me && (
+          <Link
+            href="/signin"
+            className="ml-auto rounded-full bg-link px-5 py-2.5 text-[16px] font-semibold text-white hover:bg-link-dark sm:hidden"
+          >
+            Sign in
+          </Link>
+        )}
         <Suspense fallback={<div className="min-w-[280px] flex-1" />}>
           <SearchBar />
         </Suspense>
@@ -106,6 +114,9 @@ export default async function Header() {
               <Link href={c.href} className="hover:text-ink hover:underline">{c.label}</Link>
             </li>
           ))}
+          <li>
+            <Link href="/mobile" className="font-bold text-ink hover:underline">Mobile Account Management</Link>
+          </li>
         </ul>
       </nav>
     </header>
