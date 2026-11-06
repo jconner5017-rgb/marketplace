@@ -1,11 +1,8 @@
 import Link from "next/link";
 import { apiGet } from "@/lib/api";
 import { requireUser } from "@/lib/auth";
-import { money, timeLeft } from "@/lib/format";
 import type { Listing, Store } from "@/lib/types";
-import { StoreCategoryPicker } from "@/components/sell/StoreForms";
-import { GradeBadge, Photo } from "@/components/CardBits";
-import ListingActions from "@/components/ListingActions";
+import ListingsTable from "@/components/sell/ListingsTable";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Your listings", robots: { index: false } };
@@ -78,56 +75,7 @@ export default async function SellerListings({ searchParams }: { searchParams: P
             <Link href="/sell/import" className="text-link underline">upload a CSV</Link>.</>}
         </p>
       ) : (
-        <div className="mt-3 overflow-x-auto">
-          <table className="w-full min-w-[720px] text-[14px]">
-            <thead>
-              <tr className="border-b border-line text-left text-[13px] text-muted">
-                <th className="py-2 pr-3 font-semibold" colSpan={2}>Card</th>
-                <th className="py-2 pr-3 font-semibold">Grade</th>
-                <th className="py-2 pr-3 text-right font-semibold">Price</th>
-                <th className="py-2 pr-3 text-right font-semibold">Qty</th>
-                <th className="py-2 pr-3 font-semibold">Status</th>
-                {cats.length > 0 && <th className="py-2 pr-3 font-semibold">Store category</th>}
-                <th className="py-2 font-semibold"><span className="sr-only">Actions</span></th>
-              </tr>
-            </thead>
-            <tbody>
-              {listings.map((l) => (
-                <tr key={l.id} className="border-b border-wash align-middle">
-                  <td className="w-12 py-2 pr-3"><Photo l={l} className="h-14 w-10 rounded" /></td>
-                  <td className="py-2 pr-3">
-                    <Link href={`/item/${l.id}`} className="title-tight hover:underline">{l.title}</Link>
-                    <div className="text-[12px] text-muted">{l.external_id ? `SKU ${l.external_id} · ` : ""}{l.set_name}</div>
-                  </td>
-                  <td className="py-2 pr-3"><GradeBadge l={l} /></td>
-                  <td className="num py-2 pr-3 text-right font-semibold">
-                    {l.sale_price_cents != null && l.sale_percent ? <><span className="text-slab">{money(l.sale_price_cents)}</span><div className="text-[12px] font-normal text-muted"><s>{money(l.price_cents)}</s></div></> : money(l.price_cents)}
-                  </td>
-                  <td className="num py-2 pr-3 text-right">{l.quantity}</td>
-                  <td className="py-2 pr-3">
-                    {l.format === "auction" && l.auction ? (
-                      <span className={l.auction.state === "live" ? "text-ship" : "text-muted"}>
-                        {l.auction.state === "live"
-                          ? <>Auction · {l.auction.bid_count} {l.auction.bid_count === 1 ? "bid" : "bids"} · <span suppressHydrationWarning>{timeLeft(l.auction.ends_at)}</span></>
-                          : l.auction.state === "won" ? "Sold, awaiting payment" : l.auction.state === "unsold" ? "Ended, unsold" : "Ended"}
-                      </span>
-                    ) : (
-                      <span className={l.status === "active" ? "text-ship" : "text-muted"}>
-                        {l.status === "active" ? (l.offers_enabled ? "Active · offers on" : "Active") : l.status === "sold_out" ? "Sold out" : l.status === "ended" ? "Ended" : "Hidden"}
-                      </span>
-                    )}
-                  </td>
-                  {cats.length > 0 && (
-                    <td className="py-2 pr-3"><StoreCategoryPicker listingId={l.id} value={l.store_category_id} categories={cats} /></td>
-                  )}
-                  <td className="py-2 text-right">
-                    <ListingActions id={l.id} status={l.status} auction={l.format === "auction" ? l.auction : undefined} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <ListingsTable listings={listings} categories={cats} />
       )}
       {total > PAGE && (
         <nav aria-label="Pages" className="mt-4 flex items-center gap-3 text-[14px]">
