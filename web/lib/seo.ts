@@ -19,7 +19,8 @@ export function productJsonLd(l: Listing, gameLabel: string) {
     "@type": "Offer",
     url,
     priceCurrency: "USD",
-    price: (l.price_cents / 100).toFixed(2),
+    // A store sale is what the buyer pays, so it is the price search engines see.
+    price: ((l.sale_price_cents && l.sale_price_cents > 0 && l.sale_price_cents < l.price_cents ? l.sale_price_cents : l.price_cents) / 100).toFixed(2),
     availability: available ? "https://schema.org/InStock" : "https://schema.org/SoldOut",
     itemCondition: "https://schema.org/UsedCondition",
     seller: { "@type": "Organization", name: l.seller_username },
