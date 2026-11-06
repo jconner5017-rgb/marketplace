@@ -25,6 +25,7 @@ import (
 	"github.com/jconner5017-rgb/marketplace/internal/feedback"
 	"github.com/jconner5017-rgb/marketplace/internal/fees"
 	"github.com/jconner5017-rgb/marketplace/internal/httpapi"
+	"github.com/jconner5017-rgb/marketplace/internal/identify"
 	"github.com/jconner5017-rgb/marketplace/internal/inbox"
 	"github.com/jconner5017-rgb/marketplace/internal/listings"
 	"github.com/jconner5017-rgb/marketplace/internal/photos"
@@ -255,6 +256,7 @@ func run(log *slog.Logger) error {
 		FCM:      fcmSvc,
 		Feedback: feedbackSvc,
 		Photos:   photoSvc,
+		Identify: &identify.Client{APIKey: cfg.AnthropicAPIKey, Model: cfg.IdentifyModel},
 		Stores:   storeSvc,
 		Mail:     mailSvc,
 

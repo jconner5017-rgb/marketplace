@@ -1,13 +1,19 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { send } from "@/lib/client";
 import { CONDITIONS, categoryInfo, money, toCents } from "@/lib/format";
 import type { FeeSchedule, SiteCatalog } from "@/lib/catalog";
 import type { Listing } from "@/lib/types";
 import Field from "./Field";
 import PhotoUploader from "./sell/PhotoUploader";
+
+/** What "Identify from photos" fills the form with (see POST /v1/seller/identify). */
+type Identified = {
+  category: string; game_or_sport: string; title: string; set_name: string; year: number | null; card_number: string;
+  graded: boolean; grader: string; grade: number | null; cert_number: string; condition: string; attributes: string[]; notes: string;
+};
 
 const GRADERS = ["PSA", "BGS", "SGC", "CGC", "TAG", "OTHER"];
 type ShipEstimate = { method: "stamp" | "label"; cost_cents: number; label_cents: number; carrier?: string; service?: string; live: boolean; from_set: boolean; signature: boolean };
@@ -86,6 +92,49 @@ export default function NewListingForm({ capCents, catalog, fees, initial }: {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [fields, setFields] = useState<Record<string, string>>({});
+  const formRef = useRef<HTMLFormElement>(null);
+  const [idBusy, setIdBusy] = useState(false);
+  const [idMsg, setIdMsg] = useState("");
+  const [identified, setIdentified] = useState<Identified | null>(null);
+
+  // "Identify from photos": the server reads the card with AI; the seller checks the result.
+  async function identify() {
+    setIdBusy(true);
+    setIdMsg("");
+    const r = await send<{ result: Identified; left_today: number }>("POST", "/v1/seller/identify", { photo_urls: photos.slice(0, 2) });
+    setIdBusy(false);
+    if (!r.ok) { setIdMsg(r.message); return; }
+    const x = r.data.result;
+    if (x.category) setCategory(x.category);
+    setGraded(x.graded);
+    setIdentified(x);
+    setIdMsg(`Filled in from your photos. Check every detail before you list.${x.notes ? ` ${x.notes}` : ""} (${r.data.left_today} left today)`);
+  }
+  // Runs after the category and grading switches have re-drawn their fields.
+  useEffect(() => {
+    const f = formRef.current;
+    if (!identified || !f) return;
+    const put = (name: string, v: string | number | null | undefined) => {
+      if (v === null || v === undefined || v === "") return;
+      const el = f.elements.namedItem(name);
+      if (el instanceof HTMLInputElement || el instanceof HTMLSelectElement || el instanceof HTMLTextAreaElement) el.value = String(v);
+    };
+    put("game_or_sport", identified.game_or_sport);
+    put("title", identified.title);
+    put("set_name", identified.set_name);
+    put("year", identified.year);
+    put("card_number", identified.card_number);
+    if (identified.graded) {
+      put("grader", identified.grader);
+      put("grade", identified.grade);
+      put("cert_number", identified.cert_number);
+    } else {
+      put("condition", identified.condition);
+    }
+    f.querySelectorAll<HTMLInputElement>('input[name="attributes"]').forEach((cb) => { cb.checked = identified.attributes.includes(cb.value); });
+    f.querySelector("fieldset")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setIdentified(null);
+  }, [identified]);
 
   const cents = format === "auction" ? toCents(start) : toCents(price);
   const [weight, setWeight] = useState(String(initial?.weight_oz ?? 1));
@@ -190,7 +239,7 @@ export default function NewListingForm({ capCents, catalog, fees, initial }: {
 
   const select = "mt-1 w-full rounded-md border border-line px-3 py-2";
   return (
-    <form onSubmit={submit} noValidate className="mt-6 space-y-8">
+    <form ref={formRef} onSubmit={submit} noValidate className="mt-6 space-y-8">
       {message && (
         <p role="alert" className="rounded-md border border-slab/40 bg-slab/5 px-3 py-2 text-[14px] text-slab">{message}</p>
       )}
@@ -203,6 +252,11 @@ export default function NewListingForm({ capCents, catalog, fees, initial }: {
       {!locked && <>
       <fieldset className="grid gap-4 sm:grid-cols-2">
         <legend className="mb-2 text-[18px] font-bold">The card</legend>
+        {!editing && (
+          <p className="text-[14px] text-muted sm:col-span-2">
+            Tip: add the front and back photos below first, then tap <span className="font-semibold text-ink">Identify from photos</span> to fill this in.
+          </p>
+        )}
         <Field label="Category" name="category" error={fields.category}>
           <select id="category" name="category" className={select} value={category} onChange={(e) => setCategory(e.target.value)}>
             <option value="tcg">Trading card game</option>
@@ -287,6 +341,17 @@ export default function NewListingForm({ capCents, catalog, fees, initial }: {
       <fieldset className="space-y-4">
         <legend className="mb-2 text-[18px] font-bold">Photos and description</legend>
         <PhotoUploader value={photos} onChange={setPhotos} error={fields.photo_urls} />
+        {!locked && photos.length > 0 && (
+          <div className="rounded-lg border border-line bg-wash p-4">
+            <button type="button" onClick={identify} disabled={idBusy}
+              className="rounded-full bg-link px-4 py-2 text-[14px] font-semibold text-white hover:bg-link-dark disabled:opacity-60">
+              {idBusy ? "Identifying…" : "Identify from photos"}
+            </button>
+            <p role="status" className="mt-2 text-[13px] text-muted">
+              {idMsg || "Fills in the card details from your front and back photos with AI. Check them before you list."}
+            </p>
+          </div>
+        )}
         <Field label="Description (optional)" name="description" error={fields.description}>
           <textarea id="description" name="description" rows={4} maxLength={5000} defaultValue={initial?.description ?? ""} className="mt-1 w-full rounded-md border border-line px-3 py-2" />
         </Field>

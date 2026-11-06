@@ -18,6 +18,7 @@ import (
 	"github.com/jconner5017-rgb/marketplace/internal/fcm"
 	"github.com/jconner5017-rgb/marketplace/internal/feedback"
 	"github.com/jconner5017-rgb/marketplace/internal/fees"
+	"github.com/jconner5017-rgb/marketplace/internal/identify"
 	"github.com/jconner5017-rgb/marketplace/internal/inbox"
 	"github.com/jconner5017-rgb/marketplace/internal/listings"
 	"github.com/jconner5017-rgb/marketplace/internal/photos"
@@ -67,6 +68,7 @@ type Server struct {
 	fcm        *fcm.Service
 	feedback   *feedback.Service
 	photos     *photos.Service
+	identify   *identify.Client
 	stores     *stores.Service
 	blog       *blog.Service
 	// shippingToken guards the carrier tracking webhook URL.
@@ -97,8 +99,9 @@ type Options struct {
 	FCM      *fcm.Service
 	Feedback *feedback.Service
 	Photos   *photos.Service
-	Stores   *stores.Service // nil: built here
-	Mail     *email.Service  // nil or without a sender: no mail, no confirmation required
+	Identify *identify.Client // nil or without a key: identification is off
+	Stores   *stores.Service  // nil: built here
+	Mail     *email.Service   // nil or without a sender: no mail, no confirmation required
 	// ShippingWebhookToken must be in the tracking webhook URL (?token=).
 	ShippingWebhookToken string
 	// AdminIPAllowlistOff turns off the admin IP allowlist (break-glass).
@@ -133,6 +136,7 @@ func New(o Options) *Server {
 		fcm:           o.FCM,
 		feedback:      o.Feedback,
 		photos:        o.Photos,
+		identify:      o.Identify,
 		mail:          o.Mail,
 		shippingToken: o.ShippingWebhookToken,
 		ipRules:       &admin.IPRules{DB: o.DB, Audit: o.Audit, Disabled: o.AdminIPAllowlistOff},
@@ -379,6 +383,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/catalog", handleCatalog)
 	mux.HandleFunc("GET /demo/card/{name}", handleDemoCard)
 	mux.HandleFunc("POST /v1/photos", s.sellerAPI(s.handleUploadPhoto))
+	mux.HandleFunc("POST /v1/seller/identify", s.sellerAPI(s.handleIdentify))
 	mux.HandleFunc("GET /photos/{file}", s.handlePhoto)
 	mux.HandleFunc("GET /v1/listings/{id}", s.handleGetListing)
 

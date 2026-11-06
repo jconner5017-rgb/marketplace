@@ -114,7 +114,7 @@ export const ARTICLES: Article[] = [
       { p: "Go to Sell and connect a Stripe account. Stripe asks for your bank details and ID. Your sales are paid straight into your own Stripe account; Slabs & Singles never holds your money." },
       { h: "2. List your cards" },
       { list: [
-        "List one card at a time with List a card.",
+        "List one card at a time with List a card. Add the front and back photos, then tap Identify from photos and the card, set, year, number and grade or condition fill in for you to check. It works from a phone camera too (up to 50 cards a day).",
         "Upload many at once with a CSV file.",
         "Or connect FireCardManager to list your inventory and keep it in sync with eBay.",
       ] },

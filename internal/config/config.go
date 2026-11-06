@@ -17,6 +17,11 @@ type Config struct {
 	SessionTTL   time.Duration // how long a login lasts
 	TrustProxy   bool          // read the client IP from X-Forwarded-For (behind a load balancer)
 
+	// AnthropicAPIKey turns on photo identification on the listing form;
+	// IdentifyModel picks the Claude model (default in package identify).
+	AnthropicAPIKey string
+	IdentifyModel   string
+
 	PublicURL           string // e.g. https://marketplace-api-xqq7.onrender.com (Stripe return links)
 	StripeSecretKey     string // sk_test_... or sk_live_...; selling is disabled without it
 	StripeWebhookSecret string // whsec_...; the webhook endpoint is disabled without it
@@ -99,6 +104,8 @@ func Load() (Config, error) {
 	}
 
 	c.PublicURL = strings.TrimRight(os.Getenv("PUBLIC_URL"), "/")
+	c.AnthropicAPIKey = strings.TrimSpace(os.Getenv("ANTHROPIC_API_KEY"))
+	c.IdentifyModel = strings.TrimSpace(os.Getenv("IDENTIFY_MODEL"))
 	c.StripeSecretKey = strings.TrimSpace(os.Getenv("STRIPE_SECRET_KEY"))
 	c.StripeWebhookSecret = strings.TrimSpace(os.Getenv("STRIPE_WEBHOOK_SECRET"))
 	c.SeedDemo = strings.ToLower(strings.TrimSpace(os.Getenv("SEED_DEMO")))
