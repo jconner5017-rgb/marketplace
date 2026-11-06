@@ -57,6 +57,7 @@ export const FOOTER: { title: string; links: { label: string; href: string }[] }
       { label: "News", href: "/announcements" },
       { label: "Blog", href: "/blog" },
       { label: "Policies", href: "/help/policies" },
+      { label: "Returns", href: "/help/returns" },
       { label: "Terms of Service", href: "/help/terms" },
       { label: "User Agreement", href: "/help/user-agreement" },
       { label: "Privacy Statement", href: "/help/privacy" },
