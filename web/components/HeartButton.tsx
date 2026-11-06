@@ -35,7 +35,7 @@ export default function HeartButton({ id, title, className = "" }: { id: string;
         aria-pressed={on}
         aria-label={on ? `Remove ${title} from your watchlist` : `Add ${title} to your watchlist`}
         title={on ? "Watching" : "Add to Watchlist"}
-        className={`flex h-9 w-9 items-center justify-center rounded-full bg-white/95 shadow-sm ring-1 ring-black/10 transition hover:scale-105 ${on ? "text-slab" : "text-ink"}`}
+        className={`flex h-9 w-9 items-center justify-center rounded-full bg-paper/95 shadow-md ring-1 ring-line transition hover:scale-105 ${on ? "text-slab" : "text-ink"}`}
       >
         <HeartIcon size={18} filled={on} />
       </button>
