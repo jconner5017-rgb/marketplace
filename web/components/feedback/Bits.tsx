@@ -57,7 +57,7 @@ export function SellerBadge({ b, size = "sm" }: { b: { key: string; label: strin
     return (
       <span title={b.hint} className={`inline-flex items-center gap-1.5 rounded-full border border-line bg-white font-semibold text-ink ${pad}`}>
         <span aria-hidden className={`inline-block rounded-full ${big ? "h-3.5 w-3.5" : "h-2.5 w-2.5"}`}
-          style={{ background: color, boxShadow: `0 0 0 2px #fff, 0 0 0 3px ${color}` }} />
+          style={{ background: color, boxShadow: `0 0 0 2px var(--color-paper), 0 0 0 3px ${color}` }} />
         {b.label}
       </span>
     );

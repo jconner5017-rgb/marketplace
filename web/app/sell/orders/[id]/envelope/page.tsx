@@ -141,7 +141,7 @@ export default async function EnvelopePage({ params, searchParams }: {
       </div>
 
       {format === "label" ? (
-        <div id="print-area" className="mt-6 overflow-hidden border border-line bg-white text-black shadow-sm"
+        <div id="print-area" className="keep-light mt-6 overflow-hidden border border-line bg-white text-black shadow-sm"
           style={{ width: "4in", height: "2in", padding: "0.15in 0.2in", fontFamily: "Arial, Helvetica, sans-serif" }}>
           <div style={{ fontSize: "7pt", lineHeight: 1.15 }}>
             {e.from ? <>{e.from.name} · {e.from.line1}{e.from.line2 ? `, ${e.from.line2}` : ""} · {e.from.city}, {e.from.state} {e.from.zip}</> : null}
@@ -154,7 +154,7 @@ export default async function EnvelopePage({ params, searchParams }: {
       ) : format === "6" ? (
         // A portrait page the width of the envelope's short side; the face is
         // turned a quarter so it prints sideways.
-        <div id="print-area" className="relative mt-6 overflow-hidden border border-line bg-white shadow-sm"
+        <div id="print-area" className="keep-light relative mt-6 overflow-hidden border border-line bg-white shadow-sm"
           style={{ width: `${six.h}in`, height: `${six.w}in` }}>
           <EnvelopeFace e={e} f={six} style={{
             position: "absolute", left: 0, top: 0, transformOrigin: "top left",
@@ -162,7 +162,7 @@ export default async function EnvelopePage({ params, searchParams }: {
           }} />
         </div>
       ) : (
-        <div id="print-area" className="mt-6 overflow-hidden border border-line shadow-sm" style={{ width: "9.5in", height: "4.125in" }}>
+        <div id="print-area" className="keep-light mt-6 overflow-hidden border border-line shadow-sm" style={{ width: "9.5in", height: "4.125in" }}>
           <EnvelopeFace e={e} f={FACES["10"]} />
         </div>
       )}

@@ -87,10 +87,10 @@ export default async function Home() {
               <h2 className="font-bold">
                 <Link href={landingHref(s.category)} className="hover:underline">{s.title}</Link>
               </h2>
-              <ul className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[14px]">
+              <ul className="mt-2 space-y-1 text-[14px]">
                 {s.items.map((g) => (
                   <li key={g.href}>
-                    <Link href={g.href} className="text-link hover:underline">{g.label}</Link>
+                    <Link href={g.href} className="whitespace-nowrap text-link hover:underline">{g.label}</Link>
                   </li>
                 ))}
               </ul>

@@ -39,7 +39,7 @@ export function GradeBadge({ l, size = "sm" }: { l: Listing; size?: "sm" | "lg" 
   if (l.grader) {
     return (
       <span
-        className={`inline-flex flex-col overflow-hidden rounded-[3px] border border-slab bg-white leading-none ${big ? "min-w-16" : "min-w-11"}`}
+        className={`keep-light inline-flex flex-col overflow-hidden rounded-[3px] border border-slab bg-white leading-none ${big ? "min-w-16" : "min-w-11"}`}
         title={`Graded ${l.grader} ${gradeLabel(l.grade)}`}
       >
         <span className={`bg-slab text-center font-bold text-white ${big ? "px-2 py-1 text-xs" : "px-1.5 py-[3px] text-[10px]"}`}>

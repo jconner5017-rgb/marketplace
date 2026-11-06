@@ -6,6 +6,7 @@ import { getCatalog } from "@/lib/catalog";
 import SignOutButton from "./SignOutButton";
 import BellMenu from "./BellMenu";
 import { BellIcon, CartIcon, ChevronIcon, HeartIcon } from "./Icons";
+import ThemeToggle from "./ThemeToggle";
 import SearchBar from "./SearchBar";
 import MenuCloser from "./MenuCloser";
 import ConfirmEmailBanner from "./ConfirmEmailBanner";
@@ -52,6 +53,7 @@ export default async function Header() {
           <Link href="/search?max_price=5&sort=price_asc" className="hidden hover:underline sm:inline">Deals under $5</Link>
 
           <nav aria-label="Your account" className="ml-auto flex items-center gap-5">
+            <ThemeToggle />
             <Link href={me ? "/sell" : signIn("/sell")} className="hover:underline">Sell</Link>
             <Link href={me ? "/watchlist" : signIn("/watchlist")} className="flex items-center gap-1 hover:underline">
               <HeartIcon /> Watchlist{me && me.watching > 0 ? <span className="num text-muted">({me.watching})</span> : null}

@@ -15,6 +15,68 @@
   --color-warn: #9a5b00;
 }
 
+/* ---------- Dark theme ----------
+   Same layouts, darker colours: the palette above is swapped when
+   <html data-theme="dark">. Colours used as solid fills behind white text
+   (ink chips, blue and red buttons) get their own darker fills, because the
+   text versions of those colours get lighter in dark mode. */
+:root {
+  --color-ink-fill: var(--color-ink);
+  --color-link-fill: var(--color-link);
+  --color-link-fill-dark: var(--color-link-dark);
+  --color-slab-fill: var(--color-slab);
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --color-paper: #12151e;
+  --color-wash: #1b1f2c;
+  --color-line: #2c3245;
+  --color-ink: #e9ebf2;
+  --color-muted: #a1a9be;
+  --color-link: #8fb4ff;
+  --color-link-dark: #b9d0ff;
+  --color-slab: #ff6b7d;
+  --color-ship: #4cd38f;
+  --color-warn: #f2b155;
+  --color-ink-fill: #2b3247;
+  --color-link-fill: #3b6fe0;
+  --color-link-fill-dark: #2f5bc0;
+  --color-slab-fill: #d2283e;
+}
+:root[data-theme="dark"] .bg-ink { background-color: var(--color-ink-fill); }
+:root[data-theme="dark"] .bg-link { background-color: var(--color-link-fill); }
+:root[data-theme="dark"] .bg-link-dark,
+:root[data-theme="dark"] .hover\:bg-link-dark:hover { background-color: var(--color-link-fill-dark); }
+:root[data-theme="dark"] .bg-slab { background-color: var(--color-slab-fill); }
+:root[data-theme="dark"] .bg-white { background-color: var(--color-paper); }
+:root[data-theme="dark"] .hover\:bg-white:hover { background-color: var(--color-wash); }
+/* Light-only tints written as fixed colours */
+:root[data-theme="dark"] .bg-\[\#fff4e0\] { background-color: #3a2a12; }
+:root[data-theme="dark"] .text-\[\#8a5300\] { color: #ffc98a; }
+:root[data-theme="dark"] .bg-\[\#fff6f6\] { background-color: #2e1a1f; }
+:root[data-theme="dark"] .bg-\[\#e6f0ff\] { background-color: #1d2a48; }
+:root[data-theme="dark"] .bg-\[\#fff6dc\] { background-color: #33290f; }
+:root[data-theme="dark"] img { color-scheme: light; }
+
+/* Things that are white in real life stay white: the grading-slab label and
+   the printable envelope. Everything inside uses the light palette. */
+.keep-light {
+  --color-paper: #ffffff;
+  --color-wash: #f2f4f7;
+  --color-line: #d9dee5;
+  --color-ink: #18202b;
+  --color-muted: #5b6573;
+  --color-link: #1a4fd6;
+  --color-link-dark: #123a9e;
+  --color-slab: #c8102e;
+  --color-ink-fill: #18202b;
+  --color-link-fill: #1a4fd6;
+  --color-link-fill-dark: #123a9e;
+  --color-slab-fill: #c8102e;
+  color: var(--color-ink);
+  color-scheme: light;
+}
+
 html {
   color: var(--color-ink);
   background: var(--color-paper);

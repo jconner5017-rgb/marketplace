@@ -23,9 +23,20 @@ export const metadata: Metadata = {
   description: "Buy and sell sports cards and trading card game singles, raw or graded, up to $1,000. US only, free shipping on every card.",
 };
 
+/**
+ * Applies the saved light/dark choice before the page paints, so a dark-mode
+ * visitor never sees a white flash. Visitors who haven't chosen get light.
+ * (To follow each visitor's own system setting instead, set FOLLOW_SYSTEM to true.)
+ */
+const FOLLOW_SYSTEM = false;
+const THEME_SCRIPT = `(function(){try{var t=localStorage.getItem("sns-theme");if(t!=="dark"&&t!=="light"){t=${FOLLOW_SYSTEM ? 'window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"' : '"light"'};}document.documentElement.dataset.theme=t;}catch(e){document.documentElement.dataset.theme="light";}})();`;
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={archivo.variable}>
+    <html lang="en" className={archivo.variable} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+      </head>
       <body className="min-h-screen font-sans text-[15px] leading-normal">
         {/* Google Analytics (gtag.js) on every page. Page changes inside the
             site are counted by GA4's enhanced measurement (history changes). */}
