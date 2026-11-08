@@ -912,7 +912,7 @@ func (s *Service) upsert(ctx context.Context, sellerID string, in Input, noRelis
 
 // ListForSeller returns the seller's own listings, newest first.
 func (s *Service) ListForSeller(ctx context.Context, sellerID string, limit, offset int) ([]Listing, int, error) {
-	return s.ListForSellerFiltered(ctx, sellerID, "", "", limit, offset)
+	return s.ListForSellerFiltered(ctx, sellerID, "", "", "", limit, offset)
 }
 
 // SellerFilters are the seller hub's listing views (the same groups the
@@ -930,9 +930,22 @@ var SellerFilters = map[string]string{
 	"sold_out": ` AND l.status = 'sold_out'`,
 }
 
+// SellerSorts are the seller hub's listing orders; newest is the default.
+var SellerSorts = map[string]string{
+	"":           "l.created_at DESC, l.id",
+	"newest":     "l.created_at DESC, l.id",
+	"oldest":     "l.created_at ASC, l.id",
+	"price_desc": "l.price_cents DESC, l.created_at DESC, l.id",
+	"price_asc":  "l.price_cents ASC, l.created_at DESC, l.id",
+}
+
 // ListForSellerFiltered lists a seller's listings in one hub view, optionally
-// matching q against the title, set or SKU.
-func (s *Service) ListForSellerFiltered(ctx context.Context, sellerID, show, q string, limit, offset int) ([]Listing, int, error) {
+// matching q against the title, set or SKU, in one of SellerSorts' orders.
+func (s *Service) ListForSellerFiltered(ctx context.Context, sellerID, show, q, sort string, limit, offset int) ([]Listing, int, error) {
+	order, ok := SellerSorts[sort]
+	if !ok {
+		order = SellerSorts[""]
+	}
 	where, ok := SellerFilters[show]
 	if !ok {
 		where = ""
@@ -954,7 +967,7 @@ func (s *Service) ListForSellerFiltered(ctx context.Context, sellerID, show, q s
 	rows, err := s.DB.QueryContext(ctx, `
 		SELECT `+listingCols+` FROM listings l JOIN users u ON u.id = l.seller_id
 		WHERE l.seller_id = $1 AND l.status <> 'removed'`+where+`
-		ORDER BY l.created_at DESC, l.id LIMIT $`+strconv.Itoa(n+1)+` OFFSET $`+strconv.Itoa(n+2), append(args, limit, offset)...)
+		ORDER BY `+order+` LIMIT $`+strconv.Itoa(n+1)+` OFFSET $`+strconv.Itoa(n+2), append(args, limit, offset)...)
 	if err != nil {
 		return nil, 0, err
 	}

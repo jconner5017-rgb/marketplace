@@ -44,6 +44,18 @@ func TestLotListingsAndCustomParcel(t *testing.T) {
 		t.Fatalf("single card has a lot count: %v", l)
 	}
 
+	// Seller hub sort orders.
+	first := func(sort string) float64 {
+		code, body := do(t, sc, "GET", e.ts.URL+"/v1/seller/listings?sort="+sort, nil)
+		if code != 200 {
+			t.Fatalf("sort %s: %d %v", sort, code, body)
+		}
+		return body["listings"].([]any)[0].(map[string]any)["price_cents"].(float64)
+	}
+	if first("price_desc") != 2500 || first("price_asc") != 500 || first("newest") != 900 || first("oldest") != 2500 || first("bogus") != 900 {
+		t.Fatalf("sorts: high=%v low=%v new=%v old=%v", first("price_desc"), first("price_asc"), first("newest"), first("oldest"))
+	}
+
 	// Search filter.
 	anon := client(t)
 	count := func(v string) int {

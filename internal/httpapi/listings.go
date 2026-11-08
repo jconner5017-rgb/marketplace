@@ -90,7 +90,8 @@ func (s *Server) handleCreateListing(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleMyListings(w http.ResponseWriter, r *http.Request) {
 	u, _ := currentUser(r)
 	limit, offset := pageParams(r)
-	ls, total, err := s.listings.ListForSellerFiltered(r.Context(), u.ID, r.URL.Query().Get("show"), r.URL.Query().Get("q"), limit, offset)
+	ls, total, err := s.listings.ListForSellerFiltered(r.Context(), u.ID, r.URL.Query().Get("show"), r.URL.Query().Get("q"),
+		r.URL.Query().Get("sort"), limit, offset)
 	if err != nil {
 		s.listingError(w, r, err)
 		return

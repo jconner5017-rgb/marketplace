@@ -3,6 +3,8 @@ import { apiGet } from "@/lib/api";
 import { requireUser } from "@/lib/auth";
 import type { Listing, Store } from "@/lib/types";
 import ListingsTable from "@/components/sell/ListingsTable";
+import ListingSort, { LISTING_SORTS } from "@/components/sell/ListingSort";
+import { Suspense } from "react";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Your listings", robots: { index: false } };
@@ -19,15 +21,17 @@ const VIEWS = [
 ];
 const PAGE = 100;
 
-export default async function SellerListings({ searchParams }: { searchParams: Promise<{ show?: string; q?: string; page?: string }> }) {
+export default async function SellerListings({ searchParams }: { searchParams: Promise<{ show?: string; q?: string; page?: string; sort?: string }> }) {
   const sp = await searchParams;
   const show = VIEWS.some((v) => v.key === sp.show) ? sp.show! : "";
   const q = typeof sp.q === "string" ? sp.q.slice(0, 100) : "";
   const page = Math.max(1, Number(sp.page) || 1);
+  const sort = LISTING_SORTS.some(([v]) => v === sp.sort) && sp.sort !== "newest" ? sp.sort! : "";
   await requireUser("/sell/listings");
   const qs = new URLSearchParams({ limit: String(PAGE), offset: String((page - 1) * PAGE) });
   if (show) qs.set("show", show);
   if (q) qs.set("q", q);
+  if (sort) qs.set("sort", sort);
   const [r, storeR] = await Promise.all([
     apiGet<{ listings: Listing[]; total: number }>(`/v1/seller/listings?${qs}`),
     apiGet<{ store: Store | null }>("/v1/seller/store"),
@@ -37,9 +41,10 @@ export default async function SellerListings({ searchParams }: { searchParams: P
   const total = r.data?.total ?? 0;
   const href = (p: Record<string, string | number>) => {
     const u = new URLSearchParams();
-    const v = { show, q, page: 1, ...p };
+    const v = { show, q, sort, page: 1, ...p };
     if (v.show) u.set("show", String(v.show));
     if (v.q) u.set("q", String(v.q));
+    if (v.sort) u.set("sort", String(v.sort));
     if (Number(v.page) > 1) u.set("page", String(v.page));
     const s = u.toString();
     return "/sell/listings" + (s ? "?" + s : "");
@@ -62,12 +67,16 @@ export default async function SellerListings({ searchParams }: { searchParams: P
           </Link>
         ))}
       </nav>
-      <form action="/sell/listings" className="mt-3 flex max-w-[480px] gap-2 text-[14px]">
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+      <form action="/sell/listings" className="flex w-full max-w-[480px] gap-2 text-[14px]">
         {show && <input type="hidden" name="show" value={show} />}
+        {sort && <input type="hidden" name="sort" value={sort} />}
         <label htmlFor="lq" className="sr-only">Search your listings</label>
         <input id="lq" name="q" defaultValue={q} placeholder="Search title, set or SKU" className="flex-1 rounded-lg border border-line px-3 py-2" />
         <button className="rounded-lg border border-ink px-4 py-2 font-semibold hover:bg-wash">Search</button>
       </form>
+      <Suspense fallback={null}><ListingSort value={sort} /></Suspense>
+      </div>
 
       {listings.length === 0 ? (
         <p className="py-10 text-center text-muted">
