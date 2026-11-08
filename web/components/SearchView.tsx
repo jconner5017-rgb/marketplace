@@ -14,7 +14,7 @@ export type SP = Record<string, string | string[] | undefined>;
 
 // Query keys the API understands; anything else in the URL is ignored.
 const API_KEYS = ["q", "mode", "exclude", "in", "category", "game", "set", "year", "year_min", "year_max", "number",
-  "grader", "min_grade", "cert", "condition", "attribute", "seller", "min_price", "max_price", "discount", "sort", "format"];
+  "grader", "min_grade", "cert", "condition", "attribute", "seller", "min_price", "max_price", "discount", "sort", "format", "lots"];
 // Keys that can repeat (?grader=PSA&grader=BGS).
 const MULTI = new Set(["game", "grader", "condition", "attribute"]);
 const PER_PAGE = [24, 48, 96];
@@ -249,6 +249,8 @@ function ActiveFilters({ params, cat }: { params: URLSearchParams; cat: SiteCata
     chips.push({ label, href: hrefWith(params, { min_price: null, max_price: null }) });
   }
   if (params.get("discount")) chips.push({ label: "Multi-card discount", href: hrefWith(params, { discount: null }) });
+  if (params.get("lots") === "only") chips.push({ label: "Lots only", href: hrefWith(params, { lots: null }) });
+  if (params.get("lots") === "none") chips.push({ label: "Single cards only", href: hrefWith(params, { lots: null }) });
   if (params.get("in") === "title") chips.push({ label: "Titles only", href: hrefWith(params, { in: null }) });
   if (params.get("mode") === "any" || params.get("mode") === "exact") {
     chips.push({ label: params.get("mode") === "any" ? "Any of the words" : "Exact phrase", href: hrefWith(params, { mode: null }) });
@@ -293,6 +295,16 @@ function Sidebar({ params, facets, cat }: { params: URLSearchParams; facets: Fac
               </li>
             );
           })}
+        </ul>
+      </div>
+      <div>
+        <h2 className="mb-2 font-bold">Singles or lots</h2>
+        <ul className="space-y-1">
+          {[["", "Everything"], ["none", "Single cards"], ["only", "Lots"]].map(([v, l]) => (
+            <li key={v || "all"}>
+              <Option href={hrefWith(params, { lots: v || null })} on={(params.get("lots") ?? "") === v}>{l}</Option>
+            </li>
+          ))}
         </ul>
       </div>
       <FacetGroup

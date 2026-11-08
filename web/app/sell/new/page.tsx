@@ -5,17 +5,18 @@ import NewListingForm from "@/components/NewListingForm";
 import { getCatalog, getFees } from "@/lib/catalog";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "List a card" };
+export const metadata = { title: "List a card or lot" };
 
-export default async function NewListingPage() {
-  await requireUser("/sell/new");
+export default async function NewListingPage({ searchParams }: { searchParams: Promise<{ lot?: string }> }) {
+  const lot = (await searchParams).lot === "1";
+  await requireUser(lot ? "/sell/new?lot=1" : "/sell/new");
   const [{ seller }, catalog, fees] = await Promise.all([getSeller(), getCatalog(), getFees()]);
   if (!seller?.charges_enabled) redirect("/sell");
   return (
     <div className="mx-auto max-w-[760px] pt-6">
-      <h1 className="text-[26px] font-bold">List a card</h1>
-      <p className="mt-1 text-muted">Your price limit is ${(seller.tier_cap_cents / 100).toFixed(2)} per card. Every listing ships free.</p>
-      <NewListingForm capCents={seller.tier_cap_cents} catalog={catalog} fees={fees} />
+      <h1 className="text-[26px] font-bold">{lot ? "List a lot" : "List a card"}</h1>
+      <p className="mt-1 text-muted">Your price limit is ${(seller.tier_cap_cents / 100).toFixed(2)} per listing (a lot counts as one listing). Every listing ships free.</p>
+      <NewListingForm capCents={seller.tier_cap_cents} catalog={catalog} fees={fees} startAsLot={lot} />
     </div>
   );
 }

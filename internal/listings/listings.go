@@ -77,6 +77,10 @@ type Input struct {
 	Format  string         `json:"format"` // fixed (default) or auction
 	Auction *AuctionInput  `json:"auction"`
 	Offers  *OfferSettings `json:"offers"`
+
+	// LotCount makes this a lot: several cards sold together as one item.
+	// Nil (or 0) is a single card.
+	LotCount *int `json:"lot_count"`
 }
 
 // Patch changes only the fields that are present.
@@ -105,6 +109,8 @@ type Patch struct {
 	Format  *string        `json:"format"`
 	Auction *AuctionInput  `json:"auction"`
 	Offers  *OfferSettings `json:"offers"`
+	// 0 turns a lot back into a single card.
+	LotCount *int `json:"lot_count"`
 }
 
 type Listing struct {
@@ -134,6 +140,7 @@ type Listing struct {
 	PackagePreset   string    `json:"package_preset"`
 	WeightOz        float64   `json:"weight_oz"`
 	Status          string    `json:"status"`
+	LotCount        *int      `json:"lot_count,omitempty"`
 	Version         int       `json:"version"`
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`
@@ -201,6 +208,19 @@ func (in *Input) normalize() {
 		}
 	}
 	in.PhotoURLs = photos
+	if in.LotCount != nil && *in.LotCount == 0 {
+		in.LotCount = nil
+	}
+	if in.LotCount != nil {
+		// A lot is described by its title, photos and description, not one card number.
+		in.CardNumber = nil
+		if in.PackagePreset == "" || in.PackagePreset == "envelope" {
+			in.PackagePreset = "box"
+		}
+		if in.WeightOz == 0 {
+			in.WeightOz = LotWeightOz(*in.LotCount)
+		}
+	}
 	if in.PackagePreset == "" {
 		in.PackagePreset = "envelope"
 	}
@@ -316,6 +336,14 @@ func (in *Input) validate(capCents int) error {
 	if !slices.Contains(Presets, in.PackagePreset) {
 		f["package_preset"] = "one of " + strings.Join(Presets, ", ")
 	}
+	if in.LotCount != nil {
+		if *in.LotCount < 2 || *in.LotCount > 5000 {
+			f["lot_count"] = "a lot has 2 to 5000 cards"
+		}
+		if in.PackagePreset == "envelope" {
+			f["package_preset"] = "lots ship in a bubble mailer or a box"
+		}
+	}
 	if in.WeightOz <= 0 || in.WeightOz > 1120 {
 		f["weight_oz"] = "0.1 to 1120"
 	}
@@ -337,7 +365,7 @@ type Service struct {
 const listingCols = `l.id, l.seller_id, u.username, l.external_id, l.category, l.game_or_sport, l.set_name,
 	l.year, l.card_number, l.title, l.description, l.condition, l.grader, l.grade, l.cert_number,
 	l.attributes, l.photo_urls, l.price_cents, l.quantity, l.package_preset, l.weight_oz,
-	l.status, l.version, l.created_at, l.updated_at` + saleCols + storeCols
+	l.status, l.version, l.created_at, l.updated_at` + saleCols + storeCols + `, l.lot_count`
 
 // storeCols: the listing's store category and its store sale right now.
 const storeCols = `, l.store_category_id,
@@ -365,18 +393,22 @@ func scanListing(row interface{ Scan(...any) error }) (Listing, error) {
 	var year sql.NullInt64
 	var grade sql.NullFloat64
 	var sc saleScan
-	var storeCat sql.NullInt64
+	var storeCat, lot sql.NullInt64
 	dest := []any{&l.ID, &l.SellerID, &l.SellerUsername, &ext, &l.Category, &l.GameOrSport, &l.SetName,
 		&year, &cardNo, &l.Title, &l.Description, &cond, &grader, &grade, &cert,
 		pq.Array(&l.Attributes), pq.Array(&l.PhotoURLs), &l.PriceCents, &l.Quantity, &l.PackagePreset,
 		&l.WeightOz, &l.Status, &l.Version, &l.CreatedAt, &l.UpdatedAt}
-	if err := row.Scan(append(append(dest, sc.dest()...), &storeCat, &l.SalePercent)...); err != nil {
+	if err := row.Scan(append(append(dest, sc.dest()...), &storeCat, &l.SalePercent, &lot)...); err != nil {
 		return l, err
 	}
 	sc.apply(&l)
 	if storeCat.Valid {
 		c := int(storeCat.Int64)
 		l.StoreCategoryID = &c
+	}
+	if lot.Valid {
+		n := int(lot.Int64)
+		l.LotCount = &n
 	}
 	if l.SalePercent > 0 {
 		l.SalePriceCents = SalePrice(l.PriceCents, l.SalePercent)
@@ -456,13 +488,13 @@ func insertListing(ctx context.Context, tx *sql.Tx, sellerID string, in Input) (
 	err := tx.QueryRowContext(ctx, `
 		INSERT INTO listings (seller_id, external_id, category, game_or_sport, set_name, year, card_number,
 			title, description, condition, grader, grade, cert_number, attributes, photo_urls,
-			price_cents, quantity, package_preset, weight_oz, status)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+			price_cents, quantity, package_preset, weight_oz, status, lot_count)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
 		RETURNING id`,
 		sellerID, in.ExternalID, in.Category, in.GameOrSport, in.SetName, in.Year, in.CardNumber,
 		in.Title, in.Description, in.Condition, in.Grader, in.Grade, in.CertNumber,
 		pq.Array(in.Attributes), pq.Array(in.PhotoURLs), in.PriceCents, in.Quantity,
-		in.PackagePreset, in.WeightOz, status(in)).Scan(&id)
+		in.PackagePreset, in.WeightOz, status(in), in.LotCount).Scan(&id)
 	if err != nil {
 		var pqErr *pq.Error
 		if errors.As(err, &pqErr) && pqErr.Code == "23505" && pqErr.Constraint == "listings_seller_external_key" {
@@ -630,11 +662,11 @@ func updateListing(ctx context.Context, tx *sql.Tx, id string, in Input) (Listin
 		UPDATE listings SET category=$2, game_or_sport=$3, set_name=$4, year=$5, card_number=$6,
 			title=$7, description=$8, condition=$9, grader=$10, grade=$11, cert_number=$12,
 			attributes=$13, photo_urls=$14, price_cents=$15, quantity=$16, package_preset=$17,
-			weight_oz=$18, status=$19, version = version + 1, updated_at = now()
+			weight_oz=$18, status=$19, lot_count=$20, version = version + 1, updated_at = now()
 		WHERE id = $1`,
 		id, in.Category, in.GameOrSport, in.SetName, in.Year, in.CardNumber, in.Title, in.Description,
 		in.Condition, in.Grader, in.Grade, in.CertNumber, pq.Array(in.Attributes), pq.Array(in.PhotoURLs),
-		in.PriceCents, in.Quantity, in.PackagePreset, in.WeightOz, status(in)); err != nil {
+		in.PriceCents, in.Quantity, in.PackagePreset, in.WeightOz, status(in), in.LotCount); err != nil {
 		return Listing{}, err
 	}
 	return getTx(ctx, tx, id)
@@ -652,7 +684,7 @@ func inputFrom(l Listing) Input {
 		Year: l.Year, CardNumber: l.CardNumber, Title: l.Title, Description: l.Description,
 		Condition: l.Condition, Grader: l.Grader, Grade: l.Grade, CertNumber: l.CertNumber,
 		Attributes: l.Attributes, PhotoURLs: l.PhotoURLs, PriceCents: l.PriceCents, Quantity: l.Quantity,
-		PackagePreset: l.PackagePreset, WeightOz: l.WeightOz, Status: st,
+		PackagePreset: l.PackagePreset, WeightOz: l.WeightOz, Status: st, LotCount: l.LotCount,
 	}
 }
 
@@ -714,6 +746,15 @@ func applyPatch(in *Input, p Patch) {
 	if p.Offers != nil {
 		in.Offers = p.Offers
 	}
+	if p.LotCount != nil {
+		in.LotCount = p.LotCount
+	}
+}
+
+// LotWeightOz estimates a lot's weight before packing: about 0.1 oz a raw
+// card in a sleeve, never under 1 oz. Sellers can correct it.
+func LotWeightOz(cards int) float64 {
+	return math.Max(1, math.Round(float64(cards)*0.1*10)/10)
 }
 
 // checkAuctionEdit limits changes to an auction: settings can change until

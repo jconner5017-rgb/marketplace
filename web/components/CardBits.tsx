@@ -34,7 +34,28 @@ export function SaleLine({ l, className = "" }: { l: Listing; className?: string
  * Graded cards: a tiny grading-slab label (red band, white body).
  * Raw cards: a plain outlined condition tag.
  */
+/** "Lot of 25" chip for lots, then the grade or condition. */
 export function GradeBadge({ l, size = "sm" }: { l: Listing; size?: "sm" | "lg" }) {
+  const badge = <GradeOnly l={l} size={size} />;
+  if (!l.lot_count) return badge;
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1.5">
+      <LotBadge count={l.lot_count} size={size} />
+      {badge}
+    </span>
+  );
+}
+
+export function LotBadge({ count, size = "sm" }: { count: number; size?: "sm" | "lg" }) {
+  return (
+    <span className={`inline-block whitespace-nowrap rounded-[3px] bg-ink font-bold text-paper ${size === "lg" ? "px-2 py-1 text-sm" : "px-1.5 py-0.5 text-[11px]"}`}
+      title={`${count} cards sold together`}>
+      Lot of {count.toLocaleString()}
+    </span>
+  );
+}
+
+function GradeOnly({ l, size = "sm" }: { l: Listing; size?: "sm" | "lg" }) {
   const big = size === "lg";
   if (l.grader) {
     return (

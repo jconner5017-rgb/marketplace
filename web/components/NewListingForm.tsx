@@ -60,8 +60,8 @@ const dollars = (c: number | null | undefined) => (c == null ? "" : (c / 100).to
 const ruleText = (kind: Kind | null | undefined, v: number | null | undefined) => (v == null ? "" : kind === "amount" ? dollars(v) : String(v));
 
 /** The listing form, for a new card or (with `initial`) editing one. */
-export default function NewListingForm({ capCents, catalog, fees, initial }: {
-  capCents: number; catalog: SiteCatalog; fees: FeeSchedule; initial?: Listing;
+export default function NewListingForm({ capCents, catalog, fees, initial, startAsLot = false }: {
+  capCents: number; catalog: SiteCatalog; fees: FeeSchedule; startAsLot?: boolean; initial?: Listing;
 }) {
   const editing = !!initial;
   const a = initial?.auction;
@@ -76,7 +76,9 @@ export default function NewListingForm({ capCents, catalog, fees, initial }: {
   const [graded, setGraded] = useState(initial ? initial.grader != null : false);
   const [category, setCategory] = useState<string>(initial?.category ?? "tcg");
   const [price, setPrice] = useState(initial && initial.format === "fixed" ? dollars(initial.price_cents) : "");
-  const [preset, setPreset] = useState(initial?.package_preset ?? "envelope");
+  const [preset, setPreset] = useState(initial?.package_preset ?? (startAsLot ? "box" : "envelope"));
+  const [isLot, setIsLot] = useState(initial ? initial.lot_count != null : startAsLot);
+  const [lotCount, setLotCount] = useState(initial?.lot_count ? String(initial.lot_count) : "");
   const [format, setFormat] = useState<"fixed" | "auction">(initial?.format ?? "fixed");
   const [start, setStart] = useState(dollars(a?.start_cents));
   const [reserve, setReserve] = useState(dollars(a?.reserve_cents));
@@ -203,7 +205,8 @@ export default function NewListingForm({ capCents, catalog, fees, initial }: {
       game_or_sport: s("game_or_sport"),
       set_name: s("set_name"),
       year: s("year") ? Number(s("year")) : null,
-      card_number: editing ? s("card_number") : opt("card_number"),
+      card_number: isLot ? null : editing ? s("card_number") : opt("card_number"),
+      lot_count: isLot ? Number(lotCount) || null : editing ? 0 : null,
       title: s("title"),
       description: s("description"),
       condition: graded ? opt("condition") : s("condition"),
@@ -251,7 +254,31 @@ export default function NewListingForm({ capCents, catalog, fees, initial }: {
       )}
       {!locked && <>
       <fieldset className="grid gap-4 sm:grid-cols-2">
-        <legend className="mb-2 text-[18px] font-bold">The card</legend>
+        <legend className="mb-2 text-[18px] font-bold">{isLot ? "The lot" : "The card"}</legend>
+        <div className="sm:col-span-2">
+          <div className="flex gap-2" role="radiogroup" aria-label="Single card or lot">
+            {([["Single card", false], ["Lot (several cards)", true]] as const).map(([label, v]) => (
+              <button
+                key={label}
+                type="button"
+                role="radio"
+                aria-checked={isLot === v}
+                onClick={() => {
+                  setIsLot(v);
+                  if (v && preset === "envelope") setPreset("box");
+                }}
+                className={`rounded-full border px-4 py-1.5 text-[14px] font-semibold ${isLot === v ? "border-ink bg-ink text-paper" : "border-line hover:border-ink"}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {isLot && (
+            <p className="mt-2 text-[13px] text-muted">
+              A lot sells several cards together as one item, like an eBay lot. Show every card (or the stack) in the photos and list what&apos;s included in the description.
+            </p>
+          )}
+        </div>
         {!editing && (
           <p className="text-[14px] text-muted sm:col-span-2">
             Tip: add the front and back photos below first, then tap <span className="font-semibold text-ink">Identify from photos</span> to fill this in.
@@ -275,14 +302,25 @@ export default function NewListingForm({ capCents, catalog, fees, initial }: {
         <Field label="Set" name="set_name" placeholder="Base Set, Topps Chrome…" defaultValue={initial?.set_name} error={fields.set_name} />
         <div className="grid grid-cols-2 gap-4">
           <Field label="Year" name="year" inputMode="numeric" placeholder="1999" defaultValue={initial?.year ?? ""} error={fields.year} />
-          <Field label="Card number" name="card_number" placeholder="4/102" defaultValue={initial?.card_number ?? ""} error={fields.card_number} />
+          {isLot ? (
+            <Field label="Number of cards" name="lot_count" inputMode="numeric" placeholder="25" value={lotCount}
+              onChange={(e) => {
+                const v = e.target.value.replace(/[^0-9]/g, "");
+                setLotCount(v);
+                const n = Number(v);
+                if (n >= 2) setWeight(String(Math.max(1, Math.round(n * 0.1 * 10) / 10)));
+              }}
+              error={fields.lot_count} />
+          ) : (
+            <Field label="Card number" name="card_number" placeholder="4/102" defaultValue={initial?.card_number ?? ""} error={fields.card_number} />
+          )}
         </div>
         <Field
           className="sm:col-span-2"
           label="Title"
           name="title"
           maxLength={200}
-          placeholder="Charizard Holo Base Set"
+          placeholder={isLot ? "25-card 2024 Prizm football base lot" : "Charizard Holo Base Set"}
           defaultValue={initial?.title}
           hint="Buyers search by title. Include the player or card name and anything notable."
           error={fields.title}
@@ -431,13 +469,13 @@ export default function NewListingForm({ capCents, catalog, fees, initial }: {
         )}
         <Field label="Package" name="package_preset" error={fields.package_preset}>
           <select id="package_preset" value={preset} onChange={(e) => setPreset(e.target.value)} className={select}>
-            <option value="envelope">Stamped envelope (one raw card up to $20; up to $100 for trusted buyers)</option>
+            {!isLot && <option value="envelope">Stamped envelope (one raw card up to $20; up to $100 for trusted buyers)</option>}
             <option value="bubble">Bubble mailer (7¼ × 5¼ in)</option>
             <option value="box">Small box (8 × 6 × 2 in)</option>
           </select>
         </Field>
         <Field label="Weight (oz)" name="weight_oz" inputMode="decimal" value={weight} onChange={(e) => setWeight(e.target.value)} error={fields.weight_oz}
-          hint={preset === "envelope" ? "The card and its sleeve." : "Each card as packed (a raw card in a toploader is about 1 oz, a slab about 3–4 oz)."} />
+          hint={isLot ? "All the cards before packing. We estimate about 0.1 oz a raw card; you can change the box and weight when you buy the label." : preset === "envelope" ? "The card and its sleeve." : "Each card as packed (a raw card in a toploader is about 1 oz, a slab about 3–4 oz)."} />
         {PACKAGES[preset] && (
           <div className="rounded-lg border border-line p-3 text-[13px] sm:col-span-2">
             <p><span className="font-semibold">Size:</span> {PACKAGES[preset].size}{PACKAGES[preset].adds ? `. ${PACKAGES[preset].adds}` : ""}</p>

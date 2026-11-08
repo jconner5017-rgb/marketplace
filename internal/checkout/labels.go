@@ -189,8 +189,34 @@ func (s *Service) activeLabel(ctx context.Context, orderID string) (bool, error)
 	return n > 0, err
 }
 
-// LabelRates gets live rates for an order's package.
-func (s *Service) LabelRates(ctx context.Context, sellerID, orderID string) ([]LabelRate, error) {
+// DefaultParcel is the package the site suggests for an order's cards.
+func (s *Service) DefaultParcel(ctx context.Context, sellerID, orderID string) (shipping.Parcel, error) {
+	o, err := s.loadLabelOrder(ctx, sellerID, orderID)
+	if err != nil {
+		return shipping.Parcel{}, err
+	}
+	return shipping.ParcelFor(o.items), nil
+}
+
+// CheckParcel rejects package sizes and weights a carrier won't take.
+func CheckParcel(p shipping.Parcel) error {
+	for _, d := range []struct {
+		name string
+		v    float64
+	}{{"length", p.Length}, {"width", p.Width}, {"height", p.Height}} {
+		if d.v < 0.1 || d.v > 108 {
+			return &FieldError{Field: "parcel." + d.name, Msg: "each side must be 0.1 to 108 inches"}
+		}
+	}
+	if p.WeightOz < 0.1 || p.WeightOz > 1120 {
+		return &FieldError{Field: "parcel.weight_oz", Msg: "weight must be 0.1 oz to 70 lb"}
+	}
+	return nil
+}
+
+// LabelRates gets live rates for an order's package. A nil parcel uses the
+// site's suggested package; otherwise the seller's own box and weight.
+func (s *Service) LabelRates(ctx context.Context, sellerID, orderID string, parcel *shipping.Parcel) ([]LabelRate, error) {
 	if s.Ship == nil || s.Platform == nil {
 		return nil, ErrNoLabels
 	}
@@ -211,7 +237,14 @@ func (s *Service) LabelRates(ctx context.Context, sellerID, orderID string) ([]L
 		return nil, err
 	}
 	sig := o.total > SignatureOver
-	rates, err := s.Ship.Rates(ctx, shipping.RateRequest{From: *o.from, To: o.shipTo, Parcel: shipping.ParcelFor(o.items),
+	use := shipping.ParcelFor(o.items)
+	if parcel != nil {
+		if err := CheckParcel(*parcel); err != nil {
+			return nil, err
+		}
+		use = *parcel
+	}
+	rates, err := s.Ship.Rates(ctx, shipping.RateRequest{From: *o.from, To: o.shipTo, Parcel: use,
 		Signature: sig, Reference: fmt.Sprintf("Order %d", o.number)})
 	if err != nil {
 		return nil, err

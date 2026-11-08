@@ -443,12 +443,38 @@ func (s *Server) handleLabelRates(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	rates, err := s.checkout.LabelRates(r.Context(), u.ID, id)
+	// Optional body: {"parcel": {"length", "width", "height", "weight_oz"}}
+	// to price the seller's own box. With no body the suggested package is used.
+	var req struct {
+		Parcel *struct {
+			Length   float64 `json:"length"`
+			Width    float64 `json:"width"`
+			Height   float64 `json:"height"`
+			WeightOz float64 `json:"weight_oz"`
+		} `json:"parcel"`
+	}
+	if r.ContentLength != 0 && !decodeJSON(w, r, &req) {
+		return
+	}
+	var parcel *shipping.Parcel
+	if req.Parcel != nil {
+		parcel = &shipping.Parcel{Length: req.Parcel.Length, Width: req.Parcel.Width, Height: req.Parcel.Height, WeightOz: req.Parcel.WeightOz}
+	}
+	used, err := s.checkout.DefaultParcel(r.Context(), u.ID, id)
 	if err != nil {
 		s.labelError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"rates": rates})
+	if parcel != nil {
+		used = *parcel
+	}
+	rates, err := s.checkout.LabelRates(r.Context(), u.ID, id, parcel)
+	if err != nil {
+		s.labelError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"rates": rates, "parcel": map[string]float64{
+		"length": used.Length, "width": used.Width, "height": used.Height, "weight_oz": used.WeightOz}})
 }
 
 // POST /v1/orders/{id}/label {"rate_id"}

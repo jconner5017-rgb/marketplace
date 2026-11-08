@@ -39,6 +39,7 @@ func ParseSearch(q url.Values) (p SearchParams, bad map[string]string) {
 		Seller:     q.Get("seller"),
 		OnSale:     q.Get("on_sale") == "1",
 		Discount:   q.Get("discount") == "1" || q.Get("discount") == "true",
+		Lots:       lotsParam(q.Get("lots")),
 		Sort:       q.Get("sort"),
 		Format:     q.Get("format"),
 	}
@@ -110,4 +111,14 @@ func DollarsToCents(v string) (int, error) {
 		return 0, errors.New("bad amount")
 	}
 	return int(f*100 + 0.5), nil
+}
+
+func lotsParam(v string) string {
+	switch v {
+	case "only", "1", "true":
+		return "only"
+	case "none", "0", "false":
+		return "none"
+	}
+	return ""
 }

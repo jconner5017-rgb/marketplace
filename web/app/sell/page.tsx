@@ -45,8 +45,9 @@ export default async function SellPage({ searchParams }: { searchParams: Promise
           your bank details and ID, handled by Stripe.
         </p>
         <ul className="mt-5 space-y-2 text-[15px]">
+          <li>Sell single cards, or lots of several cards sold together as one item, like an eBay lot.</li>
           <li>Every listing ships free, so build shipping into your price.</li>
-          <li>New sellers can list cards up to $20 each, rising to $250 and then $1,000 as you build feedback.</li>
+          <li>New sellers can list cards and lots up to $20 each, rising to $250 and then $1,000 as you build feedback.</li>
         </ul>
         <SellingCosts fees={fees} />
         <div className="mt-6">{promoBox}</div>
@@ -150,6 +151,7 @@ export default async function SellPage({ searchParams }: { searchParams: Promise
       <div className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <HubCard title="Listings" href="/sell/listings">
           <p className="mb-1"><Link href="/sell/new" className="font-semibold text-link hover:underline">List a card</Link>{" · "}
+            <Link href="/sell/new?lot=1" className="font-semibold text-link hover:underline">List a lot</Link>{" · "}
             <Link href="/sell/import" className="text-link hover:underline">Upload a CSV</Link></p>
           <ul className="text-[14px]">
             <CountRow href="/sell/listings?show=active" label="Active listings" n={L.active} />

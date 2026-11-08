@@ -26,6 +26,7 @@ export const FOOTER: { title: string; links: { label: string; href: string; bold
     links: [
       { label: "Start selling", href: "/sell" },
       { label: "How to sell", href: "/help/selling" },
+      { label: "Selling lots", href: "/help/lots" },
       { label: "Selling fees", href: "/help/fees" },
       { label: "Seller levels", href: "/help/seller-levels" },
       { label: "Shipping your cards", href: "/help/shipping" },

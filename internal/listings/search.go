@@ -36,6 +36,7 @@ type SearchParams struct {
 	MinCents      int
 	MaxCents      int
 	Discount      bool   // seller offers a multi-card discount
+	Lots          string // "only" keeps lots, "none" hides them; empty shows both
 	Format        string // auction, fixed (Buy It Now) or offers (accepts offers)
 	Sort          string // newest (default), price_asc, price_desc, relevance
 	// ListedAfter keeps cards listed after this time (saved-search alerts).
@@ -242,6 +243,12 @@ func buildFilter(p SearchParams, skip ...string) filter {
 	}
 	if p.Discount {
 		where = append(where, "sp.bundle_discount_type IS NOT NULL")
+	}
+	switch p.Lots {
+	case "only":
+		where = append(where, "l.lot_count IS NOT NULL")
+	case "none":
+		where = append(where, "l.lot_count IS NULL")
 	}
 	if p.Seller != "" {
 		where = append(where, "lower(u.username) = lower("+arg(p.Seller)+")")

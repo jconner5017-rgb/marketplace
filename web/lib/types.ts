@@ -23,6 +23,8 @@ export type Listing = {
   package_preset: string;
   weight_oz: number;
   status: string;
+  /** Set for a lot: the number of cards sold together. */
+  lot_count?: number | null;
   version: number;
   created_at: string;
   updated_at: string;
