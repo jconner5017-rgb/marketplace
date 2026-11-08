@@ -16,7 +16,7 @@ import (
 // line up.
 var Sports = []string{
 	"Baseball", "Football", "Basketball", "Hockey", "Soccer", "Auto Racing",
-	"Wrestling", "MMA", "Golf", "Boxing", "Tennis", "Cycling",
+	"Wrestling", "MMA", "Golf", "Boxing", "Tennis", "Cycling", "Multi-Sport",
 }
 
 // Games is the fixed list of trading card games, plus "Other TCG" for
@@ -90,6 +90,7 @@ var gameAliases = map[string]string{
 // Built-in display labels, used when the catalog tables are first filled.
 var defaultLabels = map[string][2]string{
 	"MMA":                  {"MMA (Mixed Martial Arts)", "MMA"},
+	"Multi-Sport":          {"Multi-Sport (mixed sports)", "Multi-Sport"},
 	"Pokemon":              {"Pokémon TCG", "Pokémon"},
 	"Magic":                {"Magic: The Gathering", "Magic"},
 	"Yu-Gi-Oh!":            {"Yu-Gi-Oh! TCG", "Yu-Gi-Oh!"},
