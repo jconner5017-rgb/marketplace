@@ -1,13 +1,8 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { LISTING_SORTS } from "@/lib/listingSorts";
 
-export const LISTING_SORTS = [
-  ["newest", "Newly listed"],
-  ["oldest", "Oldest listed"],
-  ["price_desc", "Price: high to low"],
-  ["price_asc", "Price: low to high"],
-] as const;
 
 /** Sort dropdown for the seller's listings; keeps the view and search, starts at page 1. */
 export default function ListingSort({ value }: { value: string }) {

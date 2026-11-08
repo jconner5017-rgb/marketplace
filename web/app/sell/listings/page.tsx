@@ -3,7 +3,8 @@ import { apiGet } from "@/lib/api";
 import { requireUser } from "@/lib/auth";
 import type { Listing, Store } from "@/lib/types";
 import ListingsTable from "@/components/sell/ListingsTable";
-import ListingSort, { LISTING_SORTS } from "@/components/sell/ListingSort";
+import ListingSort from "@/components/sell/ListingSort";
+import { LISTING_SORTS } from "@/lib/listingSorts";
 import { Suspense } from "react";
 
 export const dynamic = "force-dynamic";
