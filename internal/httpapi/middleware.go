@@ -79,7 +79,7 @@ func requireJSONForWrites(next http.Handler) http.Handler {
 			// text/csv (bulk import) and image/* (photo uploads) also force a
 			// preflight; form posts and text/plain don't.
 			mt, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type"))
-			photo := r.URL.Path == "/v1/photos" && (mt == "image/jpeg" || mt == "image/png" || mt == "image/gif")
+			photo := (r.URL.Path == "/v1/photos" || r.URL.Path == "/v1/admin/banners/photo") && (mt == "image/jpeg" || mt == "image/png" || mt == "image/gif")
 			if mt != "application/json" && mt != "text/csv" && !photo {
 				writeError(w, http.StatusUnsupportedMediaType, "json_required",
 					"Content-Type must be application/json", nil)
