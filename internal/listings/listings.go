@@ -84,8 +84,6 @@ type Input struct {
 	// LotCount makes this a lot: several cards sold together as one item.
 	// Nil (or 0) is a single card.
 	LotCount *int `json:"lot_count"`
-
-	htmlTooLong bool // set by normalize, reported by validate
 }
 
 // Patch changes only the fields that are present.
@@ -191,9 +189,8 @@ func (in *Input) normalize() {
 	in.Title = TidyTitle(in.Title)
 	in.Description = strings.TrimSpace(in.Description)
 	if strings.TrimSpace(in.DescriptionHTML) != "" {
-		raw := in.DescriptionHTML
-		in.DescriptionHTML = SanitizeHTML(raw)
-		in.htmlTooLong = in.DescriptionHTML == "" && len(raw) > MaxDescriptionHTML
+		// Too long once cleaned: dropped, and the plain description is used.
+		in.DescriptionHTML = SanitizeHTML(in.DescriptionHTML)
 		if in.DescriptionHTML != "" {
 			text := TextFromHTML(in.DescriptionHTML)
 			if r := []rune(text); len(r) > 5000 {
@@ -298,9 +295,6 @@ func (in *Input) validate(capCents int) error {
 	}
 	maxLen("title", in.Title, 200)
 	maxLen("description", in.Description, 5000)
-	if in.htmlTooLong {
-		f["description_html"] = fmt.Sprintf("the formatted description is too long (%d characters at most once cleaned)", MaxDescriptionHTML)
-	}
 	if in.ExternalID != nil {
 		maxLen("external_id", *in.ExternalID, 100)
 	}
