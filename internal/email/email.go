@@ -195,6 +195,10 @@ type execer interface {
 
 // Queue adds an account email to the outbox.
 func (s *Service) Queue(ctx context.Context, q execer, userID, to, subject, text string) error {
+	// .invalid addresses (internal accounts like the test buyer) can never be delivered.
+	if strings.HasSuffix(strings.ToLower(strings.TrimSpace(to)), ".invalid") {
+		return nil
+	}
 	_, err := q.ExecContext(ctx, `INSERT INTO email_outbox (user_id, to_email, kind, subject, body) VALUES (NULLIF($1, '')::uuid, $2, 'transactional', $3, $4)`,
 		userID, to, subject, text)
 	return err

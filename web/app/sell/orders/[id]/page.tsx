@@ -28,6 +28,12 @@ export default async function SellerOrder({ params }: { params: Promise<{ id: st
         <StatusPill o={o} />
       </div>
       <p className="text-[14px] text-muted">Paid {day(o.paid_at)} · Buyer {o.buyer}</p>
+      {o.test && (
+        <p className="mt-3 max-w-[560px] rounded-lg border border-dashed border-slab p-3 text-[14px]">
+          <b>Test sale.</b> Nobody paid for this order; it&apos;s here to practise printing the envelope and marking it shipped. It&apos;s addressed to
+          your own ship-from address. Delete it in the back office (Orders &gt; Test sale) when you&apos;re done.
+        </p>
+      )}
       <BuyerRecord username={o.buyer} />
       {o.status === "paid" && (
         <div className="mt-4 max-w-[560px] rounded-lg border border-ink p-4">
