@@ -380,6 +380,7 @@ func (s *Server) Handler() http.Handler {
 	// Listings: seller management.
 	mux.HandleFunc("POST /v1/seller/listings", requireUser(s.handleCreateListing))
 	mux.HandleFunc("GET /v1/seller/listings", requireUser(s.handleMyListings))
+	mux.HandleFunc("GET /v1/seller/listings/sync", s.sellerAPI(s.handleListingSync))
 	mux.HandleFunc("GET /v1/seller/listings/{id}", requireUser(s.handleMyListing))
 	mux.HandleFunc("PATCH /v1/seller/listings/{id}", requireUser(s.handleUpdateListing))
 	mux.HandleFunc("DELETE /v1/seller/listings/{id}", requireUser(s.handleRemoveListing))

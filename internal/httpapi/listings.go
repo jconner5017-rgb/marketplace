@@ -315,3 +315,37 @@ func isCrawler(ua string) bool {
 	}
 	return ua == ""
 }
+
+// GET /v1/seller/listings/sync — every listing of this seller that has an
+// external id (a FireCardManager SKU), with its id and status, so the app
+// can drop cards whose listing was removed on the website.
+func (s *Server) handleListingSync(w http.ResponseWriter, r *http.Request) {
+	u, _ := currentUser(r)
+	rows, err := s.db.QueryContext(r.Context(), `
+		SELECT external_id, id, status FROM listings
+		WHERE seller_id = $1 AND external_id IS NOT NULL ORDER BY created_at`, u.ID)
+	if err != nil {
+		s.internalError(w, r, err)
+		return
+	}
+	defer rows.Close()
+	type item struct {
+		ExternalID string `json:"external_id"`
+		ID         string `json:"id"`
+		Status     string `json:"status"`
+	}
+	out := []item{}
+	for rows.Next() {
+		var it item
+		if err := rows.Scan(&it.ExternalID, &it.ID, &it.Status); err != nil {
+			s.internalError(w, r, err)
+			return
+		}
+		out = append(out, it)
+	}
+	if err := rows.Err(); err != nil {
+		s.internalError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"listings": out})
+}

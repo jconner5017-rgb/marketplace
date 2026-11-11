@@ -49,3 +49,25 @@ func TestFormattedDescription(t *testing.T) {
 		t.Fatalf("after plain edit: %v", got)
 	}
 }
+
+func TestListingSync(t *testing.T) {
+	e := setupEnv(t)
+	sc, _ := newSeller(t, e, "sync_shop", true)
+	a := createListing(t, e, &httpClientT{sc}, rawCard("SY1", 900))["id"].(string)
+	createListing(t, e, &httpClientT{sc}, rawCard("SY2", 900))
+	if code, _ := do(t, sc, "DELETE", e.ts.URL+"/v1/seller/listings/"+a, nil); code != 204 && code != 200 {
+		t.Fatalf("remove: %d", code)
+	}
+	code, body := do(t, sc, "GET", e.ts.URL+"/v1/seller/listings/sync", nil)
+	if code != 200 {
+		t.Fatalf("sync: %d %v", code, body)
+	}
+	got := map[string]string{}
+	for _, x := range body["listings"].([]any) {
+		m := x.(map[string]any)
+		got[m["external_id"].(string)] = m["status"].(string)
+	}
+	if got["SY1"] != "removed" || got["SY2"] != "active" {
+		t.Fatalf("statuses: %v", got)
+	}
+}
