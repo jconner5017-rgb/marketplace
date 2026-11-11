@@ -34,6 +34,24 @@ var (
 // process decodes an upload, scales it to fit MaxSide, and re-encodes it as
 // JPEG. Re-encoding drops all metadata, including camera GPS location.
 func process(data []byte) (out []byte, w, h int, err error) {
+	return processWith(data, MinSide, MinSide, MaxSide, ErrTooSmall)
+}
+
+// Banner limits: wide images for site banners, kept up to 1940 pixels across.
+const (
+	BannerMinWidth  = 970
+	BannerMinHeight = 250
+	BannerMaxSide   = 1940
+)
+
+var ErrBannerTooSmall = errors.New("banners need to be at least 970 × 250 pixels; 1940 × 500 is best")
+
+// processBanner is process with banner sizes instead of card-photo sizes.
+func processBanner(data []byte) (out []byte, w, h int, err error) {
+	return processWith(data, BannerMinWidth, BannerMinHeight, BannerMaxSide, ErrBannerTooSmall)
+}
+
+func processWith(data []byte, minW, minH, maxSide int, tooSmall error) (out []byte, w, h int, err error) {
 	if len(data) > MaxUploadBytes {
 		return nil, 0, 0, ErrTooLarge
 	}
@@ -44,14 +62,14 @@ func process(data []byte) (out []byte, w, h int, err error) {
 	if cfg.Width*cfg.Height > maxPixels || cfg.Width <= 0 || cfg.Height <= 0 {
 		return nil, 0, 0, ErrDimension
 	}
-	if cfg.Width < MinSide || cfg.Height < MinSide {
-		return nil, 0, 0, ErrTooSmall
+	if cfg.Width < minW || cfg.Height < minH {
+		return nil, 0, 0, tooSmall
 	}
 	src, _, err := image.Decode(bytes.NewReader(data))
 	if err != nil {
 		return nil, 0, 0, ErrNotImage
 	}
-	dst := fit(src, MaxSide)
+	dst := fit(src, maxSide)
 	var buf bytes.Buffer
 	if err := jpeg.Encode(&buf, dst, &jpeg.Options{Quality: quality}); err != nil {
 		return nil, 0, 0, err

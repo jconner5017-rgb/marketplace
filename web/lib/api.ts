@@ -1,6 +1,6 @@
 import "server-only";
 import { cookies, headers } from "next/headers";
-import type { BidHistory, Facets, Listing, SearchResult, Seller, Summary, User } from "./types";
+import type { BidHistory, Facets, Listing, SearchResult, Seller, SiteBanner, Summary, User } from "./types";
 
 // The Go API, reached over Render's private network in production.
 export const API_URL = (process.env.API_URL || "http://localhost:8080").replace(/\/$/, "");
@@ -110,4 +110,10 @@ export async function getListing(id: string, countView = false): Promise<Listing
 
 export async function getBids(id: string): Promise<BidHistory | null> {
   return (await apiGet<BidHistory>("/v1/listings/" + encodeURIComponent(id) + "/bids")).data;
+}
+
+
+/** A promo banner staff switched on in the back office, or null. */
+export async function getBanner(slot: string): Promise<SiteBanner | null> {
+  return (await apiGet<{ banner: SiteBanner | null }>("/v1/banners/" + encodeURIComponent(slot))).data?.banner ?? null;
 }

@@ -51,6 +51,12 @@ func (s *Service) UploadUnlimited(ctx context.Context, ownerID string, data []by
 	return s.upload(ctx, ownerID, data, false)
 }
 
+// UploadBanner stores a site banner image for a staff member: wide sizes
+// allowed, no daily limit.
+func (s *Service) UploadBanner(ctx context.Context, ownerID string, data []byte) (Photo, error) {
+	return s.store(ctx, ownerID, data, processBanner)
+}
+
 func (s *Service) upload(ctx context.Context, ownerID string, data []byte, limited bool) (Photo, error) {
 	if limited {
 		var n int
@@ -62,7 +68,11 @@ func (s *Service) upload(ctx context.Context, ownerID string, data []byte, limit
 			return Photo{}, ErrTooMany
 		}
 	}
-	out, w, h, err := process(data)
+	return s.store(ctx, ownerID, data, process)
+}
+
+func (s *Service) store(ctx context.Context, ownerID string, data []byte, proc func([]byte) ([]byte, int, int, error)) (Photo, error) {
+	out, w, h, err := proc(data)
 	if err != nil {
 		return Photo{}, err
 	}
@@ -113,6 +123,7 @@ func (s *Service) Sweep(ctx context.Context) (int, error) {
 		WHERE p.created_at < now() - interval '1 day'
 		  AND NOT EXISTS (SELECT 1 FROM listings l WHERE l.photo_urls @> ARRAY[p.url])
 		  AND NOT EXISTS (SELECT 1 FROM stores st WHERE st.logo_url = p.url OR st.banner_url = p.url)
+		  AND NOT EXISTS (SELECT 1 FROM site_banners sb WHERE sb.image_url = p.url)
 		LIMIT 500`)
 	if err != nil {
 		return 0, err

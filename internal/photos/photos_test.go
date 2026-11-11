@@ -137,3 +137,19 @@ func TestUploadAndSweep(t *testing.T) {
 		t.Fatalf("used photo swept: %v", err)
 	}
 }
+
+func TestProcessBanner(t *testing.T) {
+	if _, w, h, err := processBanner(pngOf(970, 250)); err != nil || w != 970 || h != 250 {
+		t.Fatalf("970x250: %v %dx%d", err, w, h)
+	}
+	if _, _, _, err := processBanner(pngOf(728, 90)); err != ErrBannerTooSmall {
+		t.Fatalf("728x90: want ErrBannerTooSmall, got %v", err)
+	}
+	if _, w, h, err := processBanner(pngOf(3880, 1000)); err != nil || w != 1940 || h != 500 {
+		t.Fatalf("3880x1000: %v %dx%d", err, w, h)
+	}
+	// Card photos keep their own rules.
+	if _, _, _, err := process(pngOf(970, 250)); err != ErrTooSmall {
+		t.Fatalf("card photo 970x250: want ErrTooSmall, got %v", err)
+	}
+}

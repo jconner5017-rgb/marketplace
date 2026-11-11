@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { search } from "@/lib/api";
+import { getBanner, search } from "@/lib/api";
+import PromoBanner from "@/components/PromoBanner";
 import { ListingTile } from "@/components/CardBits";
 import type { Listing } from "@/lib/types";
 import { gameHref, sportHref, nonsportHref, landingHref } from "@/lib/format";
@@ -20,7 +21,7 @@ function shuffle<T>(xs: T[]): T[] {
 }
 
 export default async function Home() {
-  const [ending, fresh, graded, cheap, sportsMix, tcgMix, cat] = await Promise.all([
+  const [ending, fresh, graded, cheap, sportsMix, tcgMix, cat, banner] = await Promise.all([
     // Six picked at random from the 24 auctions ending soonest.
     search("format=auction&sort=ending&limit=24"),
     search("sort=newest&limit=12"),
@@ -30,6 +31,7 @@ export default async function Home() {
     search("category=sports&sort=random&limit=12"),
     search("category=tcg&sort=random&limit=12"),
     getCatalog(),
+    getBanner("home"),
   ]);
   const SHELVES = [
     { title: "Sports cards", category: "sports", items: cat.sports.map((s) => ({ label: s.short, href: sportHref(s.value) })) },
@@ -103,6 +105,8 @@ export default async function Home() {
         <Shelf title="Auctions ending soon" href="/search?format=auction&sort=ending" items={shuffle(ending.listings).slice(0, 6)} />
       )}
       <Shelf title="Newly listed" href="/search?sort=newest" items={fresh.listings} />
+      {/* Promo banner, edited in the back office (Site > Homepage banner). */}
+      {banner && <PromoBanner image={banner.image_url} link={banner.link_url} alt={banner.alt_text} />}
       <Shelf title="Graded slabs" href="/search?min_grade=1" items={graded.listings} />
       <Shelf title="Singles under $20" href="/search?max_price=20&sort=price_asc" items={cheap.listings} />
       <Shelf title="Sports card singles" href="/sports" items={sportsMix.listings} />

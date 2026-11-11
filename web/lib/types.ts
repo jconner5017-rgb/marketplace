@@ -325,3 +325,6 @@ export type Store = {
   followers: number; listings: number; categories: StoreCategory[]; sale: StoreSale | null; following: boolean;
   last_update_at?: string; created_at: string; reviewed_at?: string;
 };
+
+/** An editable promo banner (back office: Site > Homepage banner). */
+export type SiteBanner = { slot: string; image_url: string; link_url: string; alt_text: string; active: boolean; updated_at?: string };
