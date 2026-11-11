@@ -170,7 +170,10 @@ export default async function ItemPage({ params }: Props) {
           {l.description && (
             <>
               <h2 className="mt-8 border-b border-line pb-2 text-[20px] font-bold">Seller&apos;s description</h2>
-              <p className="mt-3 max-w-[70ch] whitespace-pre-line text-[15px]">{l.description}</p>
+              {l.description_html
+                ? /* Cleaned on the server to a short list of plain tags (no styles, scripts or images). */
+                  <div className="rich-desc mt-3 max-w-[78ch] text-[15px]" dangerouslySetInnerHTML={{ __html: l.description_html }} />
+                : <p className="mt-3 max-w-[70ch] whitespace-pre-line text-[15px]">{l.description}</p>}
             </>
           )}
           {isAuction && bids && <BidList history={bids} auction={l.auction!} />}

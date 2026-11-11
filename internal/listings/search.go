@@ -123,7 +123,8 @@ func (s *Service) Search(ctx context.Context, p SearchParams) (SearchResult, err
 		if err != nil {
 			return SearchResult{}, err
 		}
-		l.ExternalID = nil // internal to the seller
+		l.ExternalID = nil     // internal to the seller
+		l.DescriptionHTML = "" // results show tiles; the full page loads it
 		res.Listings = append(res.Listings, l)
 	}
 	return res, rows.Err()

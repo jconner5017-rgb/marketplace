@@ -54,25 +54,28 @@ var (
 // Input is a full listing as submitted by a seller, the CSV importer or
 // FireCardManager.
 type Input struct {
-	ExternalID    *string  `json:"external_id"`
-	Category      string   `json:"category"`
-	GameOrSport   string   `json:"game_or_sport"`
-	SetName       string   `json:"set_name"`
-	Year          *int     `json:"year"`
-	CardNumber    *string  `json:"card_number"`
-	Title         string   `json:"title"`
-	Description   string   `json:"description"`
-	Condition     *string  `json:"condition"`
-	Grader        *string  `json:"grader"`
-	Grade         *float64 `json:"grade"`
-	CertNumber    *string  `json:"cert_number"`
-	Attributes    []string `json:"attributes"`
-	PhotoURLs     []string `json:"photo_urls"`
-	PriceCents    int      `json:"price_cents"`
-	Quantity      int      `json:"quantity"`
-	PackagePreset string   `json:"package_preset"`
-	WeightOz      float64  `json:"weight_oz"`
-	Status        string   `json:"status"`
+	ExternalID  *string `json:"external_id"`
+	Category    string  `json:"category"`
+	GameOrSport string  `json:"game_or_sport"`
+	SetName     string  `json:"set_name"`
+	Year        *int    `json:"year"`
+	CardNumber  *string `json:"card_number"`
+	Title       string  `json:"title"`
+	Description string  `json:"description"`
+	// DescriptionHTML is an optional formatted description (a safe subset of
+	// HTML, see SanitizeHTML). When set, Description is derived from it.
+	DescriptionHTML string   `json:"description_html"`
+	Condition       *string  `json:"condition"`
+	Grader          *string  `json:"grader"`
+	Grade           *float64 `json:"grade"`
+	CertNumber      *string  `json:"cert_number"`
+	Attributes      []string `json:"attributes"`
+	PhotoURLs       []string `json:"photo_urls"`
+	PriceCents      int      `json:"price_cents"`
+	Quantity        int      `json:"quantity"`
+	PackagePreset   string   `json:"package_preset"`
+	WeightOz        float64  `json:"weight_oz"`
+	Status          string   `json:"status"`
 
 	Format  string         `json:"format"` // fixed (default) or auction
 	Auction *AuctionInput  `json:"auction"`
@@ -81,28 +84,33 @@ type Input struct {
 	// LotCount makes this a lot: several cards sold together as one item.
 	// Nil (or 0) is a single card.
 	LotCount *int `json:"lot_count"`
+
+	htmlTooLong bool // set by normalize, reported by validate
 }
 
 // Patch changes only the fields that are present.
 type Patch struct {
-	Category      *string   `json:"category"`
-	GameOrSport   *string   `json:"game_or_sport"`
-	SetName       *string   `json:"set_name"`
-	Year          *int      `json:"year"`
-	CardNumber    *string   `json:"card_number"`
-	Title         *string   `json:"title"`
-	Description   *string   `json:"description"`
-	Condition     *string   `json:"condition"`
-	Grader        *string   `json:"grader"`
-	Grade         *float64  `json:"grade"`
-	CertNumber    *string   `json:"cert_number"`
-	Attributes    *[]string `json:"attributes"`
-	PhotoURLs     *[]string `json:"photo_urls"`
-	PriceCents    *int      `json:"price_cents"`
-	Quantity      *int      `json:"quantity"`
-	PackagePreset *string   `json:"package_preset"`
-	WeightOz      *float64  `json:"weight_oz"`
-	Status        *string   `json:"status"`
+	Category    *string `json:"category"`
+	GameOrSport *string `json:"game_or_sport"`
+	SetName     *string `json:"set_name"`
+	Year        *int    `json:"year"`
+	CardNumber  *string `json:"card_number"`
+	Title       *string `json:"title"`
+	Description *string `json:"description"`
+	// DescriptionHTML replaces the formatted description; sending only
+	// Description clears it.
+	DescriptionHTML *string   `json:"description_html"`
+	Condition       *string   `json:"condition"`
+	Grader          *string   `json:"grader"`
+	Grade           *float64  `json:"grade"`
+	CertNumber      *string   `json:"cert_number"`
+	Attributes      *[]string `json:"attributes"`
+	PhotoURLs       *[]string `json:"photo_urls"`
+	PriceCents      *int      `json:"price_cents"`
+	Quantity        *int      `json:"quantity"`
+	PackagePreset   *string   `json:"package_preset"`
+	WeightOz        *float64  `json:"weight_oz"`
+	Status          *string   `json:"status"`
 	// Set true to make a graded card raw (clears grader/grade/cert).
 	ClearGrading bool `json:"clear_grading"`
 
@@ -114,24 +122,26 @@ type Patch struct {
 }
 
 type Listing struct {
-	ID             string   `json:"id"`
-	SellerID       string   `json:"-"`
-	SellerUsername string   `json:"seller_username"`
-	ExternalID     *string  `json:"external_id,omitempty"`
-	Category       string   `json:"category"`
-	GameOrSport    string   `json:"game_or_sport"`
-	SetName        string   `json:"set_name"`
-	Year           *int     `json:"year"`
-	CardNumber     *string  `json:"card_number"`
-	Title          string   `json:"title"`
-	Description    string   `json:"description"`
-	Condition      *string  `json:"condition"`
-	Grader         *string  `json:"grader"`
-	Grade          *float64 `json:"grade"`
-	CertNumber     *string  `json:"cert_number"`
-	Attributes     []string `json:"attributes"`
-	PhotoURLs      []string `json:"photo_urls"`
-	PriceCents     int      `json:"price_cents"`
+	ID             string  `json:"id"`
+	SellerID       string  `json:"-"`
+	SellerUsername string  `json:"seller_username"`
+	ExternalID     *string `json:"external_id,omitempty"`
+	Category       string  `json:"category"`
+	GameOrSport    string  `json:"game_or_sport"`
+	SetName        string  `json:"set_name"`
+	Year           *int    `json:"year"`
+	CardNumber     *string `json:"card_number"`
+	Title          string  `json:"title"`
+	Description    string  `json:"description"`
+	// DescriptionHTML: the cleaned formatted description, or "" for plain text.
+	DescriptionHTML string   `json:"description_html,omitempty"`
+	Condition       *string  `json:"condition"`
+	Grader          *string  `json:"grader"`
+	Grade           *float64 `json:"grade"`
+	CertNumber      *string  `json:"cert_number"`
+	Attributes      []string `json:"attributes"`
+	PhotoURLs       []string `json:"photo_urls"`
+	PriceCents      int      `json:"price_cents"`
 	// Store sale: percent off right now and the price buyers pay (fixed price only).
 	SalePercent     int       `json:"sale_percent,omitempty"`
 	SalePriceCents  int       `json:"sale_price_cents,omitempty"`
@@ -180,6 +190,20 @@ func (in *Input) normalize() {
 	in.SetName = strings.TrimSpace(in.SetName)
 	in.Title = TidyTitle(in.Title)
 	in.Description = strings.TrimSpace(in.Description)
+	if strings.TrimSpace(in.DescriptionHTML) != "" {
+		raw := in.DescriptionHTML
+		in.DescriptionHTML = SanitizeHTML(raw)
+		in.htmlTooLong = in.DescriptionHTML == "" && len(raw) > MaxDescriptionHTML
+		if in.DescriptionHTML != "" {
+			text := TextFromHTML(in.DescriptionHTML)
+			if r := []rune(text); len(r) > 5000 {
+				text = strings.TrimSpace(string(r[:5000]))
+			}
+			in.Description = text
+		}
+	} else {
+		in.DescriptionHTML = ""
+	}
 	trim(&in.ExternalID)
 	trim(&in.CardNumber)
 	trim(&in.CertNumber)
@@ -274,6 +298,9 @@ func (in *Input) validate(capCents int) error {
 	}
 	maxLen("title", in.Title, 200)
 	maxLen("description", in.Description, 5000)
+	if in.htmlTooLong {
+		f["description_html"] = fmt.Sprintf("the formatted description is too long (%d characters at most once cleaned)", MaxDescriptionHTML)
+	}
 	if in.ExternalID != nil {
 		maxLen("external_id", *in.ExternalID, 100)
 	}
@@ -365,7 +392,7 @@ type Service struct {
 const listingCols = `l.id, l.seller_id, u.username, l.external_id, l.category, l.game_or_sport, l.set_name,
 	l.year, l.card_number, l.title, l.description, l.condition, l.grader, l.grade, l.cert_number,
 	l.attributes, l.photo_urls, l.price_cents, l.quantity, l.package_preset, l.weight_oz,
-	l.status, l.version, l.created_at, l.updated_at` + saleCols + storeCols + `, l.lot_count`
+	l.status, l.version, l.created_at, l.updated_at` + saleCols + storeCols + `, l.lot_count, l.description_html`
 
 // storeCols: the listing's store category and its store sale right now.
 const storeCols = `, l.store_category_id,
@@ -398,7 +425,7 @@ func scanListing(row interface{ Scan(...any) error }) (Listing, error) {
 		&year, &cardNo, &l.Title, &l.Description, &cond, &grader, &grade, &cert,
 		pq.Array(&l.Attributes), pq.Array(&l.PhotoURLs), &l.PriceCents, &l.Quantity, &l.PackagePreset,
 		&l.WeightOz, &l.Status, &l.Version, &l.CreatedAt, &l.UpdatedAt}
-	if err := row.Scan(append(append(dest, sc.dest()...), &storeCat, &l.SalePercent, &lot)...); err != nil {
+	if err := row.Scan(append(append(dest, sc.dest()...), &storeCat, &l.SalePercent, &lot, &l.DescriptionHTML)...); err != nil {
 		return l, err
 	}
 	sc.apply(&l)
@@ -488,13 +515,13 @@ func insertListing(ctx context.Context, tx *sql.Tx, sellerID string, in Input) (
 	err := tx.QueryRowContext(ctx, `
 		INSERT INTO listings (seller_id, external_id, category, game_or_sport, set_name, year, card_number,
 			title, description, condition, grader, grade, cert_number, attributes, photo_urls,
-			price_cents, quantity, package_preset, weight_oz, status, lot_count)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
+			price_cents, quantity, package_preset, weight_oz, status, lot_count, description_html)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
 		RETURNING id`,
 		sellerID, in.ExternalID, in.Category, in.GameOrSport, in.SetName, in.Year, in.CardNumber,
 		in.Title, in.Description, in.Condition, in.Grader, in.Grade, in.CertNumber,
 		pq.Array(in.Attributes), pq.Array(in.PhotoURLs), in.PriceCents, in.Quantity,
-		in.PackagePreset, in.WeightOz, status(in), in.LotCount).Scan(&id)
+		in.PackagePreset, in.WeightOz, status(in), in.LotCount, in.DescriptionHTML).Scan(&id)
 	if err != nil {
 		var pqErr *pq.Error
 		if errors.As(err, &pqErr) && pqErr.Code == "23505" && pqErr.Constraint == "listings_seller_external_key" {
@@ -662,11 +689,11 @@ func updateListing(ctx context.Context, tx *sql.Tx, id string, in Input) (Listin
 		UPDATE listings SET category=$2, game_or_sport=$3, set_name=$4, year=$5, card_number=$6,
 			title=$7, description=$8, condition=$9, grader=$10, grade=$11, cert_number=$12,
 			attributes=$13, photo_urls=$14, price_cents=$15, quantity=$16, package_preset=$17,
-			weight_oz=$18, status=$19, lot_count=$20, version = version + 1, updated_at = now()
+			weight_oz=$18, status=$19, lot_count=$20, description_html=$21, version = version + 1, updated_at = now()
 		WHERE id = $1`,
 		id, in.Category, in.GameOrSport, in.SetName, in.Year, in.CardNumber, in.Title, in.Description,
 		in.Condition, in.Grader, in.Grade, in.CertNumber, pq.Array(in.Attributes), pq.Array(in.PhotoURLs),
-		in.PriceCents, in.Quantity, in.PackagePreset, in.WeightOz, status(in), in.LotCount); err != nil {
+		in.PriceCents, in.Quantity, in.PackagePreset, in.WeightOz, status(in), in.LotCount, in.DescriptionHTML); err != nil {
 		return Listing{}, err
 	}
 	return getTx(ctx, tx, id)
@@ -681,7 +708,7 @@ func inputFrom(l Listing) Input {
 	return Input{
 		Format: l.Format, Auction: auctionFromListing(l), Offers: &o,
 		ExternalID: l.ExternalID, Category: l.Category, GameOrSport: l.GameOrSport, SetName: l.SetName,
-		Year: l.Year, CardNumber: l.CardNumber, Title: l.Title, Description: l.Description,
+		Year: l.Year, CardNumber: l.CardNumber, Title: l.Title, Description: l.Description, DescriptionHTML: l.DescriptionHTML,
 		Condition: l.Condition, Grader: l.Grader, Grade: l.Grade, CertNumber: l.CertNumber,
 		Attributes: l.Attributes, PhotoURLs: l.PhotoURLs, PriceCents: l.PriceCents, Quantity: l.Quantity,
 		PackagePreset: l.PackagePreset, WeightOz: l.WeightOz, Status: st, LotCount: l.LotCount,
@@ -698,6 +725,13 @@ func applyPatch(in *Input, p Patch) {
 	set(&in.GameOrSport, p.GameOrSport)
 	set(&in.SetName, p.SetName)
 	set(&in.Title, p.Title)
+	if p.DescriptionHTML != nil {
+		in.DescriptionHTML = *p.DescriptionHTML
+	} else if p.Description != nil && strings.TrimSpace(*p.Description) != strings.TrimSpace(in.Description) {
+		// The text itself was changed (not just sent back as it was):
+		// the plain edit replaces the formatted description.
+		in.DescriptionHTML = ""
+	}
 	set(&in.Description, p.Description)
 	set(&in.PackagePreset, p.PackagePreset)
 	set(&in.Status, p.Status)
@@ -773,7 +807,7 @@ func checkAuctionEdit(cur Listing, in *Input) error {
 	base := inputFrom(cur)
 	base.normalize()
 	base.PriceCents = cur.PriceCents
-	base.Description, base.PhotoURLs = in.Description, in.PhotoURLs
+	base.Description, base.DescriptionHTML, base.PhotoURLs = in.Description, in.DescriptionHTML, in.PhotoURLs
 	a, _ := json.Marshal(in)
 	b, _ := json.Marshal(base)
 	if string(a) != string(b) {

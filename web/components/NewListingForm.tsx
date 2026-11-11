@@ -390,6 +390,12 @@ export default function NewListingForm({ capCents, catalog, fees, initial, start
             </p>
           </div>
         )}
+        {initial?.description_html && (
+          <p className="mb-2 rounded-lg bg-wash p-3 text-[13px] text-muted">
+            This listing has a formatted description (sent from FireCardManager). Leave the text below as it is to keep the formatting;
+            changing it replaces the formatted version with plain text.
+          </p>
+        )}
         <Field label="Description (optional)" name="description" error={fields.description}>
           <textarea id="description" name="description" rows={4} maxLength={5000} defaultValue={initial?.description ?? ""} className="mt-1 w-full rounded-md border border-line px-3 py-2" />
         </Field>

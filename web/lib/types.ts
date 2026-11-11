@@ -9,6 +9,8 @@ export type Listing = {
   card_number: string | null;
   title: string;
   description: string;
+  /** Cleaned formatted description (safe HTML subset), when the seller sent one. */
+  description_html?: string;
   condition: string | null;
   grader: string | null;
   grade: number | null;
