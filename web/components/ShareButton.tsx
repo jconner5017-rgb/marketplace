@@ -55,7 +55,7 @@ export default function ShareButton({ url, title, image }: { url: string; title:
         Share
       </button>
       {open && (
-        <div role="menu" className="absolute left-0 z-20 mt-2 w-56 rounded-lg border border-line bg-paper p-1.5 shadow-lg">
+        <div role="menu" className="absolute right-0 z-20 mt-2 w-56 rounded-lg border border-line bg-paper p-1.5 shadow-lg">
           <button type="button" role="menuitem" onClick={copy} className="block w-full rounded px-3 py-2 text-left text-[14px] hover:bg-wash">
             {copied ? "Link copied ✓" : "Copy link"}
           </button>

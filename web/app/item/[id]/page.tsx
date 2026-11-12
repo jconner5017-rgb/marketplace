@@ -94,7 +94,13 @@ export default async function ItemPage({ params }: Props) {
       </nav>
 
       <div className="mt-4 grid gap-8 lg:grid-cols-[minmax(0,1fr)_420px]">
-        <Gallery photos={l.photo_urls} title={l.title} />
+        {/* Pinned to the top of its column (next to the title), and stays in view while the details scroll. */}
+        <div className="self-start lg:sticky lg:top-4">
+          <Gallery photos={l.photo_urls} title={l.title} />
+          <div className="mt-3 flex justify-end">
+            <ShareButton url={`${SITE_URL}/item/${l.id}`} title={l.title} image={l.photo_urls[0]} />
+          </div>
+        </div>
 
         <div>
           <h1 className="title-tight text-[26px] font-bold leading-tight">{l.title}</h1>
@@ -143,10 +149,6 @@ export default async function ItemPage({ params }: Props) {
             )}
             {!sold && <ContactSeller id={l.id} seller={l.seller_username} signedIn={!!me} />}
           </div>
-          <div className="mt-4">
-            <ShareButton url={`${SITE_URL}/item/${l.id}`} title={l.title} image={l.photo_urls[0]} />
-          </div>
-
           <section aria-labelledby="srp" className="mt-6 rounded-lg border border-line p-4 text-[14px]">
             <h2 id="srp" className="text-[17px] font-bold">Shipping, returns and payments</h2>
             <dl className="mt-3 space-y-3">
