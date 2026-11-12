@@ -30,13 +30,33 @@ type LabelSettings struct {
 	ShipFrom *shipping.Address `json:"ship_from"`
 	Card     string            `json:"card"`
 	Enabled  bool              `json:"enabled"` // a provider is configured
+	// ReturnsPolicy: "damaged_only" (the default) or "30_days".
+	ReturnsPolicy string `json:"returns_policy"`
+}
+
+// ReturnsPolicies a seller can choose.
+var ReturnsPolicies = map[string]bool{"damaged_only": true, "30_days": true}
+
+// SetReturnsPolicy saves the seller's return policy.
+func (s *Service) SetReturnsPolicy(ctx context.Context, sellerID, policy string) error {
+	if !ReturnsPolicies[policy] {
+		return &FieldError{"returns_policy", "choose 30-day returns or damaged / not as described only"}
+	}
+	res, err := s.DB.ExecContext(ctx, `UPDATE seller_profiles SET returns_policy = $2 WHERE user_id = $1`, sellerID, policy)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 func (s *Service) LabelSettings(ctx context.Context, sellerID string) (LabelSettings, error) {
 	var st LabelSettings
 	var from []byte
 	var card sql.NullString
-	err := s.DB.QueryRowContext(ctx, `SELECT ship_from, label_card FROM seller_profiles WHERE user_id = $1`, sellerID).Scan(&from, &card)
+	err := s.DB.QueryRowContext(ctx, `SELECT ship_from, label_card, returns_policy FROM seller_profiles WHERE user_id = $1`, sellerID).Scan(&from, &card, &st.ReturnsPolicy)
 	if errors.Is(err, sql.ErrNoRows) {
 		return st, ErrNotFound
 	}

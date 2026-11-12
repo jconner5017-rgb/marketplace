@@ -286,7 +286,10 @@ func (s *Server) handleGetListing(w http.ResponseWriter, r *http.Request) {
 			s.log.Warn("count view", "err", err)
 		}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"listing": l})
+	// The seller's return policy, shown on the listing page.
+	policy := "damaged_only"
+	_ = s.db.QueryRowContext(r.Context(), `SELECT returns_policy FROM seller_profiles WHERE user_id = $1`, l.SellerID).Scan(&policy)
+	writeJSON(w, http.StatusOK, map[string]any{"listing": l, "seller": map[string]string{"returns_policy": policy}})
 }
 
 // GET /v1/catalog — the fixed lists the site and FireCardManager use for menus.

@@ -11,6 +11,8 @@ export type Listing = {
   description: string;
   /** Cleaned formatted description (safe HTML subset), when the seller sent one. */
   description_html?: string;
+  /** The seller's return policy (listing page only): "damaged_only" or "30_days". */
+  returns_policy?: "damaged_only" | "30_days";
   condition: string | null;
   grader: string | null;
   grade: number | null;

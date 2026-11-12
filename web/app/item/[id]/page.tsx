@@ -2,7 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { apiGet, getBids, getListing, getSummary, search } from "@/lib/api";
-import type { FeedbackSummary } from "@/lib/types";
+import type { FeedbackEntry, FeedbackSummary } from "@/lib/types";
+import ShareButton from "@/components/ShareButton";
 import { BadgeList, SellerLine } from "@/components/feedback/Bits";
 import ItemActions from "@/components/ItemActions";
 import AuctionPanel, { BidList } from "@/components/AuctionPanel";
@@ -49,7 +50,7 @@ export default async function ItemPage({ params }: Props) {
     getSummary(),
     isAuction ? getBids(l.id) : Promise.resolve(null),
     getCatalog(),
-    apiGet<{ summary: FeedbackSummary }>(`/v1/members/${encodeURIComponent(l.seller_username)}/feedback?role=seller&limit=1`),
+    apiGet<{ summary: FeedbackSummary; feedback: FeedbackEntry[] }>(`/v1/members/${encodeURIComponent(l.seller_username)}/feedback?role=seller&limit=5`),
     // A sold card's page points to similar cards still for sale: same set first, then the same sport or game.
     sold && l.set_name ? search(`category=${l.category}&game=${game}&set=${encodeURIComponent(l.set_name)}&limit=12`) : Promise.resolve(null),
     sold ? search(`category=${l.category}&game=${game}&limit=12`) : Promise.resolve(null),
@@ -119,13 +120,13 @@ export default async function ItemPage({ params }: Props) {
           ) : isAuction && bids ? (
             <>
               <AuctionPanel l={l} history={bids} signedIn={!!me} />
-              <p className="mt-2 text-[14px] text-ship">Free shipping · USPS</p>
+              <p className="mt-2 text-[14px] text-ship">Free shipping · USPS · Usually arrives in 3–7 days</p>
             </>
           ) : (
             <>
               <Price l={l} className="num mt-4 text-[32px] font-extrabold leading-none" />
               <p className="mt-1 text-[14px] text-muted">{l.offers_enabled ? "Buy It Now or Best Offer" : "Buy It Now"}</p>
-              <p className="mt-1 text-[14px] text-ship">Free shipping · USPS</p>
+              <p className="mt-1 text-[14px] text-ship">Free shipping · USPS · Usually arrives in 3–7 days</p>
               <ItemActions id={l.id} signedIn={!!me} quantity={l.quantity} price={l.price_cents} offers={l.offers_enabled} />
             </>
           )}
@@ -140,14 +141,45 @@ export default async function ItemPage({ params }: Props) {
             {store && (
               <p className="mt-2"><Link href={`/store/${store.slug}`} className="font-semibold text-link hover:underline">Visit {store.name}</Link></p>
             )}
-            <p className="mt-1 text-muted">Ships from the United States. Delivery to US addresses only.</p>
-            {l.grader ? (
-              <p className="mt-1 text-muted">Graded cards ship in a padded mailer with tracking.</p>
-            ) : (
-              <p className="mt-1 text-muted">Raw cards ship sleeved and protected.</p>
-            )}
             {!sold && <ContactSeller id={l.id} seller={l.seller_username} signedIn={!!me} />}
           </div>
+          <div className="mt-4">
+            <ShareButton url={`${SITE_URL}/item/${l.id}`} title={l.title} image={l.photo_urls[0]} />
+          </div>
+
+          <section aria-labelledby="srp" className="mt-6 rounded-lg border border-line p-4 text-[14px]">
+            <h2 id="srp" className="text-[17px] font-bold">Shipping, returns and payments</h2>
+            <dl className="mt-3 space-y-3">
+              <div className="grid grid-cols-[88px_1fr] gap-3">
+                <dt className="text-muted">Shipping</dt>
+                <dd>
+                  <span className="font-semibold text-ship">Free</span> · USPS
+                  <div className="text-muted">Usually arrives in 3–7 days. Ships within 3 business days of payment, from the United States to US addresses only.</div>
+                  <div className="text-muted">{l.grader ? "Graded cards ship in a padded mailer with tracking." : "Raw cards ship sleeved and protected."}</div>
+                </dd>
+              </div>
+              <div className="grid grid-cols-[88px_1fr] gap-3">
+                <dt className="text-muted">Returns</dt>
+                <dd>
+                  {l.returns_policy === "30_days"
+                    ? <><span className="font-semibold">30-day returns.</span> Return for any reason within 30 days of delivery; the buyer pays return shipping.</>
+                    : <><span className="font-semibold">No returns</span> for a change of mind.</>}
+                  <div className="text-muted">
+                    Always covered: if the card arrives damaged or isn&apos;t as described, return it within 30 days of delivery for a full
+                    refund, and the seller pays return shipping. <Link href="/help/returns" className="text-link hover:underline">How returns work</Link>
+                  </div>
+                </dd>
+              </div>
+              <div className="grid grid-cols-[88px_1fr] gap-3">
+                <dt className="text-muted">Payments</dt>
+                <dd>
+                  <span className="font-semibold">Secure checkout with Stripe</span>
+                  <div className="text-muted">Pay by card, Apple Pay or Google Pay. Your card details go to Stripe, never to the seller.</div>
+                </dd>
+              </div>
+            </dl>
+          </section>
+
           <div className="mt-3">
             <ReportButton type="listing" id={l.id} label="Report this listing" signedIn={!!me} next={`/item/${l.id}`} />
           </div>
@@ -180,6 +212,8 @@ export default async function ItemPage({ params }: Props) {
         </div>
       </section>
 
+      {rep.data && <AboutSeller s={rep.data.summary} feedback={rep.data.feedback ?? []} store={store} />}
+
       {similar.length > 0 && (
         <section className="mt-12">
           <div className="flex items-baseline justify-between border-b border-line pb-2">
@@ -206,5 +240,90 @@ export default async function ItemPage({ params }: Props) {
         </section>
       )}
     </div>
+  );
+}
+
+const STARS: [keyof FeedbackSummary, string][] = [
+  ["item_avg", "Accurate description"],
+  ["shipping_avg", "Shipping speed"],
+  ["communication_avg", "Communication"],
+];
+
+/** About the seller and their latest feedback, like a marketplace seller card. */
+function AboutSeller({ s, feedback, store }: {
+  s: FeedbackSummary; feedback: FeedbackEntry[]; store: { slug: string; name: string } | null;
+}) {
+  const joined = new Date(s.member_since).toLocaleDateString("en-US", { month: "short", year: "numeric" });
+  const seller = `/seller/${encodeURIComponent(s.username)}`;
+  return (
+    <section className="mt-12 grid gap-8 border-t border-line pt-8 lg:grid-cols-[360px_minmax(0,1fr)]">
+      <div>
+        <h2 className="text-[20px] font-bold">About this seller</h2>
+        <div className="mt-4 flex items-center gap-4">
+          <div aria-hidden="true" className="flex h-16 w-16 flex-none items-center justify-center rounded-full bg-ink text-[26px] font-bold text-white">
+            {s.username.charAt(0).toUpperCase()}
+          </div>
+          <div>
+            <Link href={seller} className="text-[18px] font-bold hover:underline">{store?.name ?? s.username}</Link>
+            <p className="num text-[14px] text-muted">
+              {s.positive_percent != null ? `${s.positive_percent.toFixed(1)}% positive feedback` : "No feedback yet"} · {s.sales.toLocaleString()} sold
+            </p>
+          </div>
+        </div>
+        <p className="mt-3 text-[14px] text-muted">Joined {joined}</p>
+        <BadgeList s={s} />
+        <div className="mt-4 flex flex-col gap-2">
+          {store && (
+            <Link href={`/store/${store.slug}`} className="rounded-full bg-link px-5 py-2.5 text-center font-semibold text-white hover:bg-link-dark">Visit store</Link>
+          )}
+          <Link href={seller} className="rounded-full border border-line px-5 py-2.5 text-center font-semibold hover:bg-wash">Seller profile</Link>
+        </div>
+        {STARS.some(([k]) => s[k] != null) && (
+          <div className="mt-6">
+            <h3 className="font-bold">Detailed seller ratings</h3>
+            <dl className="mt-2 space-y-1.5 text-[14px]">
+              {STARS.map(([k, label]) => {
+                const v = s[k] as number | null;
+                if (v == null) return null;
+                return (
+                  <div key={k} className="grid grid-cols-[1fr_96px_32px] items-center gap-3">
+                    <dt>{label}</dt>
+                    <dd aria-hidden="true" className="h-1.5 rounded-full bg-wash">
+                      <div className="h-1.5 rounded-full bg-ink" style={{ width: `${Math.max(0, Math.min(100, (v / 5) * 100))}%` }} />
+                    </dd>
+                    <dd className="num text-right">{v.toFixed(1)}</dd>
+                  </div>
+                );
+              })}
+            </dl>
+            <p className="mt-1 text-[12px] text-muted">Average for the last 12 months</p>
+          </div>
+        )}
+      </div>
+      <div>
+        <div className="flex items-baseline justify-between">
+          <h2 className="text-[20px] font-bold">Seller feedback <span className="num font-normal text-muted">({s.total.toLocaleString()})</span></h2>
+          <Link href={seller} className="text-[14px] text-link hover:underline">See all</Link>
+        </div>
+        {feedback.length === 0 ? (
+          <p className="mt-4 text-[14px] text-muted">No feedback yet.</p>
+        ) : (
+          <ul className="mt-4 divide-y divide-wash">
+            {feedback.map((f) => (
+              <li key={f.id} className="py-3 text-[14px]">
+                <p className="text-[13px] text-muted">
+                  <span aria-label={f.rating > 0 ? "Positive" : f.rating < 0 ? "Negative" : "Neutral"}
+                    className={f.rating > 0 ? "text-ship" : f.rating < 0 ? "text-slab" : ""}>{f.rating > 0 ? "●" : f.rating < 0 ? "●" : "○"}</span>{" "}
+                  {f.from} · {new Date(f.created_at).toLocaleDateString("en-US", { month: "short", year: "numeric" })}
+                  {f.verified_purchase && " · Verified purchase"}
+                </p>
+                {f.comment && <p className="mt-1">{f.comment}</p>}
+                {f.item_title && <p className="mt-1 truncate text-[13px] text-muted">{f.item_title}</p>}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </section>
   );
 }

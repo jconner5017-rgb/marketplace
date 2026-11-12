@@ -2,6 +2,7 @@ import Link from "next/link";
 import { apiGet } from "@/lib/api";
 import { requireUser } from "@/lib/auth";
 import { CardButton, FinishCard, ShipFromForm } from "@/components/ShippingSettings";
+import ReturnsPolicyForm from "@/components/ReturnsPolicyForm";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Shipping settings", robots: { index: false } };
@@ -10,6 +11,7 @@ type Settings = {
   ship_from: { name: string; line1: string; line2?: string; city: string; state: string; zip: string; phone?: string } | null;
   card: string;
   enabled: boolean;
+  returns_policy: "damaged_only" | "30_days";
 };
 
 export default async function ShippingSettingsPage({ searchParams }: { searchParams: Promise<{ card_session?: string }> }) {
@@ -31,6 +33,15 @@ export default async function ShippingSettingsPage({ searchParams }: { searchPar
         <h2 className="border-b border-line pb-2 text-[18px] font-bold">Ship-from address</h2>
         <p className="mt-2 text-[14px] text-muted">Printed as the return address on labels and tracked envelopes. We check it with the carrier when you save.</p>
         <div className="mt-3"><ShipFromForm initial={s.ship_from} /></div>
+      </section>
+
+      <section className="mt-8">
+        <h2 className="border-b border-line pb-2 text-[18px] font-bold">Return policy</h2>
+        <p className="mt-2 text-[14px] text-muted">
+          Shown on every listing. Cards that arrive damaged or not as described are always returnable within 30 days of delivery,
+          with you paying return shipping, whichever you choose.
+        </p>
+        <div className="mt-3"><ReturnsPolicyForm initial={s.returns_policy ?? "damaged_only"} /></div>
       </section>
 
       <section className="mt-8">

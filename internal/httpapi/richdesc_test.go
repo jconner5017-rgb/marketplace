@@ -71,3 +71,29 @@ func TestListingSync(t *testing.T) {
 		t.Fatalf("statuses: %v", got)
 	}
 }
+
+func TestReturnsPolicy(t *testing.T) {
+	e := setupEnv(t)
+	sc, _ := newSeller(t, e, "ret_shop", true)
+	id := createListing(t, e, &httpClientT{sc}, rawCard("RT1", 900))["id"].(string)
+	policyOf := func() string {
+		_, body := do(t, sc, "GET", e.ts.URL+"/v1/listings/"+id, nil)
+		return body["seller"].(map[string]any)["returns_policy"].(string)
+	}
+	if p := policyOf(); p != "damaged_only" {
+		t.Fatalf("default: %q", p)
+	}
+	if code, _ := do(t, sc, "PUT", e.ts.URL+"/v1/seller/returns", map[string]string{"returns_policy": "60_days"}); code != 422 {
+		t.Fatalf("bad policy: %d", code)
+	}
+	if code, body := do(t, sc, "PUT", e.ts.URL+"/v1/seller/returns", map[string]string{"returns_policy": "30_days"}); code != 200 {
+		t.Fatalf("set: %d %v", code, body)
+	}
+	if p := policyOf(); p != "30_days" {
+		t.Fatalf("after set: %q", p)
+	}
+	_, body := do(t, sc, "GET", e.ts.URL+"/v1/seller/shipping", nil)
+	if body["returns_policy"] != "30_days" {
+		t.Fatalf("settings: %v", body)
+	}
+}

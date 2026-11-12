@@ -392,6 +392,22 @@ func (s *Server) handleShippingEstimate(w http.ResponseWriter, r *http.Request) 
 		"stripe": map[string]int{"percent_bps": checkout.StripePercentBps, "fixed_cents": checkout.StripeFixedCents}})
 }
 
+// PUT /v1/seller/returns {"returns_policy": "damaged_only" | "30_days"}
+func (s *Server) handleReturnsPolicy(w http.ResponseWriter, r *http.Request) {
+	u, _ := currentUser(r)
+	var req struct {
+		Policy string `json:"returns_policy"`
+	}
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	if err := s.checkout.SetReturnsPolicy(r.Context(), u.ID, req.Policy); err != nil {
+		s.checkoutError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"returns_policy": req.Policy})
+}
+
 // PUT /v1/seller/shipping/from {name, line1, line2, city, state, zip, phone}
 func (s *Server) handleShipFrom(w http.ResponseWriter, r *http.Request) {
 	u, _ := currentUser(r)

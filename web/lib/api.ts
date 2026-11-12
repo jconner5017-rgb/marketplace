@@ -104,8 +104,9 @@ export async function facets(qs: string): Promise<Facets | null> {
 }
 
 export async function getListing(id: string, countView = false): Promise<Listing | null> {
-  const r = await apiGet<{ listing: Listing }>("/v1/listings/" + encodeURIComponent(id) + (countView ? "?view=1" : ""));
-  return r.data?.listing ?? null;
+  const r = await apiGet<{ listing: Listing; seller?: { returns_policy?: Listing["returns_policy"] } }>(
+    "/v1/listings/" + encodeURIComponent(id) + (countView ? "?view=1" : ""));
+  return r.data?.listing ? { ...r.data.listing, returns_policy: r.data.seller?.returns_policy } : null;
 }
 
 export async function getBids(id: string): Promise<BidHistory | null> {

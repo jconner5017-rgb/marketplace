@@ -601,7 +601,7 @@ export const ARTICLES: Article[] = [
         "The seller refunds the full price within 3 business days of receiving the card. The refund goes back to the card you paid with.",
       ] },
       { h: "Other returns" },
-      { p: "Returns for other reasons, such as a change of mind, are up to each seller. Ask the seller from the order." },
+      { p: "Returns for other reasons, such as a change of mind, depend on the seller's return policy, shown on every listing under Shipping, returns and payments. Sellers who offer 30-day returns accept a return for any reason within 30 days of delivery; the buyer pays return shipping. Start it by messaging the seller from the order." },
       { h: "If the seller doesn't respond" },
       { p: "Sellers issue refunds from their own Stripe account, because Slabs & Singles doesn't hold payments. If a seller doesn't resolve a card that isn't as described, you can dispute the charge with your card issuer. Sellers who don't honor returns can lose their seller level or have their account limited." },
       { links: [
