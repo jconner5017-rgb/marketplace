@@ -288,7 +288,11 @@ func (s *Server) handleGetListing(w http.ResponseWriter, r *http.Request) {
 	}
 	// The seller's return policy, shown on the listing page.
 	policy := "damaged_only"
-	_ = s.db.QueryRowContext(r.Context(), `SELECT returns_policy FROM seller_profiles WHERE user_id = $1`, l.SellerID).Scan(&policy)
+	if l.ReturnsPolicy != nil {
+		policy = *l.ReturnsPolicy // set on this listing
+	} else {
+		_ = s.db.QueryRowContext(r.Context(), `SELECT returns_policy FROM seller_profiles WHERE user_id = $1`, l.SellerID).Scan(&policy)
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"listing": l, "seller": map[string]string{"returns_policy": policy}})
 }
 

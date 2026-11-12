@@ -96,4 +96,23 @@ func TestReturnsPolicy(t *testing.T) {
 	if body["returns_policy"] != "30_days" {
 		t.Fatalf("settings: %v", body)
 	}
+
+	// Per listing (seller hub bulk edit): overrides the seller default and
+	// survives an edit that doesn't mention it.
+	do(t, sc, "PUT", e.ts.URL+"/v1/seller/returns", map[string]string{"returns_policy": "damaged_only"})
+	if code, body := do(t, sc, "PATCH", e.ts.URL+"/v1/seller/listings/"+id, map[string]any{"returns_policy": "weekly"}); code != 422 {
+		t.Fatalf("bad listing policy: %d %v", code, body)
+	}
+	if code, body := do(t, sc, "PATCH", e.ts.URL+"/v1/seller/listings/"+id, map[string]any{"returns_policy": "30_days"}); code != 200 {
+		t.Fatalf("listing policy: %d %v", code, body)
+	}
+	if p := policyOf(); p != "30_days" {
+		t.Fatalf("listing override: %q", p)
+	}
+	if code, _ := do(t, sc, "PATCH", e.ts.URL+"/v1/listings/RT1", map[string]any{"price_cents": 950}); code != 200 {
+		t.Fatalf("api patch: %d", code)
+	}
+	if p := policyOf(); p != "30_days" {
+		t.Fatalf("after unrelated edit: %q", p)
+	}
 }

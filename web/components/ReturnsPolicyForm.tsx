@@ -6,8 +6,8 @@ import { send } from "@/lib/client";
 type Policy = "damaged_only" | "30_days";
 
 const OPTIONS: { value: Policy; label: string; help: string }[] = [
-  { value: "damaged_only", label: "No returns, except damaged or not as described", help: "Buyers can't return a card because they changed their mind." },
-  { value: "30_days", label: "30-day returns", help: "Buyers can return a card for any reason within 30 days of delivery and pay the return shipping." },
+  { value: "damaged_only", label: "Returns only if defective or not as described", help: "Within 30 days of delivery. No returns for a change of mind. The buyer pays return shipping." },
+  { value: "30_days", label: "30-day returns, no questions asked", help: "Any reason, within 30 days of delivery. The buyer pays return shipping." },
 ];
 
 /** The seller's return policy, shown on every one of their listings. */
@@ -24,7 +24,7 @@ export default function ReturnsPolicyForm({ initial }: { initial: Policy }) {
     setBusy(false);
     if (!r.ok) return setMsg(r.message);
     setSaved(v);
-    setMsg("Saved. Your listings show the new policy now.");
+    setMsg("Saved. Listings without their own policy show it now.");
   }
 
   return (

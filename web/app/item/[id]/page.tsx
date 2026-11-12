@@ -172,11 +172,10 @@ export default async function ItemPage({ params }: Props) {
                 <dt className="text-muted">Returns</dt>
                 <dd>
                   {l.returns_policy === "30_days"
-                    ? <><span className="font-semibold">30-day returns.</span> Return for any reason within 30 days of delivery; the buyer pays return shipping.</>
-                    : <><span className="font-semibold">No returns</span> for a change of mind.</>}
+                    ? <><span className="font-semibold">30-day returns.</span> Return for any reason within 30 days of delivery, no questions asked.</>
+                    : <><span className="font-semibold">Returns only if defective or not as described,</span> within 30 days of delivery.</>}
                   <div className="text-muted">
-                    Always covered: if the card arrives damaged or isn&apos;t as described, return it within 30 days of delivery for a full
-                    refund, and the seller pays return shipping. <Link href="/help/returns" className="text-link hover:underline">How returns work</Link>
+                    Full refund of the price paid; the buyer pays return shipping. <Link href="/help/returns" className="text-link hover:underline">How returns work</Link>
                   </div>
                 </dd>
               </div>

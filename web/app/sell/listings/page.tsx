@@ -33,9 +33,10 @@ export default async function SellerListings({ searchParams }: { searchParams: P
   if (show) qs.set("show", show);
   if (q) qs.set("q", q);
   if (sort) qs.set("sort", sort);
-  const [r, storeR] = await Promise.all([
+  const [r, storeR, shipR] = await Promise.all([
     apiGet<{ listings: Listing[]; total: number }>(`/v1/seller/listings?${qs}`),
     apiGet<{ store: Store | null }>("/v1/seller/store"),
+    apiGet<{ returns_policy?: string }>("/v1/seller/shipping"),
   ]);
   const cats = storeR.data?.store?.status === "active" ? storeR.data.store.categories : [];
   const listings = r.data?.listings ?? [];
@@ -85,7 +86,7 @@ export default async function SellerListings({ searchParams }: { searchParams: P
             <Link href="/sell/import" className="text-link underline">upload a CSV</Link>.</>}
         </p>
       ) : (
-        <ListingsTable listings={listings} categories={cats} />
+        <ListingsTable listings={listings} categories={cats} defaultReturns={shipR.data?.returns_policy ?? "damaged_only"} />
       )}
       {total > PAGE && (
         <nav aria-label="Pages" className="mt-4 flex items-center gap-3 text-[14px]">

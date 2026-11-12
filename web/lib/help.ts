@@ -583,9 +583,14 @@ export const ARTICLES: Article[] = [
     slug: "returns",
     title: "Returns and refunds",
     section: "About",
-    summary: "Cards not as described can be returned for a full refund within 30 days of delivery.",
+    summary: "Every listing shows its return policy: 30-day returns, or returns only for cards that are defective or not as described. The buyer pays return shipping.",
     body: [
-      { p: "A buyer can return any card that isn't as described for a full refund of the price paid. Every card ships free in the US, and the seller pays for the return." },
+      { p: "Each listing shows the seller's return policy under Shipping, returns and payments:" },
+      { list: [
+        "30-day returns: return the card for any reason within 30 days of delivery, no questions asked.",
+        "Returns only if defective or not as described: return the card within 30 days of delivery if it arrives damaged or isn't the card, grade or condition the listing shows.",
+      ] },
+      { p: "Either way you get a full refund of the price paid, and you pay the return shipping." },
       { h: "What counts as not as described" },
       { list: [
         "A different card than the one listed.",
@@ -596,12 +601,12 @@ export const ARTICLES: Article[] = [
       { h: "How to return a card" },
       { list: [
         "Open the order and message the seller within 30 days of delivery. Say what's wrong and add photos.",
-        "The seller sends a prepaid return label, or refunds you without asking for the card back.",
+        "Ship it back at your cost, with tracking, to the address the seller gives you. The seller may also refund you without asking for the card back.",
         "Ship the card back in the same kind of packaging it arrived in.",
         "The seller refunds the full price within 3 business days of receiving the card. The refund goes back to the card you paid with.",
       ] },
-      { h: "Other returns" },
-      { p: "Returns for other reasons, such as a change of mind, depend on the seller's return policy, shown on every listing under Shipping, returns and payments. Sellers who offer 30-day returns accept a return for any reason within 30 days of delivery; the buyer pays return shipping. Start it by messaging the seller from the order." },
+      { h: "Change of mind" },
+      { p: "A card bought from a listing with 30-day returns can be sent back for any reason within 30 days of delivery. Listings with returns only for defective or not as described cards can't be returned for a change of mind." },
       { h: "If the seller doesn't respond" },
       { p: "Sellers issue refunds from their own Stripe account, because Slabs & Singles doesn't hold payments. If a seller doesn't resolve a card that isn't as described, you can dispute the charge with your card issuer. Sellers who don't honor returns can lose their seller level or have their account limited." },
       { links: [
@@ -624,8 +629,8 @@ export const ARTICLES: Article[] = [
         { label: "Community guidelines", href: "/help/community", text: "how we expect members to treat each other." },
       ] },
       { h: "Returns" },
-      { p: "A buyer can return a card that isn't as described for a full refund of the price paid. Report it to the seller from the order within 30 days of delivery, with photos. The seller pays for the return: they send a prepaid return label, or refund without asking for the card back. The seller refunds in full within 3 business days of receiving the card." },
-      { p: "Not as described means a different card, a different grade or condition than listed, damage the photos didn't show, or a counterfeit or altered card. Returns for other reasons, such as a change of mind, are up to each seller. See Returns and refunds for the steps." },
+      { p: "Every listing shows its return policy, set by the seller: 30-day returns for any reason, or returns only for cards that are defective or not as described. Under either policy, a buyer can return a card that is defective or not as described within 30 days of delivery for a full refund of the price paid. Report it to the seller from the order, with photos. The buyer pays return shipping unless the seller chooses to send a label or refund without asking for the card back. The seller refunds in full within 3 business days of receiving the card." },
+      { p: "Not as described means a different card, a different grade or condition than listed, damage the photos didn't show, or a counterfeit or altered card. See Returns and refunds for the steps." },
       { links: [{ label: "Returns and refunds", href: "/help/returns", text: "how to return a card that isn't as described." }] },
       { h: "Prohibited items" },
       { p: "Counterfeit or unlicensed reproductions, reprints sold as originals, altered cards sold as unaltered, cards priced over $1,000, and anything that isn't a trading card." },

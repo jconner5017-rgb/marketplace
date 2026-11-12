@@ -10,7 +10,13 @@ import { GradeBadge, Photo } from "@/components/CardBits";
 import ListingActions from "@/components/ListingActions";
 import { StoreCategoryPicker } from "@/components/sell/StoreForms";
 
-type Panel = "" | "price" | "category" | "remove";
+type Panel = "" | "price" | "category" | "remove" | "returns";
+
+/** Return policies a listing can have (buyer pays return shipping for both). */
+export const RETURNS_LABEL: Record<string, string> = {
+  "30_days": "30-day returns",
+  damaged_only: "Defective / not as described only",
+};
 
 /** Runs one request per listing, a few at a time, and counts what worked. */
 async function each(ids: string[], run: (id: string) => Promise<{ ok: boolean; message?: string }>) {
@@ -29,7 +35,9 @@ async function each(ids: string[], run: (id: string) => Promise<{ ok: boolean; m
 }
 
 /** Seller Hub listings table: big photos, tick boxes, and bulk edits for the ticked rows. */
-export default function ListingsTable({ listings, categories }: { listings: Listing[]; categories: StoreCategory[] }) {
+export default function ListingsTable({ listings, categories, defaultReturns = "damaged_only" }: {
+  listings: Listing[]; categories: StoreCategory[]; defaultReturns?: string;
+}) {
   const router = useRouter();
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [anchor, setAnchor] = useState<number | null>(null);
@@ -151,6 +159,7 @@ export default function ListingsTable({ listings, categories }: { listings: List
             {categories.length > 0 && (
               <button type="button" disabled={busy} onClick={() => setPanel(panel === "category" ? "" : "category")} className={btn}>Store category</button>
             )}
+            <button type="button" disabled={busy} onClick={() => setPanel(panel === "returns" ? "" : "returns")} className={btn}>Returns</button>
             <button type="button" disabled={busy} onClick={() => setPanel(panel === "remove" ? "" : "remove")} className={`${btn} text-slab`}>Remove</button>
             <button type="button" onClick={() => { setSel(new Set()); setPanel(""); }} className="ml-auto text-link underline">Clear</button>
           </div>
@@ -184,6 +193,20 @@ export default function ListingsTable({ listings, categories }: { listings: List
               </button>
             </div>
           )}
+          {panel === "returns" && (
+            <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-line pt-2">
+              <span>Return policy for {n} {n === 1 ? "listing" : "listings"} (buyer pays return shipping):</span>
+              <button type="button" disabled={busy} onClick={() => patchAll("Set 30-day returns on", () => ({ returns_policy: "30_days" }))}
+                className="rounded-full bg-link px-4 py-1.5 font-semibold text-white hover:bg-link-dark disabled:opacity-60">
+                30-day returns, no questions asked
+              </button>
+              <button type="button" disabled={busy} onClick={() => patchAll("Set returns for defective or not as described only on", () => ({ returns_policy: "damaged_only" }))}
+                className="rounded-full bg-link px-4 py-1.5 font-semibold text-white hover:bg-link-dark disabled:opacity-60">
+                Only defective or not as described
+              </button>
+              <button type="button" onClick={() => setPanel("")} className="text-muted underline">Cancel</button>
+            </div>
+          )}
           {panel === "remove" && (
             <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-line pt-2">
               <span>Remove {n} {n === 1 ? "listing" : "listings"} from the marketplace? Auctions with bids are kept.</span>
@@ -212,6 +235,7 @@ export default function ListingsTable({ listings, categories }: { listings: List
               <th className="py-2 pr-3 text-right font-semibold">Price</th>
               <th className="py-2 pr-3 text-right font-semibold">Qty</th>
               <th className="py-2 pr-3 font-semibold">Status</th>
+              <th className="py-2 pr-3 font-semibold">Returns</th>
               {categories.length > 0 && <th className="py-2 pr-3 font-semibold">Store category</th>}
               <th className="py-2 font-semibold"><span className="sr-only">Actions</span></th>
             </tr>
@@ -253,6 +277,11 @@ export default function ListingsTable({ listings, categories }: { listings: List
                         {l.status === "active" ? (l.offers_enabled ? "Active · offers on" : "Active") : l.status === "sold_out" ? "Sold out" : l.status === "ended" ? "Ended" : "Hidden"}
                       </span>
                     )}
+                  </td>
+                  <td className="py-2 pr-3 text-[13px]">
+                    {l.returns_policy
+                      ? RETURNS_LABEL[l.returns_policy] ?? l.returns_policy
+                      : <span className="text-muted">{RETURNS_LABEL[defaultReturns] ?? "Default"} (default)</span>}
                   </td>
                   {categories.length > 0 && (
                     <td className="py-2 pr-3"><StoreCategoryPicker listingId={l.id} value={l.store_category_id} categories={categories} /></td>

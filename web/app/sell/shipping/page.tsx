@@ -38,8 +38,8 @@ export default async function ShippingSettingsPage({ searchParams }: { searchPar
       <section className="mt-8">
         <h2 className="border-b border-line pb-2 text-[18px] font-bold">Return policy</h2>
         <p className="mt-2 text-[14px] text-muted">
-          Shown on every listing. Cards that arrive damaged or not as described are always returnable within 30 days of delivery,
-          with you paying return shipping, whichever you choose.
+          Your default for every listing. You can set a different policy on chosen listings in Seller hub → Listings
+          (tick them, then Returns). Either way the buyer pays return shipping.
         </p>
         <div className="mt-3"><ReturnsPolicyForm initial={s.returns_policy ?? "damaged_only"} /></div>
       </section>
