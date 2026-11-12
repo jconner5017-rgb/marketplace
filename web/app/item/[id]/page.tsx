@@ -94,8 +94,8 @@ export default async function ItemPage({ params }: Props) {
       </nav>
 
       <div className="mt-4 grid gap-8 lg:grid-cols-[minmax(0,1fr)_420px]">
-        {/* Pinned to the top of its column (next to the title), and stays in view while the details scroll. */}
-        <div className="self-start lg:sticky lg:top-4">
+        {/* Top of its column, level with the title. Scrolls with the page (not pinned). */}
+        <div className="self-start">
           <Gallery photos={l.photo_urls} title={l.title} />
           {/* Like eBay: invite visitors to sell (gets new sellers signed up), and Share on the right. */}
           <div className="mt-4 flex flex-wrap items-center gap-2 border-b border-line pb-4">
