@@ -97,8 +97,16 @@ export default async function ItemPage({ params }: Props) {
         {/* Pinned to the top of its column (next to the title), and stays in view while the details scroll. */}
         <div className="self-start lg:sticky lg:top-4">
           <Gallery photos={l.photo_urls} title={l.title} />
-          <div className="mt-3 flex justify-end">
-            <ShareButton url={`${SITE_URL}/item/${l.id}`} title={l.title} image={l.photo_urls[0]} />
+          {/* Like eBay: invite visitors to sell (gets new sellers signed up), and Share on the right. */}
+          <div className="mt-4 flex flex-wrap items-center gap-2 border-b border-line pb-4">
+            <span className="text-[14px] text-muted">Have one to sell?</span>
+            {!l.lot_count && (
+              <Link href={`/sell/new?like=${l.id}`} className="rounded-full border border-line px-4 py-2 text-[14px] font-semibold hover:bg-wash">Sell one like this</Link>
+            )}
+            <Link href="/sell" className="rounded-full border border-line px-4 py-2 text-[14px] font-semibold hover:bg-wash">Sell something else</Link>
+            <div className="ml-auto">
+              <ShareButton url={`${SITE_URL}/item/${l.id}`} title={l.title} image={l.photo_urls[0]} />
+            </div>
           </div>
         </div>
 

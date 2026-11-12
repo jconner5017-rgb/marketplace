@@ -60,10 +60,13 @@ const dollars = (c: number | null | undefined) => (c == null ? "" : (c / 100).to
 const ruleText = (kind: Kind | null | undefined, v: number | null | undefined) => (v == null ? "" : kind === "amount" ? dollars(v) : String(v));
 
 /** The listing form, for a new card or (with `initial`) editing one. */
-export default function NewListingForm({ capCents, catalog, fees, initial, startAsLot = false }: {
+export default function NewListingForm({ capCents, catalog, fees, initial, prefill, startAsLot = false }: {
   capCents: number; catalog: SiteCatalog; fees: FeeSchedule; startAsLot?: boolean; initial?: Listing;
+  /** "Sell one like this": card details copied from another listing (a new listing, not an edit). */
+  prefill?: Pick<Listing, "category" | "game_or_sport" | "set_name" | "year" | "card_number" | "title" | "attributes">;
 }) {
   const editing = !!initial;
+  const seed = initial ?? prefill;
   const a = initial?.auction;
   const os = initial?.offer_settings;
   // Once an auction has bids, only the description and photos can change.
@@ -74,7 +77,7 @@ export default function NewListingForm({ capCents, catalog, fees, initial, start
       : Math.min(fees.cap_cents, cents, Math.max(fees.flat_cents, Math.floor((cents * fees.percent_bps) / 10000)));
   const router = useRouter();
   const [graded, setGraded] = useState(initial ? initial.grader != null : false);
-  const [category, setCategory] = useState<string>(initial?.category ?? "tcg");
+  const [category, setCategory] = useState<string>(seed?.category ?? "tcg");
   const [price, setPrice] = useState(initial && initial.format === "fixed" ? dollars(initial.price_cents) : "");
   const [preset, setPreset] = useState(initial?.package_preset ?? (startAsLot ? "box" : "envelope"));
   const [isLot, setIsLot] = useState(initial ? initial.lot_count != null : startAsLot);
@@ -292,16 +295,16 @@ export default function NewListingForm({ capCents, catalog, fees, initial, start
           </select>
         </Field>
         <Field label={categoryInfo(category)?.subject ?? "Game"} name="game_or_sport" error={fields.game_or_sport}>
-          <select id="game_or_sport" name="game_or_sport" key={category} className={select} defaultValue={initial?.category === category ? initial.game_or_sport : ""}>
+          <select id="game_or_sport" name="game_or_sport" key={category} className={select} defaultValue={seed?.category === category ? seed.game_or_sport : ""}>
             <option value="" disabled>Choose…</option>
             {(category === "sports" ? catalog.sports : category === "nonsport" ? catalog.nonsport : catalog.games).map((o) => (
               <option key={o.value} value={o.value}>{o.label}</option>
             ))}
           </select>
         </Field>
-        <Field label="Set" name="set_name" placeholder="Base Set, Topps Chrome…" defaultValue={initial?.set_name} error={fields.set_name} />
+        <Field label="Set" name="set_name" placeholder="Base Set, Topps Chrome…" defaultValue={seed?.set_name} error={fields.set_name} />
         <div className="grid grid-cols-2 gap-4">
-          <Field label="Year" name="year" inputMode="numeric" placeholder="1999" defaultValue={initial?.year ?? ""} error={fields.year} />
+          <Field label="Year" name="year" inputMode="numeric" placeholder="1999" defaultValue={seed?.year ?? ""} error={fields.year} />
           {isLot ? (
             <Field label="Number of cards" name="lot_count" inputMode="numeric" placeholder="25" value={lotCount}
               onChange={(e) => {
@@ -312,7 +315,7 @@ export default function NewListingForm({ capCents, catalog, fees, initial, start
               }}
               error={fields.lot_count} />
           ) : (
-            <Field label="Card number" name="card_number" placeholder="4/102" defaultValue={initial?.card_number ?? ""} error={fields.card_number} />
+            <Field label="Card number" name="card_number" placeholder="4/102" defaultValue={seed?.card_number ?? ""} error={fields.card_number} />
           )}
         </div>
         <Field
@@ -321,7 +324,7 @@ export default function NewListingForm({ capCents, catalog, fees, initial, start
           name="title"
           maxLength={200}
           placeholder={isLot ? "25-card 2024 Prizm football base lot" : "Charizard Holo Base Set"}
-          defaultValue={initial?.title}
+          defaultValue={seed?.title}
           hint="Buyers search by title. Include the player or card name and anything notable."
           error={fields.title}
         />
@@ -367,7 +370,7 @@ export default function NewListingForm({ capCents, catalog, fees, initial, start
           <div className="mt-2 flex flex-wrap gap-x-5 gap-y-2">
             {Object.entries(catalog.features).map(([k, v]) => (
               <label key={k} className="flex items-center gap-1.5 text-[14px]">
-                <input type="checkbox" name="attributes" value={k} defaultChecked={initial?.attributes.includes(k)} /> {v}
+                <input type="checkbox" name="attributes" value={k} defaultChecked={seed?.attributes?.includes(k)} /> {v}
               </label>
             ))}
           </div>
