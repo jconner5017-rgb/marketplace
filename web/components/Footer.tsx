@@ -98,9 +98,9 @@ export default function Footer() {
         <div className="mt-10 flex flex-wrap items-center gap-x-6 gap-y-2 border-t border-line pt-5 text-[12px] text-muted">
           {/* Veteran Owned badge: light or dark to match the theme (see .vet-* in globals.css). */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/veteran-owned-light.svg" alt="Veteran owned and operated business" width={150} height={36} className="vet-light h-9 w-auto" />
+          <img src="/veteran-owned-light.png" alt="Veteran owned and operated business" width={150} height={36} className="vet-light h-9 w-auto" />
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/veteran-owned-dark.svg" alt="Veteran owned and operated business" width={150} height={36} className="vet-dark h-9 w-auto" />
+          <img src="/veteran-owned-dark.png" alt="Veteran owned and operated business" width={150} height={36} className="vet-dark h-9 w-auto" />
           <span>© {new Date().getFullYear()} {SITE_NAME}</span>
           <span>US buyers and sellers only</span>
           <span>Payments by Stripe</span>
