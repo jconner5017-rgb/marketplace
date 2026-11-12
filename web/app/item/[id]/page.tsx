@@ -195,14 +195,19 @@ export default async function ItemPage({ params }: Props) {
         </div>
       </div>
 
-      <section className="mt-10">
-        <div>
-          <h2 className="border-b border-line pb-2 text-[20px] font-bold">Item specifics</h2>
-          <dl className="mt-3 grid grid-cols-1 gap-x-8 sm:grid-cols-2 lg:grid-cols-3">
+      {/* Boxed like eBay's "About this item": a tab label, then specifics and the seller's description. */}
+      <section className="mt-10" aria-labelledby="about-item">
+        <div className="relative z-[1] -mb-px inline-block rounded-t-lg border border-b-0 border-line bg-paper px-5 py-2.5">
+          <h2 id="about-item" className="text-[14px] font-bold text-link">About this item</h2>
+        </div>
+        <div className="rounded-b-lg rounded-tr-lg border border-line bg-paper p-5 sm:p-6">
+          <p className="text-[13px] text-muted">Seller assumes all responsibility for this listing.</p>
+          <h3 className="mt-5 text-[22px] font-bold">Item specifics</h3>
+          <dl className="mt-3 grid grid-cols-1 gap-x-10 md:grid-cols-2">
             {specifics
               .filter(([, v]) => v)
               .map(([k, v]) => (
-                <div key={k} className="grid grid-cols-[150px_1fr] gap-2 border-b border-wash py-2 text-[14px]">
+                <div key={k} className="grid grid-cols-[150px_1fr] gap-3 py-1.5 text-[14px] sm:grid-cols-[180px_1fr]">
                   <dt className="text-muted">{k}</dt>
                   <dd>{v}</dd>
                 </div>
@@ -210,7 +215,7 @@ export default async function ItemPage({ params }: Props) {
           </dl>
           {l.description && (
             <>
-              <h2 className="mt-8 border-b border-line pb-2 text-[20px] font-bold">Seller&apos;s description</h2>
+              <h3 className="mt-8 text-[22px] font-bold">Item description from the seller</h3>
               {l.description_html
                 ? /* Cleaned on the server to a short list of plain tags (no styles, scripts or images). */
                   <div className="rich-desc mt-3 text-[15px]" dangerouslySetInnerHTML={{ __html: l.description_html }} />
