@@ -195,10 +195,10 @@ export default async function ItemPage({ params }: Props) {
         </div>
       </div>
 
-      <section className="mt-10 grid gap-8 lg:grid-cols-[minmax(0,1fr)_420px]">
+      <section className="mt-10">
         <div>
           <h2 className="border-b border-line pb-2 text-[20px] font-bold">Item specifics</h2>
-          <dl className="mt-3 grid grid-cols-1 gap-x-8 sm:grid-cols-2">
+          <dl className="mt-3 grid grid-cols-1 gap-x-8 sm:grid-cols-2 lg:grid-cols-3">
             {specifics
               .filter(([, v]) => v)
               .map(([k, v]) => (
@@ -213,8 +213,8 @@ export default async function ItemPage({ params }: Props) {
               <h2 className="mt-8 border-b border-line pb-2 text-[20px] font-bold">Seller&apos;s description</h2>
               {l.description_html
                 ? /* Cleaned on the server to a short list of plain tags (no styles, scripts or images). */
-                  <div className="rich-desc mt-3 max-w-[78ch] text-[15px]" dangerouslySetInnerHTML={{ __html: l.description_html }} />
-                : <p className="mt-3 max-w-[70ch] whitespace-pre-line text-[15px]">{l.description}</p>}
+                  <div className="rich-desc mt-3 text-[15px]" dangerouslySetInnerHTML={{ __html: l.description_html }} />
+                : <p className="mt-3 whitespace-pre-line text-[15px]">{l.description}</p>}
             </>
           )}
           {isAuction && bids && <BidList history={bids} auction={l.auction!} />}
