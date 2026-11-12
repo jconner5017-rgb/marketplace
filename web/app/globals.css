@@ -120,7 +120,7 @@ html {
 .rich-desc a { color: var(--color-link); text-decoration: underline; }
 .rich-desc hr { border: 0; border-top: 1px solid var(--color-line); margin: 1.2em 0; }
 .rich-desc blockquote { border-left: 3px solid var(--color-line); padding-left: 0.9em; color: var(--color-muted); }
-.rich-desc table { border-collapse: collapse; width: 100%; max-width: 100%; display: block; overflow-x: auto; }
-.rich-desc td, .rich-desc th { border-bottom: 1px solid var(--color-line); padding: 6px 12px 6px 0; vertical-align: top; text-align: left; }
+.rich-desc table { border-collapse: collapse; width: 100%; max-width: 100%; table-layout: auto; }
+.rich-desc td, .rich-desc th { border-bottom: 1px solid var(--color-line); padding: 6px 12px 6px 0; vertical-align: top; text-align: left; overflow-wrap: anywhere; }
 .rich-desc tr td:first-child:nth-last-child(2) { color: var(--color-muted); }
 .rich-desc small { font-size: 13px; color: var(--color-muted); }
