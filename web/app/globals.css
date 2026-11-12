@@ -124,3 +124,8 @@ html {
 .rich-desc td, .rich-desc th { border-bottom: 1px solid var(--color-line); padding: 6px 12px 6px 0; vertical-align: top; text-align: left; overflow-wrap: anywhere; }
 .rich-desc tr td:first-child:nth-last-child(2) { color: var(--color-muted); }
 .rich-desc small { font-size: 13px; color: var(--color-muted); }
+
+/* Veteran Owned badge in the footer: the dark version in dark mode. */
+.vet-dark { display: none; }
+:root[data-theme="dark"] .vet-light { display: none; }
+:root[data-theme="dark"] .vet-dark { display: inline-block; }
