@@ -66,6 +66,9 @@ func TestListingSync(t *testing.T) {
 	for _, x := range body["listings"].([]any) {
 		m := x.(map[string]any)
 		got[m["external_id"].(string)] = m["status"].(string)
+		if m["price_cents"].(float64) != 900 {
+			t.Fatalf("price: %v", m)
+		}
 	}
 	if got["SY1"] != "removed" || got["SY2"] != "active" {
 		t.Fatalf("statuses: %v", got)

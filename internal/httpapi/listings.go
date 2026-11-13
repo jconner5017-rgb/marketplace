@@ -324,12 +324,13 @@ func isCrawler(ua string) bool {
 }
 
 // GET /v1/seller/listings/sync — every listing of this seller that has an
-// external id (a FireCardManager SKU), with its id and status, so the app
-// can drop cards whose listing was removed on the website.
+// external id (a FireCardManager SKU), with its id, status and price, so the
+// app can drop cards whose listing was removed on the website and pick up
+// price changes made here.
 func (s *Server) handleListingSync(w http.ResponseWriter, r *http.Request) {
 	u, _ := currentUser(r)
 	rows, err := s.db.QueryContext(r.Context(), `
-		SELECT external_id, id, status FROM listings
+		SELECT external_id, id, status, price_cents FROM listings
 		WHERE seller_id = $1 AND external_id IS NOT NULL ORDER BY created_at`, u.ID)
 	if err != nil {
 		s.internalError(w, r, err)
@@ -340,11 +341,12 @@ func (s *Server) handleListingSync(w http.ResponseWriter, r *http.Request) {
 		ExternalID string `json:"external_id"`
 		ID         string `json:"id"`
 		Status     string `json:"status"`
+		PriceCents int    `json:"price_cents"`
 	}
 	out := []item{}
 	for rows.Next() {
 		var it item
-		if err := rows.Scan(&it.ExternalID, &it.ID, &it.Status); err != nil {
+		if err := rows.Scan(&it.ExternalID, &it.ID, &it.Status, &it.PriceCents); err != nil {
 			s.internalError(w, r, err)
 			return
 		}
