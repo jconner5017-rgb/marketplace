@@ -32,6 +32,7 @@ import (
 const sessionCookie = "mp_session"
 
 type Server struct {
+	signupKey    []byte
 	db           *sql.DB
 	auth         *auth.Service
 	log          *slog.Logger
@@ -78,12 +79,14 @@ type Server struct {
 }
 
 type Options struct {
-	DB           *sql.DB
-	Auth         *auth.Service
-	Log          *slog.Logger
-	CookieSecure bool
-	SessionTTL   time.Duration
-	TrustProxy   bool
+	// SignupGuardKey signs sign-up form tokens (see signupguard.go); nil turns that check off.
+	SignupGuardKey []byte
+	DB             *sql.DB
+	Auth           *auth.Service
+	Log            *slog.Logger
+	CookieSecure   bool
+	SessionTTL     time.Duration
+	TrustProxy     bool
 
 	Sellers       *sellers.Service
 	Listings      *listings.Service
@@ -112,6 +115,7 @@ type Options struct {
 
 func New(o Options) *Server {
 	s := &Server{
+		signupKey:     o.SignupGuardKey,
 		db:            o.DB,
 		auth:          o.Auth,
 		log:           o.Log,
@@ -166,6 +170,7 @@ func (s *Server) Handler() http.Handler {
 
 	mux.HandleFunc("GET /healthz", s.handleHealth)
 
+	mux.HandleFunc("GET /v1/auth/signup-check", s.handleSignupCheck)
 	mux.HandleFunc("POST /v1/auth/signup", s.handleSignup)
 	mux.HandleFunc("POST /v1/auth/login", s.handleLogin)
 	mux.HandleFunc("POST /v1/auth/logout", s.handleLogout)
@@ -446,6 +451,10 @@ type signupRequest struct {
 	Email    string `json:"email"`
 	Username string `json:"username"`
 	Password string `json:"password"`
+	// Sign-up protection (signupguard.go): a hidden field people never
+	// fill, and the form token from GET /v1/auth/signup-check.
+	Website   string `json:"website,omitempty"`
+	FormToken string `json:"form_token,omitempty"`
 }
 
 func (s *Server) handleSignup(w http.ResponseWriter, r *http.Request) {
@@ -456,6 +465,34 @@ func (s *Server) handleSignup(w http.ResponseWriter, r *http.Request) {
 	var req signupRequest
 	if !decodeJSON(w, r, &req) {
 		return
+	}
+	if why := s.signupBlocked(req); why != "" {
+		s.log.Warn("sign-up blocked", "reason", why, "email", clip(req.Email, 80), "ip", clientIP(r, s.trustProxy))
+		writeError(w, http.StatusBadRequest, "signup_check",
+			"we couldn't create that account; refresh the page, wait a few seconds and try again", nil)
+		return
+	}
+	if dottedGmail(req.Email) {
+		s.log.Warn("sign-up blocked", "reason", "dotted_gmail", "email", clip(req.Email, 80), "ip", clientIP(r, s.trustProxy))
+		msg := "Gmail ignores dots, so use your address without the extra dots"
+		writeError(w, http.StatusUnprocessableEntity, "invalid_input", "check the highlighted fields", map[string]string{"email": msg})
+		return
+	}
+	// A banned address keeps its own "blocked" answer from auth.Signup below.
+	banned, _, _ := blocklist.Has(r.Context(), s.db, "email", req.Email)
+	if inbox := gmailInbox(req.Email); inbox != "" && !banned {
+		var dup bool
+		if err := s.db.QueryRowContext(r.Context(), `SELECT EXISTS (SELECT 1 FROM users
+			WHERE lower(split_part(email, '@', 2)) IN ('gmail.com', 'googlemail.com')
+			AND replace(split_part(lower(split_part(email, '@', 1)), '+', 1), '.', '') = $1)`, inbox).Scan(&dup); err != nil {
+			s.internalError(w, r, err)
+			return
+		}
+		if dup {
+			writeError(w, http.StatusConflict, "email_taken", "that email is already registered",
+				map[string]string{"email": "already registered (Gmail ignores dots and anything after +)"})
+			return
+		}
 	}
 	u, err := s.auth.Signup(r.Context(), req.Email, req.Username, req.Password)
 	var verr *auth.ValidationError

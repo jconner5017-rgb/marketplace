@@ -232,13 +232,15 @@ func run(log *slog.Logger) error {
 	}
 	log.Info("photo storage", "store", photoSvc.Store())
 	storeSvc := httpapi.NewStores(database, mailSvc)
+	signupKey := sha256.Sum256([]byte("signup-form:" + cfg.MFAKey + cfg.DatabaseURL))
 	api := httpapi.New(httpapi.Options{
-		DB:           database,
-		Auth:         authSvc,
-		Log:          log,
-		CookieSecure: cfg.CookieSecure,
-		SessionTTL:   cfg.SessionTTL,
-		TrustProxy:   cfg.TrustProxy,
+		SignupGuardKey: signupKey[:],
+		DB:             database,
+		Auth:           authSvc,
+		Log:            log,
+		CookieSecure:   cfg.CookieSecure,
+		SessionTTL:     cfg.SessionTTL,
+		TrustProxy:     cfg.TrustProxy,
 
 		Sellers:       sellerSvc,
 		Listings:      listingSvc,
