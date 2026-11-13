@@ -328,11 +328,30 @@ func isCrawler(ua string) bool {
 // external id (a FireCardManager SKU), with its id, status and price, so the
 // app can drop cards whose listing was removed on the website and pick up
 // price changes made here.
+//
+// ?since=<RFC 3339 time> returns only listings changed after that time, so
+// the app can check every few minutes without downloading every listing;
+// server_time in the answer is what to send as since next time.
 func (s *Server) handleListingSync(w http.ResponseWriter, r *http.Request) {
 	u, _ := currentUser(r)
+	var since *time.Time
+	if v := r.URL.Query().Get("since"); v != "" {
+		t, err := time.Parse(time.RFC3339Nano, v)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "bad_since", "since must be an RFC 3339 time", nil)
+			return
+		}
+		since = &t
+	}
+	var serverTime time.Time
+	if err := s.db.QueryRowContext(r.Context(), `SELECT now()`).Scan(&serverTime); err != nil {
+		s.internalError(w, r, err)
+		return
+	}
 	rows, err := s.db.QueryContext(r.Context(), `
 		SELECT external_id, id, status, price_cents, format, updated_at FROM listings
-		WHERE seller_id = $1 AND external_id IS NOT NULL ORDER BY created_at`, u.ID)
+		WHERE seller_id = $1 AND external_id IS NOT NULL AND ($2::timestamptz IS NULL OR updated_at > $2)
+		ORDER BY created_at`, u.ID, since)
 	if err != nil {
 		s.internalError(w, r, err)
 		return
@@ -359,5 +378,5 @@ func (s *Server) handleListingSync(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"listings": out})
+	writeJSON(w, http.StatusOK, map[string]any{"listings": out, "server_time": serverTime})
 }

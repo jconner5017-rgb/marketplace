@@ -1,8 +1,10 @@
 package httpapi
 
 import (
+	"net/url"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestFormattedDescription(t *testing.T) {
@@ -72,6 +74,22 @@ func TestListingSync(t *testing.T) {
 	}
 	if got["SY1"] != "removed" || got["SY2"] != "active" {
 		t.Fatalf("statuses: %v", got)
+	}
+	// Only what changed since a time.
+	st, _ := time.Parse(time.RFC3339Nano, body["server_time"].(string))
+	code, body = do(t, sc, "GET", e.ts.URL+"/v1/seller/listings/sync?since="+url.QueryEscape(st.Format(time.RFC3339Nano)), nil)
+	if code != 200 || len(body["listings"].([]any)) != 0 {
+		t.Fatalf("since (nothing changed): %d %v", code, body)
+	}
+	if code, _ := do(t, sc, "DELETE", e.ts.URL+"/v1/seller/listings/"+createListing(t, e, &httpClientT{sc}, rawCard("SY3", 900))["id"].(string), nil); code != 204 && code != 200 {
+		t.Fatalf("remove SY3: %d", code)
+	}
+	code, body = do(t, sc, "GET", e.ts.URL+"/v1/seller/listings/sync?since="+url.QueryEscape(st.Format(time.RFC3339Nano)), nil)
+	if code != 200 || len(body["listings"].([]any)) != 1 || body["listings"].([]any)[0].(map[string]any)["status"] != "removed" {
+		t.Fatalf("since (one removed): %v", body)
+	}
+	if code, _ := do(t, sc, "GET", e.ts.URL+"/v1/seller/listings/sync?since=yesterday", nil); code != 400 {
+		t.Fatalf("bad since: %d", code)
 	}
 }
 
