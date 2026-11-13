@@ -6,7 +6,7 @@ import { EndpointForm, NewKeyForm, RevokeKey } from "@/components/ConnectForms";
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Connect FireCardManager", robots: { index: false } };
 
-type Key = { id: string; name: string; prefix: string; created_at: string; last_used_at: string | null; revoked_at: string | null };
+type Key = { id: string; name: string; prefix: string; kind: "desktop" | "web"; created_at: string; last_used_at: string | null; revoked_at: string | null };
 type Delivery = { id: number; event: string; attempts: number; delivered_at: string | null; last_status: number | null; last_error: string | null; gave_up_at: string | null; next_attempt_at: string; created_at: string };
 type Connect = { keys: Key[]; endpoint: { webhook_url: string; inventory_url: string; has_secret: boolean; reconciled_at: string | null }; deliveries: Delivery[] };
 
@@ -37,11 +37,20 @@ export default async function ConnectPage() {
           desktop app needs: it lists your cards, checks for sales every few minutes while it&apos;s open, ends the eBay listing when a
           card sells here, and sends your tracking number back. Anyone with the key can manage your listings, so keep it private.
         </p>
+        <p className="mt-2 text-[14px]">
+          Using <strong>FireCardManager Web</strong> too? Make a separate key <em>for FireCardManager Web</em> and paste it on its Account page,
+          so each can be revoked on its own. Only the desktop app&apos;s check-ins count for the 3-day pause below, because it&apos;s what takes
+          sold cards off eBay.
+        </p>
         {active.length > 0 && (
           <ul className="mt-3 text-[14px]">
             {active.map((k) => (
               <li key={k.id} className="flex flex-wrap items-baseline justify-between gap-2 border-b border-wash py-2">
-                <span><span className="font-semibold">{k.name}</span> · <code className={code}>{k.prefix}…</code></span>
+                <span>
+                  <span className="font-semibold">{k.name}</span>{" "}
+                  <span className="rounded-full border border-line px-2 py-0.5 text-[11px] text-muted">{k.kind === "web" ? "FireCardManager Web" : "Desktop app"}</span>{" "}
+                  · <code className={code}>{k.prefix}…</code>
+                </span>
                 <span className="text-muted">last used {when(k.last_used_at)} · <RevokeKey id={k.id} /></span>
               </li>
             ))}

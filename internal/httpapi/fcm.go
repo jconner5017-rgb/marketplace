@@ -33,7 +33,7 @@ func (s *Server) sellerAPI(next http.HandlerFunc) http.HandlerFunc {
 				writeError(w, http.StatusUnauthorized, "bad_api_key", "use Authorization: Bearer <API key>", nil)
 				return
 			}
-			uid, err := s.fcm.Authenticate(r.Context(), strings.TrimSpace(token))
+			uid, kind, err := s.fcm.Authenticate(r.Context(), strings.TrimSpace(token))
 			if err != nil {
 				writeError(w, http.StatusUnauthorized, "bad_api_key", "invalid or revoked API key", nil)
 				return
@@ -48,10 +48,18 @@ func (s *Server) sellerAPI(next http.HandlerFunc) http.HandlerFunc {
 				return
 			}
 			// The software checked in: bring back anything paused while it was away.
-			if n, err := s.fcm.ResumeSynced(r.Context(), u.ID); err != nil {
-				s.log.Error("resume synced listings", "err", err)
-			} else if n > 0 {
-				s.log.Info("synced listings resumed", "user", u.ID, "count", n)
+			// Only the desktop app counts when the seller has it (it's what ends eBay listings).
+			resume := kind == "desktop"
+			if !resume {
+				has, err := s.fcm.HasDesktopKey(r.Context(), u.ID)
+				resume = err == nil && !has
+			}
+			if resume { // (FireCardManager Web while the PC is away brings nothing back)
+				if n, err := s.fcm.ResumeSynced(r.Context(), u.ID); err != nil {
+					s.log.Error("resume synced listings", "err", err)
+				} else if n > 0 {
+					s.log.Info("synced listings resumed", "user", u.ID, "count", n)
+				}
 			}
 			ctx := context.WithValue(context.WithValue(r.Context(), userKey, u), apiKeyCtx, true)
 			r = r.WithContext(ctx)
@@ -321,11 +329,12 @@ func (s *Server) handleCreateKey(w http.ResponseWriter, r *http.Request) {
 	}
 	var req struct {
 		Name string `json:"name"`
+		Kind string `json:"kind"` // desktop (default) or web
 	}
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	plain, k, err := s.fcm.CreateKey(r.Context(), u.ID, req.Name)
+	plain, k, err := s.fcm.CreateKey(r.Context(), u.ID, req.Name, req.Kind)
 	if errors.Is(err, fcm.ErrTooMany) {
 		writeError(w, http.StatusConflict, "too_many_keys", err.Error(), nil)
 		return

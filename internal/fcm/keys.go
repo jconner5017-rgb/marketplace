@@ -28,6 +28,7 @@ type Key struct {
 	ID         string     `json:"id"`
 	Name       string     `json:"name"`
 	Prefix     string     `json:"prefix"`
+	Kind       string     `json:"kind"` // desktop (FireCardManager on a PC) or web (FireCardManager Web)
 	CreatedAt  time.Time  `json:"created_at"`
 	LastUsedAt *time.Time `json:"last_used_at"`
 	RevokedAt  *time.Time `json:"revoked_at"`
@@ -65,10 +66,16 @@ func hashKey(k string) string {
 }
 
 // CreateKey makes a new API key for a seller. The key is returned once.
-func (s *Service) CreateKey(ctx context.Context, userID, name string) (string, Key, error) {
+func (s *Service) CreateKey(ctx context.Context, userID, name, kind string) (string, Key, error) {
+	if kind != "web" {
+		kind = "desktop"
+	}
 	name = strings.TrimSpace(name)
 	if name == "" {
 		name = "FireCardManager"
+		if kind == "web" {
+			name = "FireCardManager Web"
+		}
 	}
 	if len(name) > 60 {
 		name = name[:60]
@@ -82,9 +89,9 @@ func (s *Service) CreateKey(ctx context.Context, userID, name string) (string, K
 	}
 	plain := keyPrefix + randomString(40)
 	var k Key
-	err := s.DB.QueryRowContext(ctx, `INSERT INTO api_keys (user_id, name, prefix, key_hash) VALUES ($1, $2, $3, $4)
-		RETURNING id, name, prefix, created_at`, userID, name, plain[:len(keyPrefix)+6], hashKey(plain)).
-		Scan(&k.ID, &k.Name, &k.Prefix, &k.CreatedAt)
+	err := s.DB.QueryRowContext(ctx, `INSERT INTO api_keys (user_id, name, prefix, key_hash, kind) VALUES ($1, $2, $3, $4, $5)
+		RETURNING id, name, prefix, kind, created_at`, userID, name, plain[:len(keyPrefix)+6], hashKey(plain), kind).
+		Scan(&k.ID, &k.Name, &k.Prefix, &k.Kind, &k.CreatedAt)
 	if err != nil {
 		return "", Key{}, err
 	}
@@ -95,7 +102,7 @@ func (s *Service) CreateKey(ctx context.Context, userID, name string) (string, K
 }
 
 func (s *Service) Keys(ctx context.Context, userID string) ([]Key, error) {
-	rows, err := s.DB.QueryContext(ctx, `SELECT id, name, prefix, created_at, last_used_at, revoked_at FROM api_keys
+	rows, err := s.DB.QueryContext(ctx, `SELECT id, name, prefix, kind, created_at, last_used_at, revoked_at FROM api_keys
 		WHERE user_id = $1 ORDER BY revoked_at NULLS FIRST, created_at DESC LIMIT 50`, userID)
 	if err != nil {
 		return nil, err
@@ -104,7 +111,7 @@ func (s *Service) Keys(ctx context.Context, userID string) ([]Key, error) {
 	out := []Key{}
 	for rows.Next() {
 		var k Key
-		if err := rows.Scan(&k.ID, &k.Name, &k.Prefix, &k.CreatedAt, &k.LastUsedAt, &k.RevokedAt); err != nil {
+		if err := rows.Scan(&k.ID, &k.Name, &k.Prefix, &k.Kind, &k.CreatedAt, &k.LastUsedAt, &k.RevokedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, k)
@@ -126,17 +133,25 @@ func (s *Service) RevokeKey(ctx context.Context, userID, id string) error {
 }
 
 // Authenticate returns the seller an API key belongs to.
-func (s *Service) Authenticate(ctx context.Context, token string) (string, error) {
+// Authenticate returns the key's seller and kind (desktop or web).
+func (s *Service) Authenticate(ctx context.Context, token string) (string, string, error) {
 	if !strings.HasPrefix(token, keyPrefix) || len(token) > 100 {
-		return "", ErrBadKey
+		return "", "", ErrBadKey
 	}
-	var userID string
+	var userID, kind string
 	err := s.DB.QueryRowContext(ctx, `UPDATE api_keys SET last_used_at = now()
-		WHERE key_hash = $1 AND revoked_at IS NULL RETURNING user_id`, hashKey(token)).Scan(&userID)
+		WHERE key_hash = $1 AND revoked_at IS NULL RETURNING user_id, kind`, hashKey(token)).Scan(&userID, &kind)
 	if errors.Is(err, sql.ErrNoRows) {
-		return "", ErrBadKey
+		return "", "", ErrBadKey
 	}
-	return userID, err
+	return userID, kind, err
+}
+
+// HasDesktopKey: the seller uses FireCardManager on a PC (an active desktop key).
+func (s *Service) HasDesktopKey(ctx context.Context, userID string) (bool, error) {
+	var ok bool
+	err := s.DB.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM api_keys WHERE user_id = $1 AND kind = 'desktop' AND revoked_at IS NULL)`, userID).Scan(&ok)
+	return ok, err
 }
 
 // Remembered is a stored answer to an idempotent request.

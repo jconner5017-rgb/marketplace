@@ -21,6 +21,7 @@ function Secret({ label, value }: { label: string; value: string }) {
 
 export function NewKeyForm() {
   const router = useRouter();
+  const [kind, setKind] = useState<"desktop" | "web">("desktop");
   const [name, setName] = useState("FireCardManager");
   const [key, setKey] = useState("");
   const [error, setError] = useState("");
@@ -29,7 +30,7 @@ export function NewKeyForm() {
     e.preventDefault();
     setBusy(true);
     setError("");
-    const r = await send<{ api_key: string }>("POST", "/v1/seller/api-keys", { name });
+    const r = await send<{ api_key: string }>("POST", "/v1/seller/api-keys", { name, kind });
     setBusy(false);
     if (!r.ok) return setError(r.message);
     setKey(r.data.api_key);
@@ -38,6 +39,17 @@ export function NewKeyForm() {
   return (
     <div>
       <form onSubmit={go} className="flex flex-wrap items-end gap-2 text-[14px]">
+        <label className="font-semibold">For
+          <select value={kind} className="mt-1 block rounded-md border border-line px-3 py-1.5 font-normal"
+            onChange={(e) => {
+              const k = e.target.value as "desktop" | "web";
+              setKind(k);
+              if (name === "FireCardManager" || name === "FireCardManager Web") setName(k === "web" ? "FireCardManager Web" : "FireCardManager");
+            }}>
+            <option value="desktop">FireCardManager (desktop app)</option>
+            <option value="web">FireCardManager Web</option>
+          </select>
+        </label>
         <label className="font-semibold">Key name
           <input value={name} onChange={(e) => setName(e.target.value)} maxLength={60}
             className="mt-1 block rounded-md border border-line px-3 py-1.5 font-normal" />
@@ -45,7 +57,7 @@ export function NewKeyForm() {
         <button type="submit" disabled={busy} className="rounded-full bg-link px-4 py-2 font-semibold text-white hover:bg-link-dark disabled:opacity-60">Create API key</button>
       </form>
       {error && <p role="alert" className="mt-2 text-[13px] text-slab">{error}</p>}
-      {key && <Secret label="Your new API key" value={key} />}
+      {key && <Secret label={kind === "web" ? "Your new key: paste it into FireCardManager Web (Account > Slabs & Singles key)" : "Your new API key"} value={key} />}
     </div>
   );
 }

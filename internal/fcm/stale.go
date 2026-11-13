@@ -27,7 +27,9 @@ func (s *Service) PauseStale(ctx context.Context) ([]Paused, error) {
 		WITH stale AS (
 			SELECT u.id FROM users u
 			WHERE EXISTS (SELECT 1 FROM listings l WHERE l.seller_id = u.id AND l.inventory_sync AND l.status = 'active' AND l.format = 'fixed')
-			  AND coalesce((SELECT max(k.last_used_at) FROM api_keys k WHERE k.user_id = u.id), '-infinity') < $1
+			  -- The desktop app's last check-in; a seller with only FireCardManager Web keys: theirs.
+			  AND coalesce((SELECT max(k.last_used_at) FROM api_keys k WHERE k.user_id = u.id AND (k.kind = 'desktop' OR NOT EXISTS (
+					SELECT 1 FROM api_keys d WHERE d.user_id = u.id AND d.kind = 'desktop' AND d.revoked_at IS NULL))), '-infinity') < $1
 		)
 		UPDATE listings l SET status = 'hidden', sync_paused_at = now(), updated_at = now()
 		FROM stale WHERE l.seller_id = stale.id AND l.inventory_sync AND l.status = 'active' AND l.format = 'fixed'

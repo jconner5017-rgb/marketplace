@@ -365,3 +365,50 @@ func TestFCMStaleSyncPause(t *testing.T) {
 		t.Fatal("paused again right after a sync")
 	}
 }
+
+// A FireCardManager Web key doesn't stand in for the desktop app: while the
+// PC is away, the website's calls neither prevent the pause nor undo it.
+// A seller who only uses the website is judged by its key.
+func TestFCMWebKeyDoesNotCountAsDesktopSync(t *testing.T) {
+	e := setupEnv(t)
+	sc, _ := newSeller(t, e, "web_shop", true)
+	desk := newKey(t, e, sc)
+	code, body := do(t, sc, "POST", e.ts.URL+"/v1/seller/api-keys", map[string]string{"kind": "web"})
+	if code != 201 || body["key"].(map[string]any)["kind"] != "web" || body["key"].(map[string]any)["name"] != "FireCardManager Web" {
+		t.Fatalf("web key: %d %v", code, body)
+	}
+	web := body["api_key"].(string)
+	_, b, _ := api(t, e, desk, "POST", "/v1/listings", rawCard("FCM-601", 900), "")
+	id := b["listing"].(map[string]any)["id"].(string)
+	status := func() (s string) {
+		e.db.QueryRow(`SELECT status FROM listings WHERE id = $1`, id).Scan(&s)
+		return
+	}
+	// The PC goes quiet; the website keeps calling.
+	e.db.Exec(`UPDATE api_keys SET last_used_at = now() - interval '4 days' WHERE kind = 'desktop'`)
+	api(t, e, web, "GET", "/v1/seller/listings/sync", nil, "")
+	if p, _ := e.fcm.PauseStale(context.Background()); len(p) != 1 || status() != "hidden" {
+		t.Fatalf("web key kept the listings up: %v %s", p, status())
+	}
+	api(t, e, web, "GET", "/v1/seller/listings/sync", nil, "")
+	if status() != "hidden" {
+		t.Fatal("web key brought paused listings back")
+	}
+	api(t, e, desk, "GET", "/v1/orders", nil, "")
+	if status() != "active" {
+		t.Fatal("desktop check-in didn't resume")
+	}
+	// Without a desktop key, the website's key is what counts.
+	keys := func() []any { _, b := do(t, sc, "GET", e.ts.URL+"/v1/seller/connect", nil); return b["keys"].([]any) }
+	for _, k := range keys() {
+		if k.(map[string]any)["kind"] == "desktop" {
+			do(t, sc, "DELETE", e.ts.URL+"/v1/seller/api-keys/"+k.(map[string]any)["id"].(string), nil)
+		}
+	}
+	e.db.Exec(`UPDATE api_keys SET last_used_at = now() - interval '4 days'`)
+	e.fcm.PauseStale(context.Background())
+	api(t, e, web, "GET", "/v1/seller/listings/sync", nil, "")
+	if status() != "active" {
+		t.Fatalf("web-only seller not resumed by the web key: %s", status())
+	}
+}
