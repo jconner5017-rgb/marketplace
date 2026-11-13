@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/jconner5017-rgb/marketplace/internal/listings"
 	"github.com/jconner5017-rgb/marketplace/internal/sellers"
@@ -330,7 +331,7 @@ func isCrawler(ua string) bool {
 func (s *Server) handleListingSync(w http.ResponseWriter, r *http.Request) {
 	u, _ := currentUser(r)
 	rows, err := s.db.QueryContext(r.Context(), `
-		SELECT external_id, id, status, price_cents FROM listings
+		SELECT external_id, id, status, price_cents, format, updated_at FROM listings
 		WHERE seller_id = $1 AND external_id IS NOT NULL ORDER BY created_at`, u.ID)
 	if err != nil {
 		s.internalError(w, r, err)
@@ -338,15 +339,17 @@ func (s *Server) handleListingSync(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 	type item struct {
-		ExternalID string `json:"external_id"`
-		ID         string `json:"id"`
-		Status     string `json:"status"`
-		PriceCents int    `json:"price_cents"`
+		ExternalID string    `json:"external_id"`
+		ID         string    `json:"id"`
+		Status     string    `json:"status"`
+		PriceCents int       `json:"price_cents"` // for an auction, the current bid
+		Format     string    `json:"format"`      // fixed or auction
+		UpdatedAt  time.Time `json:"updated_at"`  // last change by the seller (or the app)
 	}
 	out := []item{}
 	for rows.Next() {
 		var it item
-		if err := rows.Scan(&it.ExternalID, &it.ID, &it.Status, &it.PriceCents); err != nil {
+		if err := rows.Scan(&it.ExternalID, &it.ID, &it.Status, &it.PriceCents, &it.Format, &it.UpdatedAt); err != nil {
 			s.internalError(w, r, err)
 			return
 		}
