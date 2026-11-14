@@ -32,15 +32,18 @@ import (
 const sessionCookie = "mp_session"
 
 type Server struct {
-	signupKey    []byte
-	db           *sql.DB
-	auth         *auth.Service
-	log          *slog.Logger
-	cookieSecure bool
-	sessionTTL   time.Duration
-	trustProxy   bool
-	authLimiter  *rateLimiter
-	mail         *email.Service
+	signupKey []byte
+	// More sign-up protection (signupguard.go).
+	turnstileSiteKey, turnstileSecret, turnstileURL string
+	signupsPerIPDay                                 int
+	db                                              *sql.DB
+	auth                                            *auth.Service
+	log                                             *slog.Logger
+	cookieSecure                                    bool
+	sessionTTL                                      time.Duration
+	trustProxy                                      bool
+	authLimiter                                     *rateLimiter
+	mail                                            *email.Service
 
 	sellers       *sellers.Service
 	listings      *listings.Service
@@ -81,12 +84,16 @@ type Server struct {
 type Options struct {
 	// SignupGuardKey signs sign-up form tokens (see signupguard.go); nil turns that check off.
 	SignupGuardKey []byte
-	DB             *sql.DB
-	Auth           *auth.Service
-	Log            *slog.Logger
-	CookieSecure   bool
-	SessionTTL     time.Duration
-	TrustProxy     bool
+	// Cloudflare Turnstile at sign-up when both keys are set; TurnstileURL for tests.
+	TurnstileSiteKey, TurnstileSecret, TurnstileURL string
+	// At most this many accounts from one network a day (0: no cap).
+	SignupsPerIPDay int
+	DB              *sql.DB
+	Auth            *auth.Service
+	Log             *slog.Logger
+	CookieSecure    bool
+	SessionTTL      time.Duration
+	TrustProxy      bool
 
 	Sellers       *sellers.Service
 	Listings      *listings.Service
@@ -115,7 +122,9 @@ type Options struct {
 
 func New(o Options) *Server {
 	s := &Server{
-		signupKey:     o.SignupGuardKey,
+		signupKey:        o.SignupGuardKey,
+		turnstileSiteKey: o.TurnstileSiteKey, turnstileSecret: o.TurnstileSecret, signupsPerIPDay: o.SignupsPerIPDay,
+		turnstileURL:  map[bool]string{true: o.TurnstileURL, false: "https://challenges.cloudflare.com/turnstile/v0/siteverify"}[o.TurnstileURL != ""],
 		db:            o.DB,
 		auth:          o.Auth,
 		log:           o.Log,
@@ -455,6 +464,7 @@ type signupRequest struct {
 	// fill, and the form token from GET /v1/auth/signup-check.
 	Website   string `json:"website,omitempty"`
 	FormToken string `json:"form_token,omitempty"`
+	Turnstile string `json:"turnstile,omitempty"` // Cloudflare Turnstile response
 }
 
 func (s *Server) handleSignup(w http.ResponseWriter, r *http.Request) {
@@ -471,6 +481,30 @@ func (s *Server) handleSignup(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "signup_check",
 			"we couldn't create that account; refresh the page, wait a few seconds and try again", nil)
 		return
+	}
+	ip := clientIP(r, s.trustProxy)
+	if disposable(req.Email) {
+		s.log.Warn("sign-up blocked", "reason", "disposable", "email", clip(req.Email, 80), "ip", ip)
+		writeError(w, http.StatusUnprocessableEntity, "invalid_input", "check the highlighted fields",
+			map[string]string{"email": "use an email address you'll keep; throwaway inboxes can't be used"})
+		return
+	}
+	if s.signupsPerIPDay > 0 && ip != "" {
+		var n int
+		if err := s.db.QueryRowContext(r.Context(), `SELECT count(*) FROM users WHERE signup_ip = $1 AND created_at > now() - interval '1 day'`, ip).Scan(&n); err == nil && n >= s.signupsPerIPDay {
+			s.log.Warn("sign-up blocked", "reason", "ip_limit", "email", clip(req.Email, 80), "ip", ip)
+			writeError(w, http.StatusTooManyRequests, "too_many_signups", "too many accounts have been made from this network today; try again tomorrow or contact support", nil)
+			return
+		}
+	}
+	if s.turnstileSecret != "" {
+		if ok, err := s.verifyTurnstile(r.Context(), req.Turnstile, ip); err != nil {
+			s.log.Warn("turnstile", "err", err) // Cloudflare unreachable: don't lock people out
+		} else if !ok {
+			s.log.Warn("sign-up blocked", "reason", "turnstile", "email", clip(req.Email, 80), "ip", ip)
+			writeError(w, http.StatusBadRequest, "signup_check", "we couldn't confirm you're a person; complete the check and try again", nil)
+			return
+		}
 	}
 	if dottedGmail(req.Email) {
 		s.log.Warn("sign-up blocked", "reason", "dotted_gmail", "email", clip(req.Email, 80), "ip", clientIP(r, s.trustProxy))
@@ -514,7 +548,7 @@ func (s *Server) handleSignup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ip := clientIP(r, s.trustProxy)
+	s.db.ExecContext(r.Context(), `UPDATE users SET signup_ip = NULLIF($2, '') WHERE id = $1`, u.ID, ip)
 	if hit, banned, err := blocklist.Has(r.Context(), s.db, "ip", ip); err == nil && hit {
 		if err := blocklist.Alert(r.Context(), s.db, u.ID, "sign-up address", banned, "IP "+ip); err != nil {
 			s.log.Error("banned ip alert", "err", err)

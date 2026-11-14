@@ -1,6 +1,9 @@
 package httpapi
 
 import (
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 )
@@ -98,5 +101,35 @@ func TestSignupGuardOverHTTP(t *testing.T) {
 	hp["website"] = "http://cheap-pills.example"
 	if code, _ := do(t, c2, "POST", e.ts.URL+"/v1/auth/signup", hp); code != 400 {
 		t.Fatalf("honeypot: %d", code)
+	}
+	if code, out := do(t, c2, "POST", e.ts.URL+"/v1/auth/signup", body("bot@mailinator.com", "throwaway", aged)); code != 422 {
+		t.Fatalf("throwaway inbox: %d %v", code, out)
+	}
+
+	// Cloudflare Turnstile, when its keys are set.
+	cf := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.ParseForm()
+		fmt.Fprintf(w, `{"success":%v}`, r.Form.Get("secret") == "cf-secret" && r.Form.Get("response") == "good")
+	}))
+	defer cf.Close()
+	e.srv.turnstileSecret, e.srv.turnstileSiteKey, e.srv.turnstileURL = "cf-secret", "cf-site", cf.URL
+	if _, check := do(t, c2, "GET", e.ts.URL+"/v1/auth/signup-check", nil); check["turnstile_site_key"] != "cf-site" {
+		t.Fatalf("site key: %v", check)
+	}
+	if code, out := do(t, c2, "POST", e.ts.URL+"/v1/auth/signup", body("person2@example.com", "person_two", aged)); code != 400 || errCode(out) != "signup_check" {
+		t.Fatalf("no turnstile: %d %v", code, out)
+	}
+	ok := body("person2@example.com", "person_two", aged)
+	ok["turnstile"] = "good"
+	if code, out := do(t, c2, "POST", e.ts.URL+"/v1/auth/signup", ok); code != 201 {
+		t.Fatalf("turnstile passed: %d %v", code, out)
+	}
+
+	// At most N accounts from one network a day (two made above).
+	e.srv.signupsPerIPDay = 2
+	third := body("person3@example.com", "person_three", aged)
+	third["turnstile"] = "good"
+	if code, out := do(t, client(t), "POST", e.ts.URL+"/v1/auth/signup", third); code != 429 || errCode(out) != "too_many_signups" {
+		t.Fatalf("per-network cap: %d %v", code, out)
 	}
 }

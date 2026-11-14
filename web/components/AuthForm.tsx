@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { safeNext, send } from "@/lib/client";
 import Field from "./Field";
 
@@ -17,10 +17,35 @@ export default function AuthForm({ mode }: { mode: "signin" | "register" }) {
   // Sign-up protection: a server-signed token stamped when the form opened
   // (a sign-up sent within a few seconds of it is refused as a bot).
   const [formToken, setFormToken] = useState("");
+  // Cloudflare Turnstile, when the server has its keys.
+  const [siteKey, setSiteKey] = useState("");
+  const [turnstile, setTurnstile] = useState("");
+  const box = useRef<HTMLDivElement>(null);
+  const widget = useRef("");
   useEffect(() => {
     if (mode !== "register") return;
-    send<{ token: string }>("GET", "/v1/auth/signup-check").then((r) => r.ok && setFormToken(r.data.token));
+    send<{ token: string; turnstile_site_key?: string }>("GET", "/v1/auth/signup-check").then((r) => {
+      if (!r.ok) return;
+      setFormToken(r.data.token);
+      setSiteKey(r.data.turnstile_site_key ?? "");
+    });
   }, [mode]);
+  useEffect(() => {
+    if (!siteKey || !box.current) return;
+    const w = window as unknown as { turnstile?: { render: (el: HTMLElement, o: Record<string, unknown>) => string } };
+    const draw = () => {
+      if (!w.turnstile || !box.current || widget.current) return;
+      widget.current = w.turnstile.render(box.current, {
+        sitekey: siteKey, callback: (t: string) => setTurnstile(t), "expired-callback": () => setTurnstile(""), "error-callback": () => setTurnstile(""),
+      });
+    };
+    if (w.turnstile) return draw();
+    const sc = document.createElement("script");
+    sc.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+    sc.async = true;
+    sc.onload = draw;
+    document.head.appendChild(sc);
+  }, [siteKey]);
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -31,7 +56,7 @@ export default function AuthForm({ mode }: { mode: "signin" | "register" }) {
     const body =
       mode === "register"
         ? { email: form.get("email"), username: form.get("username"), password: form.get("password"),
-            website: form.get("website") ?? "", form_token: formToken }
+            website: form.get("website") ?? "", form_token: formToken, turnstile }
         : { email: form.get("email"), password: form.get("password") };
     const res = await send("POST", mode === "register" ? "/v1/auth/signup" : "/v1/auth/login", body);
     setBusy(false);
@@ -39,6 +64,10 @@ export default function AuthForm({ mode }: { mode: "signin" | "register" }) {
       setMessage(res.message);
       setFields(res.fields);
       setDisabled(!register && res.status === 403);
+      if (register && siteKey) {
+        (window as unknown as { turnstile?: { reset: (id?: string) => void } }).turnstile?.reset(widget.current);
+        setTurnstile("");
+      }
       return;
     }
     router.push(next);
@@ -83,10 +112,11 @@ export default function AuthForm({ mode }: { mode: "signin" | "register" }) {
         error={fields.password}
         hint={register ? "At least 10 characters." : undefined}
       />
+      {register && siteKey && <div ref={box} className="min-h-[65px]" />}
       {!register && (
         <p className="-mt-2 text-right text-[15px] sm:text-[13px]"><Link href="/forgot-password" className="inline-block py-2 text-link underline">Forgot password?</Link></p>
       )}
-      <button type="submit" disabled={busy} className="w-full rounded-full bg-link py-3.5 text-[17px] font-semibold sm:py-2.5 sm:text-[15px] text-white hover:bg-link-dark disabled:opacity-60">
+      <button type="submit" disabled={busy || (register && !!siteKey && !turnstile)} className="w-full rounded-full bg-link py-3.5 text-[17px] font-semibold sm:py-2.5 sm:text-[15px] text-white hover:bg-link-dark disabled:opacity-60">
         {busy ? (register ? "Creating account…" : "Signing in…") : register ? "Create account" : "Sign in"}
       </button>
       <p className="text-center text-[14px] text-muted">

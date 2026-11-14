@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -233,14 +234,21 @@ func run(log *slog.Logger) error {
 	log.Info("photo storage", "store", photoSvc.Store())
 	storeSvc := httpapi.NewStores(database, mailSvc)
 	signupKey := sha256.Sum256([]byte("signup-form:" + cfg.MFAKey + cfg.DatabaseURL))
+	perIP, _ := strconv.Atoi(os.Getenv("SIGNUPS_PER_IP_DAY"))
+	if os.Getenv("SIGNUPS_PER_IP_DAY") == "" {
+		perIP = 3
+	}
 	api := httpapi.New(httpapi.Options{
-		SignupGuardKey: signupKey[:],
-		DB:             database,
-		Auth:           authSvc,
-		Log:            log,
-		CookieSecure:   cfg.CookieSecure,
-		SessionTTL:     cfg.SessionTTL,
-		TrustProxy:     cfg.TrustProxy,
+		SignupGuardKey:   signupKey[:],
+		TurnstileSiteKey: os.Getenv("TURNSTILE_SITE_KEY"),
+		TurnstileSecret:  os.Getenv("TURNSTILE_SECRET"),
+		SignupsPerIPDay:  perIP,
+		DB:               database,
+		Auth:             authSvc,
+		Log:              log,
+		CookieSecure:     cfg.CookieSecure,
+		SessionTTL:       cfg.SessionTTL,
+		TrustProxy:       cfg.TrustProxy,
 
 		Sellers:       sellerSvc,
 		Listings:      listingSvc,

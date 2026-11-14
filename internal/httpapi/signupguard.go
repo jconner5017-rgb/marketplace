@@ -1,11 +1,15 @@
 package httpapi
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/binary"
+	"encoding/json"
+	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -19,6 +23,9 @@ import (
 //     stamped with the time the form was opened. A sign-up needs one that is
 //     at least signupMinAge old (bots submit instantly) and less than
 //     signupMaxAge old. Scripts that post straight to the API have none.
+//  4. Throwaway inbox services (Mailinator and the like) are refused, at
+//     most SignupsPerIPDay accounts are made from one network a day, and
+//     Cloudflare Turnstile is checked when its keys are set.
 //  3. Gmail address tricks: Gmail ignores dots and anything after "+", so
 //     bots make endless "different" addresses for one inbox
 //     (c.s.e.j.h.i.l.g@gmail.com). Heavily dotted Gmail addresses are refused,
@@ -60,11 +67,71 @@ func (s *Server) signupTokenAge(tok string, now time.Time) (time.Duration, bool)
 
 func (s *Server) handleSignupCheck(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
-	if len(s.signupKey) == 0 {
-		writeJSON(w, http.StatusOK, map[string]string{"token": ""})
-		return
+	tok := ""
+	if len(s.signupKey) > 0 {
+		tok = s.signupToken(time.Now())
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"token": s.signupToken(time.Now())})
+	writeJSON(w, http.StatusOK, map[string]string{"token": tok, "turnstile_site_key": s.turnstileSiteKey})
+}
+
+func (s *Server) verifyTurnstile(ctx context.Context, token, ip string) (bool, error) {
+	if token == "" {
+		return false, nil
+	}
+	form := url.Values{"secret": {s.turnstileSecret}, "response": {token}}
+	if ip != "" {
+		form.Set("remoteip", ip)
+	}
+	ctx, cancel := context.WithTimeout(ctx, 8*time.Second)
+	defer cancel()
+	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, s.turnstileURL, strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return false, err
+	}
+	defer res.Body.Close()
+	var out struct {
+		Success bool `json:"success"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&out); err != nil {
+		return false, fmt.Errorf("turnstile reply: %w", err)
+	}
+	return out.Success, nil
+}
+
+// disposableDomains are throwaway inbox services.
+var disposableDomains = map[string]bool{}
+
+func init() {
+	for _, d := range strings.Fields(`mailinator.com guerrillamail.com guerrillamail.net guerrillamail.org guerrillamailblock.com sharklasers.com grr.la
+		10minutemail.com 10minutemail.net 20minutemail.com tempmail.com temp-mail.org temp-mail.io tempmail.net tempmailo.com tempr.email tempail.com
+		yopmail.com yopmail.net yopmail.fr trashmail.com trashmail.de trashmail.net getnada.com nada.email dispostable.com maildrop.cc mailnesia.com
+		throwawaymail.com fakeinbox.com mohmal.com emailondeck.com mintemail.com burnermail.io spamgourmet.com moakt.com mailcatch.com
+		mytemp.email tempinbox.com discard.email discardmail.com spambox.us getairmail.com inboxbear.com mailpoof.com emailfake.com
+		fakemail.net 1secmail.com 1secmail.org 1secmail.net mail.tm mail.gw byom.de harakirimail.com mailsac.com spam4.me 33mail.com
+		anonaddy.me tmail.ws tmpmail.org tmpmail.net linshiyouxiang.net dropmail.me minuteinbox.com emailtemporanea.net`) {
+		disposableDomains[d] = true
+	}
+}
+
+func disposable(email string) bool {
+	at := strings.LastIndex(email, "@")
+	if at < 0 {
+		return false
+	}
+	d := strings.ToLower(strings.TrimSpace(email[at+1:]))
+	for d != "" {
+		if disposableDomains[d] {
+			return true
+		}
+		i := strings.IndexByte(d, '.')
+		if i < 0 {
+			break
+		}
+		d = d[i+1:]
+	}
+	return false
 }
 
 // signupBlocked returns a reason code when a sign-up looks automated, or "".
