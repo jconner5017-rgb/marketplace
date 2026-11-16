@@ -54,8 +54,10 @@ type Service struct {
 	// (sellers' saved cards). Either nil = label buying is off.
 	Ship     shipping.Provider
 	Platform stripe.Platform
-	Enabled  bool   // CHECKOUT_ENABLED
-	WebURL   string // where Stripe sends the buyer back, e.g. https://slabsnsingles.com
+	// Postage: USPS letter postage for envelope orders (EasyPost); nil = off.
+	Postage PostageBuyer
+	Enabled bool   // CHECKOUT_ENABLED
+	WebURL  string // where Stripe sends the buyer back, e.g. https://slabsnsingles.com
 	// Letters: USPS Intelligent Mail barcodes on envelope orders.
 	Letters Letters
 	// FeeFree reports whether a seller (by email) pays no marketplace fee:

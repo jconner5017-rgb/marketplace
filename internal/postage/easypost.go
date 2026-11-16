@@ -10,7 +10,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -61,6 +63,7 @@ type Label struct {
 	ShipmentID string `json:"shipment_id"`
 	Tracking   string `json:"tracking_code"`
 	LabelURL   string `json:"label_url"`
+	ImageURL   string `json:"image_url,omitempty"` // the PNG
 	Rate       Rate   `json:"rate"`
 	Size       string `json:"label_size"`
 }
@@ -119,32 +122,87 @@ func (e *EasyPost) call(ctx context.Context, method, path string, body, out any)
 	return json.Unmarshal(raw, out)
 }
 
-// LetterRates asks for rates on an envelope (Letter, Flat or Card).
-func (e *EasyPost) LetterRates(ctx context.Context, from, to shipping.Address, pkg string, weightOz float64, labelSize string, nonMachinable bool) (Shipment, error) {
-	if !Packages[pkg] {
+// Letter is a request for envelope postage.
+type Letter struct {
+	From, To      shipping.Address
+	Package       string  // Letter, Flat or Card
+	WeightOz      float64 // up to 3.5 (Letter, Card) or 13 (Flat)
+	LabelSize     string  // 4x6, 7x3 or 6x4
+	Format        string  // PDF (default) or PNG
+	NonMachinable bool    // rigid / lumpy envelopes (toploaders) pay the surcharge
+	Reference     string
+}
+
+// MaxOz is the heaviest First-Class piece of each kind.
+func MaxOz(pkg string) float64 {
+	if pkg == "Flat" {
+		return 13
+	}
+	return 3.5
+}
+
+// LetterRates asks for rates on an envelope.
+func (e *EasyPost) LetterRates(ctx context.Context, l Letter) (Shipment, error) {
+	if !Packages[l.Package] {
 		return Shipment{}, errors.New("package must be Letter, Flat or Card")
 	}
-	if !LabelSizes[labelSize] {
-		labelSize = "4x6"
+	if !LabelSizes[l.LabelSize] {
+		l.LabelSize = "4x6"
 	}
-	max := 13.0 // Flat (large envelope)
-	if pkg != "Flat" {
-		max = 3.5 // Letter and Card
+	if l.Format != "PNG" {
+		l.Format = "PDF"
 	}
-	if weightOz <= 0 || weightOz > max {
-		return Shipment{}, fmt.Errorf("a First-Class %s weighs up to %g oz", strings.ToLower(pkg), max)
+	if max := MaxOz(l.Package); l.WeightOz <= 0 || l.WeightOz > max {
+		return Shipment{}, fmt.Errorf("a First-Class %s weighs up to %g oz", strings.ToLower(l.Package), max)
 	}
-	opts := map[string]any{"label_format": "PDF", "label_size": labelSize}
-	if nonMachinable {
-		opts["machinable"] = false // rigid / lumpy envelopes (toploaders) pay the surcharge
+	opts := map[string]any{"label_format": l.Format, "label_size": l.LabelSize}
+	if l.NonMachinable {
+		opts["machinable"] = false
+	}
+	sh := map[string]any{
+		"from_address": addr(l.From), "to_address": addr(l.To),
+		"parcel":  map[string]any{"predefined_package": l.Package, "weight": l.WeightOz},
+		"options": opts,
+	}
+	if l.Reference != "" {
+		sh["reference"] = l.Reference
 	}
 	var out Shipment
-	err := e.call(ctx, http.MethodPost, "/shipments", map[string]any{"shipment": map[string]any{
-		"from_address": addr(from), "to_address": addr(to),
-		"parcel":  map[string]any{"predefined_package": pkg, "weight": weightOz},
-		"options": opts,
-	}}, &out)
+	err := e.call(ctx, http.MethodPost, "/shipments", map[string]any{"shipment": sh}, &out)
 	return out, err
+}
+
+// FirstClass is the shipment's USPS First-Class rate, if it has one.
+func (s Shipment) FirstClass() (Rate, bool) {
+	for _, r := range s.Rates {
+		if strings.EqualFold(r.Carrier, "USPS") && strings.EqualFold(r.Service, "First") {
+			return r, true
+		}
+	}
+	return Rate{}, false
+}
+
+// Cents is the rate in cents.
+func (r Rate) Cents() (int, error) {
+	f, err := strconv.ParseFloat(r.Rate, 64)
+	if err != nil || f <= 0 {
+		return 0, fmt.Errorf("bad rate %q", r.Rate)
+	}
+	return int(math.Round(f * 100)), nil
+}
+
+// Refund asks EasyPost to refund an unused label. USPS confirms it later.
+func (e *EasyPost) Refund(ctx context.Context, shipmentID string) error {
+	var out struct {
+		RefundStatus string `json:"refund_status"`
+	}
+	if err := e.call(ctx, http.MethodPost, "/shipments/"+shipmentID+"/refund", map[string]any{}, &out); err != nil {
+		return err
+	}
+	if out.RefundStatus == "rejected" || out.RefundStatus == "not_applicable" {
+		return fmt.Errorf("USPS won't refund this postage (%s)", strings.ReplaceAll(out.RefundStatus, "_", " "))
+	}
+	return nil
 }
 
 // Buy buys one of a shipment's rates and returns its label.
@@ -166,5 +224,6 @@ func (e *EasyPost) Buy(ctx context.Context, shipmentID, rateID string) (Label, e
 	if url == "" {
 		url = out.PostageLabel.LabelURL
 	}
-	return Label{ShipmentID: out.ID, Tracking: out.TrackingCode, LabelURL: url, Rate: out.SelectedRate, Size: out.PostageLabel.LabelSize}, nil
+	return Label{ShipmentID: out.ID, Tracking: out.TrackingCode, LabelURL: url, ImageURL: out.PostageLabel.LabelURL,
+		Rate: out.SelectedRate, Size: out.PostageLabel.LabelSize}, nil
 }

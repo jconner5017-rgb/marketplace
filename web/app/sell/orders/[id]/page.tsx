@@ -9,6 +9,7 @@ import BuyerActions from "@/components/orders/BuyerActions";
 import BuyerRecord from "@/components/feedback/BuyerRecord";
 import { BuyLabel, VoidLabel } from "@/components/orders/LabelBuyer";
 import { OfferEnvelope } from "@/components/orders/EnvelopeOffer";
+import BuyPostage from "@/components/orders/BuyPostage";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Order", robots: { index: false } };
@@ -48,7 +49,8 @@ export default async function SellerOrder({ params }: { params: Promise<{ id: st
               <Link href={`/sell/orders/${o.id}/envelope`} className="mt-3 inline-block rounded-full bg-link px-4 py-2 text-[14px] font-semibold text-white hover:bg-link-dark">
                 Print tracked envelope
               </Link>
-              <p className="mt-4 text-[13px] font-semibold">Mark it shipped</p>
+              <BuyPostage orderId={o.id} />
+              <p className="mt-4 text-[13px] font-semibold">Used a stamp? Mark it shipped</p>
             </>
           ) : (
             <>
@@ -67,9 +69,13 @@ export default async function SellerOrder({ params }: { params: Promise<{ id: st
       )}
       {o.shipment?.label_url && (
         <div className="mt-4 flex max-w-[560px] flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-line p-4 text-[14px]">
-          <a href={o.shipment.label_url} target="_blank" rel="noopener noreferrer" className="rounded-full bg-link px-4 py-2 font-semibold text-white hover:bg-link-dark">Print label</a>
+          {o.shipment.postage ? (
+            <Link href={`/sell/orders/${o.id}/envelope`} className="rounded-full bg-link px-4 py-2 font-semibold text-white hover:bg-link-dark">Print envelope with postage</Link>
+          ) : (
+            <a href={o.shipment.label_url} target="_blank" rel="noopener noreferrer" className="rounded-full bg-link px-4 py-2 font-semibold text-white hover:bg-link-dark">Print label</a>
+          )}
           <span>{o.shipment.carrier} {o.shipment.service} · <span className="num">{o.shipment.tracking_number}</span></span>
-          {o.shipment.status === "label_created" && <VoidLabel orderId={o.id} />}
+          {o.shipment.status === "label_created" && <VoidLabel orderId={o.id} postage={!!o.shipment.postage} />}
         </div>
       )}
       <BuyerActions o={o} />

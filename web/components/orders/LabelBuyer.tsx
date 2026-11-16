@@ -177,7 +177,7 @@ export function BuyLabel({ orderId }: { orderId: string }) {
   );
 }
 
-export function VoidLabel({ orderId }: { orderId: string }) {
+export function VoidLabel({ orderId, postage = false }: { orderId: string; postage?: boolean }) {
   const router = useRouter();
   const [confirm, setConfirm] = useState(false);
   const [error, setError] = useState("");
@@ -192,10 +192,11 @@ export function VoidLabel({ orderId }: { orderId: string }) {
   return (
     <span className="text-[14px]">
       {confirm ? (
-        <>Void it and refund your card? <button type="button" onClick={go} className="font-semibold text-slab underline">Void label</button>{" "}
+        <>{postage ? "Void the unused postage and get your money back?" : "Void it and refund your card?"}{" "}
+          <button type="button" onClick={go} className="font-semibold text-slab underline">{postage ? "Void postage" : "Void label"}</button>{" "}
           <button type="button" onClick={() => setConfirm(false)} className="text-muted underline">Keep</button></>
       ) : (
-        <button type="button" onClick={() => setConfirm(true)} className="text-link underline">Void label</button>
+        <button type="button" onClick={() => setConfirm(true)} className="text-link underline">{postage ? "Void postage" : "Void label"}</button>
       )}
       {error && <span role="alert" className="block text-[13px] text-slab">{error}</span>}
     </span>

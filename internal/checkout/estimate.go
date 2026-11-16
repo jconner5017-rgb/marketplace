@@ -22,6 +22,27 @@ const StampCents = 82
 // plus the 49¢ nonmachinable surcharge. USPS sells $1.31 stamps for this.
 const NonmachinableStampCents = 131
 
+// USPS First-Class letter postage bought here (metered price), for the
+// listing form: the first ounce, each extra ounce, and the nonmachinable
+// surcharge. The real price comes from USPS when the seller buys it.
+const (
+	PostageLetterCents  = 78
+	PostageExtraOzCents = 29
+	PostageNonmachCents = 49
+)
+
+// PostageEstimateCents is about what envelope postage costs here.
+func PostageEstimateCents(weightOz float64, nonmachinable bool) int {
+	c := PostageLetterCents
+	if weightOz > 1 {
+		c += PostageExtraOzCents * int(math.Ceil(weightOz-1))
+	}
+	if nonmachinable {
+		c += PostageNonmachCents
+	}
+	return c
+}
+
 // Stripe's US card pricing, charged on each order and taken from the
 // seller's Stripe balance.
 const (
@@ -47,6 +68,10 @@ type ShippingEstimate struct {
 	Live       bool   `json:"live"`     // a real quote from the label company
 	FromSet    bool   `json:"from_set"` // quoted from the seller's own ship-from address
 	Signature  bool   `json:"signature"`
+	// Envelopes: postage bought on the order page instead of a stamp,
+	// from the postage balance or per envelope on the label card.
+	PostageCents     int `json:"postage_cents,omitempty"`
+	PostageCardCents int `json:"postage_card_cents,omitempty"`
 }
 
 // Quotes go to the far side of the country, so the estimate is close to the
@@ -82,10 +107,15 @@ var (
 // yet), falling back to a typical price when no quote can be had.
 func (s *Service) EstimateShipping(ctx context.Context, sellerID, preset string, weightOz float64, graded, nonmachinable bool, priceCents int) (ShippingEstimate, error) {
 	if preset == "envelope" && !graded {
+		est := ShippingEstimate{Method: "stamp", CostCents: StampCents, LabelCents: StampCents, Service: "Forever stamp", Live: true}
 		if nonmachinable {
-			return ShippingEstimate{Method: "stamp", CostCents: NonmachinableStampCents, LabelCents: NonmachinableStampCents, Service: "Nonmachinable stamp", Live: true}, nil
+			est = ShippingEstimate{Method: "stamp", CostCents: NonmachinableStampCents, LabelCents: NonmachinableStampCents, Service: "Nonmachinable stamp", Live: true}
 		}
-		return ShippingEstimate{Method: "stamp", CostCents: StampCents, LabelCents: StampCents, Service: "Forever stamp", Live: true}, nil
+		if s.Postage != nil {
+			est.PostageCents = PostageEstimateCents(weightOz, nonmachinable)
+			est.PostageCardCents = shipping.LabelChargeCents(est.PostageCents)
+		}
+		return est, nil
 	}
 	if preset != "bubble" && preset != "box" {
 		preset = "bubble"

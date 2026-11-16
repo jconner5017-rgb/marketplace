@@ -43,6 +43,7 @@ type Shipment struct {
 	LastEvent   *string         `json:"last_event"`
 	LabelURL    *string         `json:"label_url,omitempty"` // seller only
 	Bought      bool            `json:"label_bought"`        // bought through the platform (can be voided)
+	Postage     bool            `json:"postage"`             // envelope postage bought here (print the envelope)
 	ChargeCents *int            `json:"charge_cents,omitempty"`
 	CreatedAt   time.Time       `json:"created_at"`
 }
@@ -241,9 +242,9 @@ func (s *Service) fill(ctx context.Context, userID string, o *Order) error {
 	var sh Shipment
 	var label sql.NullString
 	err = s.DB.QueryRowContext(ctx, `SELECT method, carrier, service, tracking_number, tracking_url, status, last_event, label_url,
-		provider IS NOT NULL, charge_cents, created_at, events FROM shipments
+		provider IS NOT NULL, coalesce(provider = 'easypost', false), charge_cents, created_at, events FROM shipments
 		WHERE order_id = $1 AND voided_at IS NULL ORDER BY created_at DESC LIMIT 1`, o.ID).Scan(&sh.Method, &sh.Carrier, &sh.Service,
-		&sh.Tracking, &sh.TrackingURL, &sh.Status, &sh.LastEvent, &label, &sh.Bought, &sh.ChargeCents, &sh.CreatedAt, &sh.Events)
+		&sh.Tracking, &sh.TrackingURL, &sh.Status, &sh.LastEvent, &label, &sh.Bought, &sh.Postage, &sh.ChargeCents, &sh.CreatedAt, &sh.Events)
 	if err == nil {
 		if o.Side == "selling" && label.Valid {
 			sh.LabelURL = &label.String

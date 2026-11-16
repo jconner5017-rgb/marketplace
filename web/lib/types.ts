@@ -266,7 +266,7 @@ export interface Order {
   lines: OrderLine[];
   shipment: {
     method: string; carrier: string | null; service: string | null; tracking_number: string | null; tracking_url: string | null;
-    status: string; last_event: string | null; label_url?: string; label_bought: boolean; charge_cents?: number; created_at: string;
+    status: string; last_event: string | null; label_url?: string; label_bought: boolean; postage?: boolean; charge_cents?: number; created_at: string;
     events?: { at: string; description: string; location?: string }[] | null;
   } | null;
   my_feedback: OrderFeedback | null;

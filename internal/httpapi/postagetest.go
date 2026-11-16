@@ -64,7 +64,8 @@ func (s *Server) handlePostageTestRates(w http.ResponseWriter, r *http.Request) 
 	if !decodeJSON(w, r, &in) {
 		return
 	}
-	sh, err := s.postage.LetterRates(r.Context(), in.From, in.To, in.Package, in.WeightOz, in.LabelSize, in.NonMach)
+	sh, err := s.postage.LetterRates(r.Context(), postage.Letter{From: in.From, To: in.To, Package: in.Package, WeightOz: in.WeightOz,
+		LabelSize: in.LabelSize, NonMachinable: in.NonMach})
 	if err != nil {
 		postageError(w, err)
 		return

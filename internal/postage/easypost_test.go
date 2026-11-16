@@ -32,7 +32,7 @@ func TestLetter(t *testing.T) {
 		t.Fatal("test mode")
 	}
 	a := shipping.Address{Name: "A", Street1: "1 Main", City: "X", State: "NY", Zip: "10001"}
-	sh, err := e.LetterRates(context.Background(), a, a, "Letter", 1, "7x3", false)
+	sh, err := e.LetterRates(context.Background(), Letter{From: a, To: a, Package: "Letter", WeightOz: 1, LabelSize: "7x3"})
 	if err != nil || len(sh.Rates) != 1 || sh.Rates[0].Service != "First" {
 		t.Fatalf("%v %v", sh, err)
 	}
@@ -44,7 +44,7 @@ func TestLetter(t *testing.T) {
 	if err != nil || l.LabelURL != "https://x/l.pdf" || l.Rate.Rate != "0.78" {
 		t.Fatalf("%v %v", l, err)
 	}
-	if _, err := New("bad").LetterRates(context.Background(), a, a, "Box", 1, "", false); err == nil {
+	if _, err := New("bad").LetterRates(context.Background(), Letter{From: a, To: a, Package: "Box", WeightOz: 1}); err == nil {
 		t.Fatal("box allowed")
 	}
 }

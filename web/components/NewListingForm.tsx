@@ -16,7 +16,7 @@ type Identified = {
 };
 
 const GRADERS = ["PSA", "BGS", "SGC", "CGC", "TAG", "OTHER"];
-type ShipEstimate = { method: "stamp" | "label"; cost_cents: number; label_cents: number; carrier?: string; service?: string; live: boolean; from_set: boolean; signature: boolean };
+type ShipEstimate = { method: "stamp" | "label"; cost_cents: number; label_cents: number; carrier?: string; service?: string; live: boolean; from_set: boolean; signature: boolean; postage_cents?: number; postage_card_cents?: number };
 /** Stripe's US card fee on a payment, taken from the seller's Stripe balance. */
 const stripeFee = (cents: number) => (cents > 0 ? Math.round((cents * 290) / 10000) + 30 : 0);
 /** Used until the live quote arrives. */
@@ -25,7 +25,7 @@ const FALLBACK: Record<string, number> = { envelope: 82, bubble: 525, box: 700 }
 /** What each package choice means; sizes match how labels are bought (internal/shipping ParcelFor). */
 const PACKAGES: Record<string, { size: string; adds: string; carrier: string; pack: string }> = {
   envelope: {
-    size: "#10 or #6¾ letter envelope",
+    size: "#6¾, #10 or A9 letter envelope (any size up to USPS's 11½ × 6⅛ in)",
     adds: "",
     carrier: "USPS First-Class letter with an 82¢ Forever stamp, or a $1.31 nonmachinable stamp for thick cards and very rigid toploaders. Print a tracked envelope from the order for USPS scans.",
     pack: "One raw card in a penny sleeve and a toploader (recommended for thin, non-relic cards). Thick or relic/memorabilia cards ship by envelope at your own risk. No slabs.",
@@ -490,6 +490,14 @@ export default function NewListingForm({ capCents, catalog, fees, initial, prefi
             <p><span className="font-semibold">Size:</span> {PACKAGES[preset].size}{PACKAGES[preset].adds ? `. ${PACKAGES[preset].adds}` : ""}</p>
             <p className="mt-1"><span className="font-semibold">Shipping:</span> {PACKAGES[preset].carrier}{ship?.method === "label" ? ` About ${money(ship.cost_cents)} for one card.` : ""}</p>
             <p className="mt-1"><span className="font-semibold">Packing:</span> {PACKAGES[preset].pack}</p>
+            {preset === "envelope" && !graded && ship?.postage_cents ? (
+              <p className="mt-1">
+                <span className="font-semibold">Or skip the stamp:</span> buy USPS postage on the order page and print it on the envelope for about{" "}
+                {money(ship.postage_cents)} from your postage balance, or {money(ship.postage_card_cents ?? 0)} per envelope on your card (adds card
+                processing). Your choice when it sells; stamps still work.{" "}
+                <a href="/help/envelope-postage" target="_blank" className="text-link underline">Envelope postage</a>
+              </p>
+            ) : null}
             {preset === "envelope" && !graded && (
               <label className="mt-2 flex items-center gap-2">
                 <input type="checkbox" checked={thick} onChange={(e) => setThick(e.target.checked)} />
@@ -526,7 +534,9 @@ export default function NewListingForm({ capCents, catalog, fees, initial, prefi
           )}
           <p className="mt-2 text-[12px] text-muted">
             {preset === "envelope" && !graded
-              ? (thick ? "Shipping is a $1.31 nonmachinable stamp (82¢ Forever rate plus USPS's 49¢ nonmachinable surcharge)." : "Shipping is one 82¢ Forever stamp.") + " Stripe's fee comes out of your Stripe balance."
+              ? (thick ? "Shipping is a $1.31 nonmachinable stamp (82¢ Forever rate plus USPS's 49¢ nonmachinable surcharge)." : "Shipping is one 82¢ Forever stamp.")
+                + (ship?.postage_cents ? ` Postage bought here from your balance is about ${money(ship.postage_cents)} instead.` : "")
+                + " Stripe's fee comes out of your Stripe balance."
               : ship?.live
                 ? `Label quoted from ${ship.from_set ? "your ship-from address" : "the middle of the US (add your ship-from address under Sell → Shipping for your own quote)"} to the far side of the country, including 2.9% + 30¢ card processing on the label. Nearer buyers cost less.`
                 : "Typical label price, including card processing on the label. Stripe's fee comes out of your Stripe balance."}

@@ -58,6 +58,10 @@ type Envelope struct {
 	Bars          string            `json:"bars"`           // 65 of F, A, D, T
 	SVG           string            `json:"svg"`
 	FullZIP       bool              `json:"full_zip"` // routed to ZIP+4 (sorts better)
+	// PostageURL: the USPS postage image bought for this envelope (7 x 3 in),
+	// printed in place of the address, barcode and stamp.
+	PostageURL string `json:"postage_url,omitempty"`
+	Tracking   string `json:"tracking_number,omitempty"`
 }
 
 func digitsOnly(s string) string {
@@ -84,6 +88,9 @@ func zipRouting(zip string) string {
 
 // EnvelopeFor returns the order's barcode, creating it the first time.
 func (s *Service) EnvelopeFor(ctx context.Context, sellerID, orderID string) (Envelope, error) {
+	if e, ok, err := s.postageEnvelope(ctx, sellerID, orderID); ok || err != nil {
+		return e, err
+	}
 	if s.Letters.MailerID == "" {
 		return Envelope{}, ErrEnvelopeOff
 	}
@@ -264,4 +271,26 @@ func letterEvents(p usps.Piece) []map[string]any {
 	}
 	sort.SliceStable(out, func(a, b int) bool { return out[a]["at"].(string) < out[b]["at"].(string) })
 	return out
+}
+
+// postageEnvelope is the envelope for an order whose postage was bought here.
+func (s *Service) postageEnvelope(ctx context.Context, sellerID, orderID string) (Envelope, bool, error) {
+	var e Envelope
+	var shipTo []byte
+	var tracking sql.NullString
+	err := s.DB.QueryRowContext(ctx, `SELECT o.id, o.number, o.ship_to, sh.label_url, sh.tracking_number
+		FROM orders o JOIN shipments sh ON sh.order_id = o.id
+		WHERE (o.id::text = $2 OR o.number::text = $2) AND o.seller_id = $1
+		  AND sh.provider = $3 AND sh.voided_at IS NULL AND sh.label_url IS NOT NULL
+		ORDER BY sh.created_at DESC LIMIT 1`, sellerID, orderID, PostageProvider).
+		Scan(&e.OrderID, &e.OrderNumber, &shipTo, &e.PostageURL, &tracking)
+	if errors.Is(err, sql.ErrNoRows) {
+		return e, false, nil
+	}
+	if err != nil {
+		return e, false, err
+	}
+	_ = json.Unmarshal(shipTo, &e.To)
+	e.Tracking = tracking.String
+	return e, true, nil
 }

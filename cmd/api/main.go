@@ -243,6 +243,8 @@ func run(log *slog.Logger) error {
 	var letterPostage *postage.EasyPost
 	if k := strings.TrimSpace(os.Getenv("EASYPOST_API_KEY")); k != "" {
 		letterPostage = postage.New(k)
+		// A nil *EasyPost in the interface would look "on", so only set it here.
+		checkoutSvc.Postage = letterPostage
 	}
 	api := httpapi.New(httpapi.Options{
 		Postage:          letterPostage,

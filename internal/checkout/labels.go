@@ -360,7 +360,7 @@ func (s *Service) BuyLabel(ctx context.Context, sellerID, orderID, rateID string
 
 // VoidLabel cancels an unused label and refunds the seller's card.
 func (s *Service) VoidLabel(ctx context.Context, sellerID, orderID string) error {
-	if s.Ship == nil || s.Platform == nil {
+	if (s.Ship == nil || s.Platform == nil) && s.Postage == nil {
 		return ErrNoLabels
 	}
 	var oid string
@@ -375,11 +375,13 @@ func (s *Service) VoidLabel(ctx context.Context, sellerID, orderID string) error
 }
 
 func (s *Service) voidLabel(ctx context.Context, orderID, sellerID string, reopen bool) error {
-	var shipID, labelID, provider, status, pi string
+	var shipID, labelID, provider, status, pi, paidBy string
 	var cents int
-	err := s.DB.QueryRowContext(ctx, `SELECT id, provider_label_id, provider, status, coalesce(stripe_label_charge, ''), coalesce(label_cost_cents, 0)
+	var bought time.Time
+	err := s.DB.QueryRowContext(ctx, `SELECT id, provider_label_id, provider, status, coalesce(stripe_label_charge, ''), coalesce(label_cost_cents, 0),
+		coalesce(postage_paid_by, ''), created_at
 		FROM shipments WHERE order_id = $1 AND provider IS NOT NULL AND voided_at IS NULL ORDER BY created_at DESC LIMIT 1`, orderID).
-		Scan(&shipID, &labelID, &provider, &status, &pi, &cents)
+		Scan(&shipID, &labelID, &provider, &status, &pi, &cents, &paidBy, &bought)
 	if errors.Is(err, sql.ErrNoRows) {
 		return &FieldError{"label", "there's no label to void"}
 	}
@@ -388,6 +390,12 @@ func (s *Service) voidLabel(ctx context.Context, orderID, sellerID string, reope
 	}
 	if status != "label_created" {
 		return ErrLabelUsed
+	}
+	if provider == PostageProvider {
+		return s.voidPostage(ctx, orderID, sellerID, shipID, labelID, paidBy, pi, cents, bought, reopen)
+	}
+	if s.Ship == nil || s.Platform == nil {
+		return ErrNoLabels
 	}
 	if provider != s.Ship.Name() {
 		return fmt.Errorf("this label was bought through %s, which isn't configured now", provider)
@@ -424,7 +432,7 @@ func (s *Service) voidLabel(ctx context.Context, orderID, sellerID string, reope
 // voidUnusedLabel is called when an order is refunded in full before the
 // label was scanned: the label is voided and the seller's card refunded.
 func (s *Service) voidUnusedLabel(ctx context.Context, orderID, sellerID string) {
-	if s.Ship == nil || s.Platform == nil {
+	if (s.Ship == nil || s.Platform == nil) && s.Postage == nil {
 		return
 	}
 	_ = s.voidLabel(ctx, orderID, sellerID, false)
