@@ -23,6 +23,7 @@ import (
 	"github.com/jconner5017-rgb/marketplace/internal/inbox"
 	"github.com/jconner5017-rgb/marketplace/internal/listings"
 	"github.com/jconner5017-rgb/marketplace/internal/photos"
+	"github.com/jconner5017-rgb/marketplace/internal/postage"
 	"github.com/jconner5017-rgb/marketplace/internal/sales"
 	"github.com/jconner5017-rgb/marketplace/internal/sellers"
 	"github.com/jconner5017-rgb/marketplace/internal/shopping"
@@ -36,6 +37,7 @@ type Server struct {
 	// More sign-up protection (signupguard.go).
 	turnstileSiteKey, turnstileSecret, turnstileURL string
 	signupsPerIPDay                                 int
+	postage                                         *postage.EasyPost // envelope postage (EasyPost); nil: off
 	db                                              *sql.DB
 	auth                                            *auth.Service
 	log                                             *slog.Logger
@@ -88,12 +90,14 @@ type Options struct {
 	TurnstileSiteKey, TurnstileSecret, TurnstileURL string
 	// At most this many accounts from one network a day (0: no cap).
 	SignupsPerIPDay int
-	DB              *sql.DB
-	Auth            *auth.Service
-	Log             *slog.Logger
-	CookieSecure    bool
-	SessionTTL      time.Duration
-	TrustProxy      bool
+	// Postage buys First-Class letter postage through EasyPost (nil: off).
+	Postage      *postage.EasyPost
+	DB           *sql.DB
+	Auth         *auth.Service
+	Log          *slog.Logger
+	CookieSecure bool
+	SessionTTL   time.Duration
+	TrustProxy   bool
 
 	Sellers       *sellers.Service
 	Listings      *listings.Service
@@ -123,7 +127,7 @@ type Options struct {
 func New(o Options) *Server {
 	s := &Server{
 		signupKey:        o.SignupGuardKey,
-		turnstileSiteKey: o.TurnstileSiteKey, turnstileSecret: o.TurnstileSecret, signupsPerIPDay: o.SignupsPerIPDay,
+		turnstileSiteKey: o.TurnstileSiteKey, turnstileSecret: o.TurnstileSecret, signupsPerIPDay: o.SignupsPerIPDay, postage: o.Postage,
 		turnstileURL:  map[bool]string{true: o.TurnstileURL, false: "https://challenges.cloudflare.com/turnstile/v0/siteverify"}[o.TurnstileURL != ""],
 		db:            o.DB,
 		auth:          o.Auth,
@@ -362,6 +366,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("DELETE /v1/admin/blog/{id}", s.requireStaff(admin.Announce, s.handleAdminDeleteBlog))
 	mux.HandleFunc("GET /v1/banners/{slot}", s.handleBanner)
 	mux.HandleFunc("GET /v1/admin/test-sales", s.requireStaff(admin.StaffManage, s.handleTestSales))
+	mux.HandleFunc("GET /v1/admin/postage-test", s.requireStaff(admin.StaffManage, s.handlePostageTest))
+	mux.HandleFunc("POST /v1/admin/postage-test/rates", s.requireStaff(admin.StaffManage, s.handlePostageTestRates))
+	mux.HandleFunc("POST /v1/admin/postage-test/buy", s.requireStaff(admin.StaffManage, s.handlePostageTestBuy))
 	mux.HandleFunc("POST /v1/admin/test-sales", s.requireStaff(admin.StaffManage, s.handleCreateTestSale))
 	mux.HandleFunc("DELETE /v1/admin/test-sales/{id}", s.requireStaff(admin.StaffManage, s.handleDeleteTestSale))
 	mux.HandleFunc("POST /v1/admin/banners/photo", s.requireStaff(admin.Announce, s.handleAdminBannerPhoto))

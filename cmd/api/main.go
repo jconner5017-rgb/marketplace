@@ -30,6 +30,7 @@ import (
 	"github.com/jconner5017-rgb/marketplace/internal/inbox"
 	"github.com/jconner5017-rgb/marketplace/internal/listings"
 	"github.com/jconner5017-rgb/marketplace/internal/photos"
+	"github.com/jconner5017-rgb/marketplace/internal/postage"
 	"github.com/jconner5017-rgb/marketplace/internal/sales"
 	"github.com/jconner5017-rgb/marketplace/internal/sellers"
 	"github.com/jconner5017-rgb/marketplace/internal/shipping"
@@ -238,7 +239,13 @@ func run(log *slog.Logger) error {
 	if os.Getenv("SIGNUPS_PER_IP_DAY") == "" {
 		perIP = 3
 	}
+	// Envelope postage (USPS First-Class letters) through EasyPost.
+	var letterPostage *postage.EasyPost
+	if k := strings.TrimSpace(os.Getenv("EASYPOST_API_KEY")); k != "" {
+		letterPostage = postage.New(k)
+	}
 	api := httpapi.New(httpapi.Options{
+		Postage:          letterPostage,
 		SignupGuardKey:   signupKey[:],
 		TurnstileSiteKey: os.Getenv("TURNSTILE_SITE_KEY"),
 		TurnstileSecret:  os.Getenv("TURNSTILE_SECRET"),

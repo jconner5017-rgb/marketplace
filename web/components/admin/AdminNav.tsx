@@ -27,6 +27,7 @@ export const ADMIN_NAV: { group: string; items: { href: string; label: string; p
     { href: "/admin/fees", label: "Fees", perm: "orders.view" },
     { href: "/admin/promos", label: "Promo codes", perm: "orders.view" },
     { href: "/admin/test-sale", label: "Test sale", perm: "staff.manage" },
+    { href: "/admin/postage-test", label: "Test envelope postage", perm: "staff.manage" },
   ] },
   { group: "Disputes", items: [
     { href: "/admin/cases", label: "Cases", perm: "cases.manage" },
