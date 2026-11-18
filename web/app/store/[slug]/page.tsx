@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { apiGet, getSummary, search } from "@/lib/api";
+import { apiGet, facets, getSummary, search } from "@/lib/api";
 import { SITE_URL } from "@/lib/seo";
 import type { FeedbackSummary, Store } from "@/lib/types";
 import { ListingTile } from "@/components/CardBits";
@@ -35,6 +35,7 @@ export default async function StorePage({ params, searchParams }: Props) {
   const st = await load(slug);
   if (!st) notFound();
   const cat = Number(sp.cat) || 0;
+  const game = (sp.g ?? "").slice(0, 60);
   const q = (sp.q ?? "").slice(0, 100);
   const sort = SORTS.some(([v]) => v === sp.sort) ? sp.sort! : sp.sort === "new" ? "newest" : "newest";
   const onSale = sp.sale === "1";
@@ -44,14 +45,19 @@ export default async function StorePage({ params, searchParams }: Props) {
   if (cat) qs.set("store_category", String(cat));
   if (q) qs.set("q", q);
   if (onSale) qs.set("on_sale", "1");
-  const [res, me, repR] = await Promise.all([
+  // The sports and games this store has cards in (counts follow the other filters).
+  const fq = new URLSearchParams(qs);
+  fq.delete("sort"); fq.delete("limit"); fq.delete("offset");
+  if (game) qs.set("game", game);
+  const [res, fac, me, repR] = await Promise.all([
     tab === "shop" ? search(qs.toString()) : Promise.resolve(null),
+    tab === "shop" ? facets(fq.toString()) : Promise.resolve(null),
     getSummary(),
     apiGet<{ summary: FeedbackSummary }>(`/v1/members/${encodeURIComponent(st.username)}/feedback?role=seller&limit=1`),
   ]);
   const rep = repR.data?.summary;
   const href = (p: Record<string, string | number | undefined>) => {
-    const v: Record<string, string | number | undefined> = { cat: cat || undefined, q: q || undefined, sort: sort === "newest" ? undefined : sort, sale: onSale ? "1" : undefined, ...p };
+    const v: Record<string, string | number | undefined> = { cat: cat || undefined, g: game || undefined, q: q || undefined, sort: sort === "newest" ? undefined : sort, sale: onSale ? "1" : undefined, ...p };
     const u = new URLSearchParams();
     for (const [k, x] of Object.entries(v)) if (x !== undefined && x !== "" && x !== 0) u.set(k, String(x));
     const s = u.toString();
@@ -118,13 +124,27 @@ export default async function StorePage({ params, searchParams }: Props) {
           <aside>
             <form action={`/store/${st.slug}`} className="flex gap-2 text-[14px]">
               {cat > 0 && <input type="hidden" name="cat" value={cat} />}
+              {game && <input type="hidden" name="g" value={game} />}
               <label htmlFor="sq" className="sr-only">Search this store</label>
               <input id="sq" name="q" defaultValue={q} placeholder="Search this store" className="min-w-0 flex-1 rounded-lg border border-line px-3 py-2" />
               <button className="rounded-lg border border-ink px-3 py-2 font-semibold hover:bg-wash">Go</button>
             </form>
             <h2 className="mt-5 text-[14px] font-bold">Categories</h2>
             <ul className="mt-2 space-y-1 text-[14px]">
-              <li><Link href={href({ cat: undefined, page: undefined })} className={cat === 0 ? "font-semibold" : "text-link hover:underline"}>All cards</Link></li>
+              <li><Link href={href({ cat: undefined, g: undefined, page: undefined })} className={cat === 0 && !game ? "font-semibold" : "text-link hover:underline"}>All cards</Link></li>
+              {(fac?.game ?? []).map((f) => {
+                const on = game.toLowerCase() === f.value.toLowerCase();
+                return (
+                  <li key={f.value}>
+                    <Link href={href({ g: on ? undefined : f.value, page: undefined })} aria-current={on ? "true" : undefined}
+                      className={on ? "font-semibold" : "text-link hover:underline"}>{f.value}</Link>
+                    <span className="num text-muted"> ({f.count.toLocaleString()})</span>
+                  </li>
+                );
+              })}
+            </ul>
+            {st.categories.some((c) => c.listings > 0) && <h2 className="mt-5 text-[14px] font-bold">Store sections</h2>}
+            <ul className="mt-2 space-y-1 text-[14px]">
               {st.categories.filter((c) => c.listings > 0).map((c) => (
                 <li key={c.id}>
                   <Link href={href({ cat: c.id, page: undefined })} className={cat === c.id ? "font-semibold" : "text-link hover:underline"}>{c.name}</Link>
@@ -145,7 +165,7 @@ export default async function StorePage({ params, searchParams }: Props) {
               </nav>
             </div>
             {!res || res.listings.length === 0 ? (
-              <p className="py-16 text-center text-muted">{q || cat || onSale ? "No cards match." : "No cards for sale right now. Follow the store to hear when new ones are listed."}</p>
+              <p className="py-16 text-center text-muted">{q || cat || game || onSale ? "No cards match." : "No cards for sale right now. Follow the store to hear when new ones are listed."}</p>
             ) : (
               <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4">
                 {res.listings.map((l) => <ListingTile key={l.id} l={l} />)}
