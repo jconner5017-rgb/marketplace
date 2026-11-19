@@ -14,6 +14,8 @@ ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 HOSTNAME=0.0.0.0
 COPY --from=build /app/.next/standalone ./
 COPY --from=build /app/.next/static ./.next/static
 COPY --from=build /app/public ./public
+# Next.js writes its page and image cache here at run time; the node user must own it.
+RUN mkdir -p .next/cache && chown -R node:node .next
 USER node
 EXPOSE 10000
 CMD ["node", "server.js"]
