@@ -372,6 +372,16 @@ func run(log *slog.Logger) error {
 				} else if n > 0 {
 					log.Info("letter scans updated", "count", n)
 				}
+				if n, err := checkoutSvc.RefreshPostageTracking(ctx); err != nil {
+					log.Error("postage tracking", "err", err)
+				} else if n > 0 {
+					log.Info("postage tracking updated", "count", n)
+				}
+				if n, err := checkoutSvc.NotifyLateShipments(ctx); err != nil {
+					log.Error("late shipment notices", "err", err)
+				} else if n > 0 {
+					log.Info("late shipment notices", "count", n)
+				}
 				if n, err := photoSvc.Sweep(ctx); err != nil {
 					log.Error("sweep unused photos", "err", err)
 				} else if n > 0 {

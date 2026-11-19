@@ -227,3 +227,53 @@ func (e *EasyPost) Buy(ctx context.Context, shipmentID, rateID string) (Label, e
 	return Label{ShipmentID: out.ID, Tracking: out.TrackingCode, LabelURL: url, ImageURL: out.PostageLabel.LabelURL,
 		Rate: out.SelectedRate, Size: out.PostageLabel.LabelSize}, nil
 }
+
+// Tracking is where a bought shipment is, from EasyPost's tracker.
+type Tracking struct {
+	Status string // pre_transit, in_transit, out_for_delivery, delivered, return_to_sender, failure...
+	Events []shipping.TrackingEvent
+}
+
+// trackingStatus maps EasyPost tracker statuses to ours ("" = not worth recording).
+var trackingStatus = map[string]string{
+	"in_transit": shipping.InTransit, "out_for_delivery": shipping.InTransit, "available_for_pickup": shipping.InTransit,
+	"delivered": shipping.Delivered, "return_to_sender": shipping.Returned,
+	"failure": shipping.Exception, "error": shipping.Exception, "cancelled": shipping.Exception,
+}
+
+// Track reads a bought shipment's tracker: every carrier scan, oldest first.
+func (e *EasyPost) Track(ctx context.Context, shipmentID string) (Tracking, error) {
+	var out struct {
+		TrackingCode string `json:"tracking_code"`
+		Tracker      *struct {
+			Status          string `json:"status"`
+			TrackingDetails []struct {
+				Status   string `json:"status"`
+				Message  string `json:"message"`
+				Datetime string `json:"datetime"`
+				Location struct {
+					City  string `json:"city"`
+					State string `json:"state"`
+				} `json:"tracking_location"`
+			} `json:"tracking_details"`
+		} `json:"tracker"`
+	}
+	if err := e.call(ctx, http.MethodGet, "/shipments/"+shipmentID, nil, &out); err != nil {
+		return Tracking{}, err
+	}
+	t := Tracking{}
+	if out.Tracker == nil {
+		return t, nil
+	}
+	t.Status = out.Tracker.Status
+	for _, d := range out.Tracker.TrackingDetails {
+		st := trackingStatus[d.Status]
+		at, err := time.Parse(time.RFC3339, d.Datetime)
+		if st == "" || err != nil {
+			continue
+		}
+		t.Events = append(t.Events, shipping.TrackingEvent{TrackingNumber: out.TrackingCode, Carrier: "USPS", Status: st,
+			Description: strings.TrimSpace(d.Message), Location: strings.TrimSpace(strings.TrimSpace(d.Location.City + " " + d.Location.State)), At: at})
+	}
+	return t, nil
+}

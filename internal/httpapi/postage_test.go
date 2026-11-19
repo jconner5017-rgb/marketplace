@@ -4,12 +4,15 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/jconner5017-rgb/marketplace/internal/admin"
 	"github.com/jconner5017-rgb/marketplace/internal/postage"
+	"github.com/jconner5017-rgb/marketplace/internal/shipping"
 )
 
 type fakePostage struct {
+	track    []shipping.TrackingEvent
 	test     bool
 	n        int
 	refunded []string
@@ -39,6 +42,10 @@ func (f *fakePostage) Refund(_ context.Context, id string) error {
 }
 
 func (f *fakePostage) TestMode() bool { return f.test }
+
+func (f *fakePostage) Track(_ context.Context, _ string) (postage.Tracking, error) {
+	return postage.Tracking{Events: f.track}, nil
+}
 
 func TestEnvelopePostage(t *testing.T) {
 	e := setupEnv(t)
@@ -156,5 +163,69 @@ func TestEnvelopePostage(t *testing.T) {
 	_, body = do(t, sc, "GET", e.ts.URL+"/v1/seller/postage", nil)
 	if body["balance_cents"] != float64(1000) {
 		t.Fatalf("test postage spent the balance: %v", body)
+	}
+
+	// Tracking: each milestone reaches the buyer's bell once.
+	var buyer string
+	var number int64
+	if err := e.db.QueryRow(`SELECT buyer_id, number FROM orders WHERE id = $1`, id2).Scan(&buyer, &number); err != nil {
+		t.Fatal(err)
+	}
+	titles := func() []string {
+		rows, err := e.db.Query(`SELECT title FROM notifications WHERE user_id = $1 AND title LIKE $2 ORDER BY id`, buyer, fmt.Sprintf("Order #%d %%", number))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer rows.Close()
+		var out []string
+		for rows.Next() {
+			var s string
+			rows.Scan(&s)
+			out = append(out, s)
+		}
+		return out
+	}
+	base := len(titles()) // "shipped"
+	now := time.Now().Add(time.Minute)
+	step := func(evs ...shipping.TrackingEvent) {
+		fp.track = append(fp.track, evs...)
+		e.db.Exec(`UPDATE shipments SET scans_checked_at = NULL`)
+		if _, err := e.co.RefreshPostageTracking(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	step(shipping.TrackingEvent{Status: shipping.InTransit, Description: "Accepted at USPS Origin Facility", Location: "Austin TX", At: now})
+	step(shipping.TrackingEvent{Status: shipping.InTransit, Description: "Arrived at USPS Regional Facility", Location: "Dallas TX", At: now.Add(time.Hour)})
+	step(shipping.TrackingEvent{Status: shipping.InTransit, Description: "Out for Delivery", Location: "Plano TX", At: now.Add(2 * time.Hour)})
+	step(shipping.TrackingEvent{Status: shipping.Delivered, Description: "Delivered, In/At Mailbox", Location: "Plano TX", At: now.Add(3 * time.Hour)})
+	step() // nothing new
+	got := titles()[base:]
+	want := []string{
+		fmt.Sprintf("Order #%d is on its way", number),
+		fmt.Sprintf("Order #%d is out for delivery", number),
+		fmt.Sprintf("Order #%d was delivered", number),
+	}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("tracking notices: %v", got)
+	}
+	var status string
+	e.db.QueryRow(`SELECT status FROM orders WHERE id = $1`, id2).Scan(&status)
+	if status != "delivered" {
+		t.Fatalf("order status after delivery: %s", status)
+	}
+
+	// A paid order past its ship-by date: the buyer and seller hear once.
+	id3 := newSale()
+	e.db.Exec(`UPDATE orders SET ship_by = now() - interval '1 hour' WHERE id = $1`, id3)
+	for i := 0; i < 2; i++ {
+		if _, err := e.co.NotifyLateShipments(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var lateBuyer, lateSeller int
+	e.db.QueryRow(`SELECT count(*) FILTER (WHERE title LIKE '%hasn''t shipped yet'), count(*) FILTER (WHERE title LIKE '%is late')
+		FROM notifications n JOIN orders o ON o.id = $1 WHERE n.link IN ('/purchases/' || o.id, '/sell/orders/' || o.id)`, id3).Scan(&lateBuyer, &lateSeller)
+	if lateBuyer != 1 || lateSeller != 1 {
+		t.Fatalf("late notices: buyer %d seller %d", lateBuyer, lateSeller)
 	}
 }

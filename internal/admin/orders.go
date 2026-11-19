@@ -463,9 +463,9 @@ func (r *Records) OpenCase(ctx context.Context, a Actor, orderID, kind, summary 
 		RETURNING id, number`, oid, a.ID, kind, summary).Scan(&id, &cnum); err != nil {
 		return "", err
 	}
-	for _, u := range []string{buyer, seller} {
-		if _, err := tx.ExecContext(ctx, `INSERT INTO notifications (user_id, kind, title, body) VALUES ($1, 'order', $2, $3)`,
-			u, fmt.Sprintf("Case %d opened on order %d", cnum, number), "Our team is looking into this order and may message you."); err != nil {
+	for _, u := range [][2]string{{buyer, "/purchases/" + oid}, {seller, "/sell/orders/" + oid}} {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO notifications (user_id, kind, title, body, link) VALUES ($1, 'order', $2, $3, $4)`,
+			u[0], fmt.Sprintf("Case %d opened on order %d", cnum, number), "Our team is looking into this order and may message you.", u[1]); err != nil {
 			return "", err
 		}
 	}
@@ -492,8 +492,9 @@ func (r *Records) UpdateCase(ctx context.Context, a Actor, id string, u CaseUpda
 	var cur string
 	var cnum int64
 	var buyer, seller string
-	err = tx.QueryRowContext(ctx, `SELECT c.status, c.number, o.buyer_id, o.seller_id FROM cases c JOIN orders o ON o.id = c.order_id
-		WHERE c.id::text = $1 FOR UPDATE OF c`, id).Scan(&cur, &cnum, &buyer, &seller)
+	var orderID string
+	err = tx.QueryRowContext(ctx, `SELECT c.status, c.number, o.buyer_id, o.seller_id, o.id FROM cases c JOIN orders o ON o.id = c.order_id
+		WHERE c.id::text = $1 FOR UPDATE OF c`, id).Scan(&cur, &cnum, &buyer, &seller, &orderID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return ErrNotFound
 	}
@@ -519,9 +520,9 @@ func (r *Records) UpdateCase(ctx context.Context, a Actor, id string, u CaseUpda
 		}
 		details["from"], details["to"] = cur, *u.Status
 		if closing && contains(caseOpen, cur) {
-			for _, p := range []string{buyer, seller} {
-				if _, err := tx.ExecContext(ctx, `INSERT INTO notifications (user_id, kind, title, body) VALUES ($1, 'order', $2, $3)`,
-					p, fmt.Sprintf("Case %d is closed", cnum), strings.TrimSpace(*u.Outcome)); err != nil {
+			for _, p := range [][2]string{{buyer, "/purchases/" + orderID}, {seller, "/sell/orders/" + orderID}} {
+				if _, err := tx.ExecContext(ctx, `INSERT INTO notifications (user_id, kind, title, body, link) VALUES ($1, 'order', $2, $3, $4)`,
+					p[0], fmt.Sprintf("Case %d is closed", cnum), strings.TrimSpace(*u.Outcome), p[1]); err != nil {
 					return err
 				}
 			}
@@ -575,9 +576,9 @@ func (r *Records) AddCaseNote(ctx context.Context, a Actor, id, body string, int
 	defer tx.Rollback()
 	var caseID string
 	var cnum int64
-	var buyer, seller string
-	err = tx.QueryRowContext(ctx, `SELECT c.id, c.number, o.buyer_id, o.seller_id FROM cases c JOIN orders o ON o.id = c.order_id
-		WHERE c.id::text = $1`, id).Scan(&caseID, &cnum, &buyer, &seller)
+	var buyer, seller, orderID string
+	err = tx.QueryRowContext(ctx, `SELECT c.id, c.number, o.buyer_id, o.seller_id, o.id FROM cases c JOIN orders o ON o.id = c.order_id
+		WHERE c.id::text = $1`, id).Scan(&caseID, &cnum, &buyer, &seller, &orderID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return ErrNotFound
 	}
@@ -596,9 +597,9 @@ func (r *Records) AddCaseNote(ctx context.Context, a Actor, id, body string, int
 		if r := []rune(preview); len(r) > 160 {
 			preview = string(r[:159]) + "…"
 		}
-		for _, p := range []string{buyer, seller} {
-			if _, err := tx.ExecContext(ctx, `INSERT INTO notifications (user_id, kind, title, body) VALUES ($1, 'order', $2, $3)`,
-				p, fmt.Sprintf("Update on case %d", cnum), preview); err != nil {
+		for _, p := range [][2]string{{buyer, "/purchases/" + orderID}, {seller, "/sell/orders/" + orderID}} {
+			if _, err := tx.ExecContext(ctx, `INSERT INTO notifications (user_id, kind, title, body, link) VALUES ($1, 'order', $2, $3, $4)`,
+				p[0], fmt.Sprintf("Update on case %d", cnum), preview, p[1]); err != nil {
 				return err
 			}
 		}

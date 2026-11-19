@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"sort"
 	"strings"
 	"time"
 
@@ -37,6 +38,7 @@ type PostageBuyer interface {
 	LetterRates(ctx context.Context, l postage.Letter) (postage.Shipment, error)
 	Buy(ctx context.Context, shipmentID, rateID string) (postage.Label, error)
 	Refund(ctx context.Context, shipmentID string) error
+	Track(ctx context.Context, shipmentID string) (postage.Tracking, error)
 	TestMode() bool
 }
 
@@ -441,4 +443,70 @@ func (s *Service) voidPostage(ctx context.Context, orderID, sellerID, shipID, la
 		}
 	}
 	return tx.Commit()
+}
+
+// RefreshPostageTracking reads EasyPost's tracker for envelopes sent with
+// bought postage (every two hours each, for 45 days or until delivered) and
+// records new scans through ApplyTracking, which tells the buyer when it
+// moves, is out for delivery, is delivered or runs into a problem.
+func (s *Service) RefreshPostageTracking(ctx context.Context) (int, error) {
+	if s.Postage == nil {
+		return 0, nil
+	}
+	rows, err := s.DB.QueryContext(ctx, `
+		SELECT id, provider_label_id, tracking_number, coalesce(last_event_at, created_at)
+		FROM shipments
+		WHERE provider = $1 AND voided_at IS NULL AND provider_label_id IS NOT NULL AND tracking_number IS NOT NULL
+		  AND status IN ('label_created', 'in_transit', 'exception') AND created_at > now() - interval '45 days'
+		  AND (scans_checked_at IS NULL OR scans_checked_at < now() - interval '110 minutes')
+		ORDER BY scans_checked_at NULLS FIRST LIMIT 200`, PostageProvider)
+	if err != nil {
+		return 0, err
+	}
+	type job struct {
+		id, shipment, tracking string
+		since                  time.Time
+	}
+	var jobs []job
+	for rows.Next() {
+		var j job
+		if err := rows.Scan(&j.id, &j.shipment, &j.tracking, &j.since); err != nil {
+			rows.Close()
+			return 0, err
+		}
+		jobs = append(jobs, j)
+	}
+	rows.Close()
+	changed := 0
+	var firstErr error
+	for _, j := range jobs {
+		t, err := s.Postage.Track(ctx, j.shipment)
+		if err != nil {
+			if firstErr == nil {
+				firstErr = fmt.Errorf("tracking for shipment %s: %w", j.id, err)
+			}
+			continue
+		}
+		var fresh []shipping.TrackingEvent
+		for _, e := range t.Events {
+			if e.At.After(j.since) {
+				e.TrackingNumber = j.tracking
+				fresh = append(fresh, e)
+			}
+		}
+		sort.SliceStable(fresh, func(a, b int) bool { return fresh[a].At.Before(fresh[b].At) })
+		if len(fresh) > 0 {
+			n, err := s.ApplyTracking(ctx, fresh)
+			if err != nil {
+				return changed, err
+			}
+			if n > 0 {
+				changed++
+			}
+		}
+		if _, err := s.DB.ExecContext(ctx, `UPDATE shipments SET scans_checked_at = now() WHERE id = $1`, j.id); err != nil {
+			return changed, err
+		}
+	}
+	return changed, firstErr
 }

@@ -48,3 +48,22 @@ func TestLetter(t *testing.T) {
 		t.Fatal("box allowed")
 	}
 }
+
+func TestTrack(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"id":"shp_1","tracking_code":"9400","tracker":{"status":"out_for_delivery","tracking_details":[
+			{"status":"pre_transit","message":"Shipping Label Created","datetime":"2026-11-18T10:00:00Z"},
+			{"status":"in_transit","message":"Accepted at USPS Origin Facility","datetime":"2026-11-18T20:00:00Z","tracking_location":{"city":"AUSTIN","state":"TX"}},
+			{"status":"out_for_delivery","message":"Out for Delivery","datetime":"2026-11-19T08:00:00Z","tracking_location":{"city":"PLANO","state":"TX"}}]}}`))
+	}))
+	defer srv.Close()
+	e := New("EZTKtest")
+	e.Base = srv.URL
+	tr, err := e.Track(context.Background(), "shp_1")
+	if err != nil || tr.Status != "out_for_delivery" || len(tr.Events) != 2 {
+		t.Fatalf("%+v %v", tr, err)
+	}
+	if ev := tr.Events[1]; ev.Status != shipping.InTransit || ev.Description != "Out for Delivery" || ev.Location != "PLANO TX" || ev.TrackingNumber != "9400" {
+		t.Fatalf("%+v", ev)
+	}
+}

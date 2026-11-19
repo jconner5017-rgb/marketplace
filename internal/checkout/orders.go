@@ -456,3 +456,59 @@ func inboxScreen(text string) (string, bool) {
 	}
 	return "", true
 }
+
+// NotifyLateShipments tells the buyer, once, when a paid order passes its
+// ship-by date without shipping, and nudges the seller. Run hourly.
+func (s *Service) NotifyLateShipments(ctx context.Context) (int, error) {
+	tx, err := s.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+	rows, err := tx.QueryContext(ctx, `
+		UPDATE orders SET late_notified_at = now()
+		WHERE status = 'paid' AND ship_by IS NOT NULL AND ship_by < now() AND late_notified_at IS NULL
+		RETURNING id, number, buyer_id, seller_id, ship_by`)
+	if err != nil {
+		return 0, err
+	}
+	type late struct {
+		id, buyer, seller string
+		number            int64
+		by                time.Time
+	}
+	var list []late
+	for rows.Next() {
+		var l late
+		if err := rows.Scan(&l.id, &l.number, &l.buyer, &l.seller, &l.by); err != nil {
+			rows.Close()
+			return 0, err
+		}
+		list = append(list, l)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+	for _, l := range list {
+		due := l.by.In(eastern()).Format("Mon Jan 2")
+		if err := inbox.Notify(ctx, tx, l.buyer, "order", fmt.Sprintf("Order #%d hasn't shipped yet", l.number),
+			"The seller had until "+due+" to ship, and we've reminded them. If it still hasn't shipped in a day or two, "+
+				"message the seller or report a problem from your order for a refund.", "/purchases/"+l.id); err != nil {
+			return 0, err
+		}
+		if err := inbox.Notify(ctx, tx, l.seller, "order", fmt.Sprintf("Order #%d is late", l.number),
+			"It was due to ship by "+due+" and the buyer has been told. Ship it today, or message the buyer.",
+			"/sell/orders/"+l.id); err != nil {
+			return 0, err
+		}
+	}
+	return len(list), tx.Commit()
+}
+
+func eastern() *time.Location {
+	if loc, err := time.LoadLocation("America/New_York"); err == nil {
+		return loc
+	}
+	return time.UTC
+}

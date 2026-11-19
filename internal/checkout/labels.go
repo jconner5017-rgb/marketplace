@@ -442,39 +442,86 @@ var trackingState = map[string]string{
 	shipping.InTransit: "in_transit", shipping.Delivered: "delivered", shipping.Returned: "returned", shipping.Exception: "exception",
 }
 
-// ApplyTracking records carrier scans from a provider webhook. It returns
-// how many shipments were updated.
+// ApplyTracking records carrier scans from a provider webhook (or the
+// EasyPost poller). It returns how many shipments were updated. The buyer
+// gets a bell notice at each milestone, once: first scan, out for delivery,
+// delivered, a delivery problem, and returned to the seller.
 func (s *Service) ApplyTracking(ctx context.Context, events []shipping.TrackingEvent) (int, error) {
 	n := 0
 	for _, e := range events {
 		ev, _ := json.Marshal([]map[string]any{{"at": e.At.UTC().Format(time.RFC3339), "status": e.Status,
 			"description": e.Description, "location": e.Location}})
 		state := trackingState[e.Status]
-		var orderID, buyer string
+		var orderID, buyer, before, method string
 		var number int64
+		var wasOut bool
+		// The shipment as it was before this scan, so each milestone is announced once.
 		err := s.DB.QueryRowContext(ctx, `
-			UPDATE shipments sh SET events = sh.events || $2::jsonb, last_event = $3, last_event_at = $4,
-				status = CASE WHEN $5 = '' THEN sh.status ELSE $5 END, updated_at = now()
-			FROM orders o
-			WHERE sh.tracking_number = $1 AND sh.voided_at IS NULL AND o.id = sh.order_id
-			RETURNING o.id, o.buyer_id, o.number`, e.TrackingNumber, string(ev),
-			strings.TrimSpace(e.Description+" "+e.Location), e.At, state).Scan(&orderID, &buyer, &number)
+			SELECT o.id, o.buyer_id, o.number, sh.status, sh.method, sh.events::text ILIKE '%out for delivery%'
+			FROM shipments sh JOIN orders o ON o.id = sh.order_id
+			WHERE sh.tracking_number = $1 AND sh.voided_at IS NULL
+			ORDER BY sh.created_at DESC LIMIT 1`, e.TrackingNumber).Scan(&orderID, &buyer, &number, &before, &method, &wasOut)
 		if errors.Is(err, sql.ErrNoRows) {
 			continue
 		}
 		if err != nil {
 			return n, err
 		}
+		if _, err := s.DB.ExecContext(ctx, `
+			UPDATE shipments SET events = events || $2::jsonb, last_event = $3, last_event_at = $4,
+				status = CASE WHEN $5 = '' THEN status ELSE $5 END, updated_at = now()
+			WHERE tracking_number = $1 AND voided_at IS NULL`, e.TrackingNumber, string(ev),
+			strings.TrimSpace(e.Description+" "+e.Location), e.At, state); err != nil {
+			return n, err
+		}
 		n++
-		if e.Status == shipping.Delivered {
+		link := "/purchases/" + orderID
+		what := "package"
+		if method == "envelope" {
+			what = "envelope"
+		}
+		notify := func(title, body string) error {
+			return inbox.Notify(ctx, s.DB, buyer, "order", fmt.Sprintf("Order #%d %s", number, title), body, link)
+		}
+		where := strings.TrimSpace(e.Description + ", " + e.Location)
+		where = strings.Trim(where, ", ")
+		switch e.Status {
+		case shipping.Delivered:
 			res, err := s.DB.ExecContext(ctx, `UPDATE orders SET status = 'delivered', delivered_at = $2, updated_at = now()
 				WHERE id = $1 AND status = 'shipped'`, orderID, e.At)
 			if err != nil {
 				return n, err
 			}
 			if k, _ := res.RowsAffected(); k > 0 {
-				if err := inbox.Notify(ctx, s.DB, buyer, "order", fmt.Sprintf("Order #%d was delivered", number),
-					"How did it go? Leave feedback for the seller.", "/purchases/"+orderID); err != nil {
+				if err := notify("was delivered", "How did it go? Leave feedback for the seller."); err != nil {
+					return n, err
+				}
+			}
+		case shipping.InTransit:
+			if strings.Contains(strings.ToLower(e.Description), "out for delivery") && !wasOut {
+				if err := notify("is out for delivery", "Your "+what+" should arrive today."); err != nil {
+					return n, err
+				}
+			} else if before == "label_created" {
+				body := "USPS has your " + what + "."
+				if where != "" {
+					body = "USPS has your " + what + ": " + where + "."
+				}
+				if err := notify("is on its way", body); err != nil {
+					return n, err
+				}
+			}
+		case shipping.Exception:
+			if before != "exception" {
+				if err := notify("has a delivery problem", "USPS reported: "+where+". It often sorts itself out in a day or two; "+
+					"if it doesn't, message the seller or report a problem from your order."); err != nil {
+					return n, err
+				}
+			}
+		case shipping.Returned:
+			if before != "returned" {
+				if err := notify("is going back to the seller", "USPS is returning your "+what+" to the seller ("+where+"). "+
+					"Message the seller to sort out a reship or a refund, or report a problem from your order."); err != nil {
 					return n, err
 				}
 			}
