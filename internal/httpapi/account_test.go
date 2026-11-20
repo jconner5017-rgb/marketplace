@@ -22,7 +22,8 @@ func buyer(t *testing.T, e *env, name string) *httpClientT {
 func TestWatchlistCartAndHeaderSummary(t *testing.T) {
 	e := setupEnv(t)
 	sc, _ := newSeller(t, e, "shop_owner", true)
-	do(t, sc, "PATCH", e.ts.URL+"/v1/seller/settings", map[string]any{"bundle_discount_type": "per_extra_item", "bundle_discount_val": 50})
+	// The old "$0.50 off each extra card", now an order discount (migration 0044).
+	e.db.Exec(`INSERT INTO order_discounts (seller_id, min_cards, amount_cents, per_card) SELECT id, 2, 50, true FROM users WHERE username = 'shop_owner'`)
 	ids := []string{}
 	for i, cents := range []int{1000, 500, 300} {
 		card := rawCard("W"+string(rune('A'+i)), cents)

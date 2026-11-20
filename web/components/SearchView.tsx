@@ -248,7 +248,7 @@ function ActiveFilters({ params, cat }: { params: URLSearchParams; cat: SiteCata
     const label = min && max ? `$${min} to $${max}` : min ? `$${min} and up` : `Under $${max}`;
     chips.push({ label, href: hrefWith(params, { min_price: null, max_price: null }) });
   }
-  if (params.get("discount")) chips.push({ label: "Multi-card discount", href: hrefWith(params, { discount: null }) });
+  if (params.get("discount")) chips.push({ label: "Order discount", href: hrefWith(params, { discount: null }) });
   if (params.get("lots") === "only") chips.push({ label: "Lots only", href: hrefWith(params, { lots: null }) });
   if (params.get("lots") === "none") chips.push({ label: "Single cards only", href: hrefWith(params, { lots: null }) });
   if (params.get("in") === "title") chips.push({ label: "Titles only", href: hrefWith(params, { in: null }) });

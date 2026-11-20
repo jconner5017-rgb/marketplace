@@ -400,9 +400,10 @@ const listingCols = `l.id, l.seller_id, u.username, l.external_id, l.category, l
 	l.attributes, l.photo_urls, l.price_cents, l.quantity, l.package_preset, l.weight_oz,
 	l.status, l.version, l.created_at, l.updated_at` + saleCols + storeCols + `, l.lot_count, l.description_html, l.returns_policy`
 
-// storeCols: the listing's store category and its store sale right now.
+// storeCols: the listing's store category and its price in the store's sale
+// right now (its own price when there's no sale; % or $ off, migration 0044).
 const storeCols = `, l.store_category_id,
-	CASE WHEN l.format = 'fixed' THEN store_sale_percent(l.seller_id, l.store_category_id) ELSE 0 END`
+	CASE WHEN l.format = 'fixed' THEN store_sale_price(l.seller_id, l.store_category_id, l.game_or_sport, l.price_cents) ELSE l.price_cents END`
 
 // SalePrice is a price with a store sale's percent off (rounded in the buyer's favor by at most a cent).
 func SalePrice(cents, percent int) int {
@@ -414,8 +415,8 @@ func SalePrice(cents, percent int) int {
 
 // BuyPrice is what a buyer pays for one of this listing at checkout.
 func (l Listing) BuyPrice() int {
-	if l.SalePercent > 0 {
-		return SalePrice(l.PriceCents, l.SalePercent)
+	if l.SalePriceCents > 0 && l.SalePriceCents < l.PriceCents {
+		return l.SalePriceCents
 	}
 	return l.PriceCents
 }
@@ -432,7 +433,8 @@ func scanListing(row interface{ Scan(...any) error }) (Listing, error) {
 		&year, &cardNo, &l.Title, &l.Description, &cond, &grader, &grade, &cert,
 		pq.Array(&l.Attributes), pq.Array(&l.PhotoURLs), &l.PriceCents, &l.Quantity, &l.PackagePreset,
 		&l.WeightOz, &l.Status, &l.Version, &l.CreatedAt, &l.UpdatedAt}
-	if err := row.Scan(append(append(dest, sc.dest()...), &storeCat, &l.SalePercent, &lot, &l.DescriptionHTML, &rp)...); err != nil {
+	var salePrice int
+	if err := row.Scan(append(append(dest, sc.dest()...), &storeCat, &salePrice, &lot, &l.DescriptionHTML, &rp)...); err != nil {
 		return l, err
 	}
 	sc.apply(&l)
@@ -448,8 +450,10 @@ func scanListing(row interface{ Scan(...any) error }) (Listing, error) {
 		n := int(lot.Int64)
 		l.LotCount = &n
 	}
-	if l.SalePercent > 0 {
-		l.SalePriceCents = SalePrice(l.PriceCents, l.SalePercent)
+	if salePrice > 0 && salePrice < l.PriceCents {
+		// On sale: the price, and how much off it is (the SALE badge).
+		l.SalePriceCents = salePrice
+		l.SalePercent = max(1, (l.PriceCents-salePrice)*100/l.PriceCents)
 	}
 	str := func(n sql.NullString) *string {
 		if !n.Valid {

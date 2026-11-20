@@ -182,6 +182,13 @@ export type SellerGroup = {
   subtotal_cents: number;
   discount_cents: number;
   discount_label?: string;
+  /** The best deal: "sale" (already in the line prices), "coupon", "order" or none. */
+  deal_kind?: "sale" | "coupon" | "order";
+  sale_savings_cents?: number;
+  coupon_code?: string;
+  coupon_note?: string;
+  /** The seller's order discounts, e.g. "25% off 20+ cards up to $5". */
+  offers?: string[];
   total_cents: number;
   ship_method: "envelope" | "label";
   envelope_choice?: boolean;
@@ -253,6 +260,8 @@ export interface Order {
   seller: string;
   subtotal_cents: number;
   discount_cents: number;
+  discount_kind?: "sale" | "coupon" | "order";
+  discount_label?: string;
   total_cents: number;
   fee_cents?: number;
   refunded_cents: number;
@@ -319,7 +328,7 @@ export interface FeedbackEntry {
 
 export type StoreCategory = { id: number; name: string; listings: number };
 export type StoreSale = {
-  id: number; name: string; percent: number; category_id: number | null; category?: string;
+  id: number; name: string; percent: number; amount_cents?: number; games: string[]; category_id: number | null; category?: string;
   starts_at: string; ends_at: string; cancelled_at?: string;
 };
 export type Store = {
@@ -332,3 +341,18 @@ export type Store = {
 
 /** An editable promo banner (back office: Site > Homepage banner). */
 export type SiteBanner = { slot: string; image_url: string; link_url: string; alt_text: string; active: boolean; updated_at?: string };
+
+// Marketing > Discounts (2026-11-20).
+export type Coupon = {
+  id: number; code: string; label: string; percent?: number; amount_cents?: number; games: string[];
+  starts_at: string; ends_at?: string; once_per_buyer: boolean; active: boolean; created_at: string;
+  uses: number; discount_cents: number;
+};
+export type OrderDiscount = {
+  id: number; min_cards: number; price_min_cents?: number; price_max_cents?: number; percent_bp?: number;
+  amount_cents?: number; per_card: boolean; active: boolean; created_at: string; label: string;
+};
+export type Discounts = {
+  coupons: Coupon[]; order_discounts: OrderDiscount[]; sales: StoreSale[]; has_store: boolean;
+  categories: { sports: string[]; tcg: string[]; nonsport: string[] };
+};

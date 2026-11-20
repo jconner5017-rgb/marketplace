@@ -423,18 +423,9 @@ func TestStripeWebhook(t *testing.T) {
 func TestBundleDiscountSettings(t *testing.T) {
 	e := setupEnv(t)
 	c, _ := newSeller(t, e, "bundler", true)
-	code, body := do(t, c, "PATCH", e.ts.URL+"/v1/seller/settings", map[string]any{
-		"bundle_discount_type": "per_extra_item", "bundle_discount_val": 75})
-	s := body["seller"].(map[string]any)
-	if code != 200 || s["bundle_discount_type"] != "per_extra_item" || s["bundle_discount_val"].(float64) != 75 {
-		t.Fatalf("set discount: %d %v", code, body)
-	}
+	// The old multi-card discount setting moved to Marketing > Discounts.
 	if code, _ := do(t, c, "PATCH", e.ts.URL+"/v1/seller/settings", map[string]any{
-		"bundle_discount_type": "per_extra_item", "bundle_discount_val": 9999}); code != 422 {
-		t.Fatalf("too big: want 422, got %d", code)
-	}
-	code, body = do(t, c, "PATCH", e.ts.URL+"/v1/seller/settings", map[string]any{})
-	if code != 200 || body["seller"].(map[string]any)["bundle_discount_type"] != nil {
-		t.Fatalf("clear discount: %d %v", code, body)
+		"bundle_discount_type": "per_extra_item", "bundle_discount_val": 75}); code != 410 {
+		t.Fatalf("old setting: want 410, got %d", code)
 	}
 }

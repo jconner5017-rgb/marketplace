@@ -18,12 +18,12 @@ import (
 	"github.com/lib/pq"
 
 	"github.com/jconner5017-rgb/marketplace/internal/blocklist"
+	"github.com/jconner5017-rgb/marketplace/internal/deals"
 	"github.com/jconner5017-rgb/marketplace/internal/fees"
 	"github.com/jconner5017-rgb/marketplace/internal/inbox"
 	"github.com/jconner5017-rgb/marketplace/internal/promos"
 	"github.com/jconner5017-rgb/marketplace/internal/sellers"
 	"github.com/jconner5017-rgb/marketplace/internal/shipping"
-	"github.com/jconner5017-rgb/marketplace/internal/shopping"
 	"github.com/jconner5017-rgb/marketplace/internal/stripe"
 )
 
@@ -92,7 +92,9 @@ type line struct {
 	source    string
 	title     string
 	photo     string
-	unit      int
+	unit      int // what one costs before any discount (list price; the agreed price for holds)
+	sale      int // the store's sale price right now (== unit without a sale)
+	game      string
 	qty       int
 	envelope  bool // raw card set up to ship in a plain envelope
 	graded    bool
@@ -177,15 +179,47 @@ func (s *Service) start(ctx context.Context, buyerID, buyerEmail string, req Req
 		return "", "", err
 	}
 
-	cards := 0
-	for _, l := range lines {
-		subtotal += l.unit * l.qty
-		cards += l.qty
+	// Marketing & discounts (2026-11-20): the buyer gets the single best of
+	// the sale prices, their coupon or the seller's order discounts. Auction
+	// wins and accepted offers are paid at the agreed price, no discounts.
+	items := make([]deals.Item, len(lines))
+	for i, l := range lines {
+		items[i] = deals.Item{ListingID: l.listingID, Game: l.game, Full: l.unit, Sale: l.sale, Qty: l.qty}
 	}
+	var deal deals.Deal
 	if len(req.HoldIDs) == 0 {
-		if p, err := s.Sellers.Get(ctx, sellerID); err == nil {
-			discount, _ = shopping.BundleDiscount(p.BundleDiscountType, p.BundleDiscountVal, cards, subtotal)
+		rules, err := deals.ActiveRules(ctx, tx, sellerID)
+		if err != nil {
+			return "", "", err
 		}
+		var coupon *deals.Coupon
+		var code string
+		if err := tx.QueryRowContext(ctx, `SELECT code FROM cart_coupons WHERE user_id = $1 AND seller_id = $2`, buyerID, sellerID).
+			Scan(&code); err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return "", "", err
+		}
+		if code != "" {
+			if coupon, err = deals.FindCoupon(ctx, tx, sellerID, buyerID, code, s.now(), true); err != nil {
+				var dbErr *pq.Error
+				if errors.As(err, &dbErr) {
+					return "", "", err
+				}
+				// The coupon stopped working since it was added (used, expired):
+				// take it out of the cart and let the buyer decide.
+				if _, derr := s.DB.ExecContext(ctx, `DELETE FROM cart_coupons WHERE user_id = $1 AND seller_id = $2`, buyerID, sellerID); derr != nil {
+					return "", "", derr
+				}
+				return "", "", &FieldError{"coupon", err.Error() + "; it's been removed from your cart, so check the total and try again"}
+			}
+		}
+		deal = deals.Best(items, coupon, rules)
+	}
+	units, sub, disc := deal.Prices(items)
+	subtotal, discount = sub, disc
+	cards := 0
+	for i := range lines {
+		lines[i].unit = units[i]
+		cards += lines[i].qty
 	}
 	total := subtotal - discount
 
@@ -193,9 +227,11 @@ func (s *Service) start(ctx context.Context, buyerID, buyerEmail string, req Req
 	if err != nil {
 		sched = fees.Default
 	}
+	// Our fee is on what the buyer pays for each card, after the discount.
+	paid := deal.Allocate(items)
 	fee := 0
-	for _, l := range lines {
-		fee += sched.For(l.unit) * l.qty
+	for i, l := range lines {
+		fee += sched.For(paid[i]) * l.qty
 	}
 	fee = min(fee, total)
 	if s.FeeFree != nil && s.FeeFree(sellerEmail) {
@@ -205,9 +241,9 @@ func (s *Service) start(ctx context.Context, buyerID, buyerEmail string, req Req
 	var waiver promos.Waiver
 	if fee > 0 && !test {
 		var unit []int
-		for _, l := range lines {
+		for i, l := range lines {
 			for range l.qty {
-				unit = append(unit, sched.For(l.unit))
+				unit = append(unit, sched.For(paid[i]))
 			}
 		}
 		if waiver, err = promos.Reserve(ctx, tx, s.now(), sellerID, unit); err != nil {
@@ -244,10 +280,19 @@ func (s *Service) start(ctx context.Context, buyerID, buyerEmail string, req Req
 	var number int64
 	if err := tx.QueryRowContext(ctx, `
 		INSERT INTO orders (buyer_id, seller_id, subtotal_cents, discount_cents, total_cents, fee_cents,
-			fee_schedule_id, ship_method, stripe_account, test, envelope_trusted)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id, number`,
-		buyerID, sellerID, subtotal, discount, total, fee, schedID, method, acct, test, trustedEnvelope).Scan(&orderID, &number); err != nil {
+			fee_schedule_id, ship_method, stripe_account, test, envelope_trusted, discount_kind, discount_label)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NULLIF($12, ''), NULLIF($13, '')) RETURNING id, number`,
+		buyerID, sellerID, subtotal, discount, total, fee, schedID, method, acct, test, trustedEnvelope,
+		deal.Kind, deal.Label).Scan(&orderID, &number); err != nil {
 		return "", "", err
+	}
+	if err := deals.RecordCoupon(ctx, tx, orderID, buyerID, deal); err != nil {
+		return "", "", err
+	}
+	if deal.Kind == "coupon" {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM cart_coupons WHERE user_id = $1 AND seller_id = $2`, buyerID, sellerID); err != nil {
+			return "", "", err
+		}
 	}
 	if err := waiver.Record(ctx, tx, orderID); err != nil {
 		return "", "", err
@@ -301,7 +346,7 @@ func (s *Service) start(ctx context.Context, buyerID, buyerEmail string, req Req
 	}
 	if discount > 0 {
 		params.Lines = []stripe.LineItem{{
-			Name:      fmt.Sprintf("Order #%d: %d cards (bundle discount applied)", number, cards),
+			Name:      fmt.Sprintf("Order #%d: %d cards (%s applied)", number, cards, deal.Label),
 			UnitCents: total, Quantity: 1,
 		}}
 	} else {
@@ -412,7 +457,8 @@ func (s *Service) cartLines(ctx context.Context, tx *sql.Tx, buyerID, seller str
 	}
 	rows, err := tx.QueryContext(ctx, `
 		SELECT l.id, l.seller_id, l.version, l.title, coalesce(l.photo_urls[1], ''),
-		       l.price_cents - l.price_cents * store_sale_percent(l.seller_id, l.store_category_id) / 100, c.quantity,
+		       l.price_cents, store_sale_price(l.seller_id, l.store_category_id, l.game_or_sport, l.price_cents),
+		       coalesce(l.game_or_sport, ''), c.quantity,
 		       l.quantity, l.status = 'active' AND l.format = 'fixed', l.grader IS NULL AND l.package_preset = 'envelope',
 		       l.grader IS NOT NULL, l.package_preset
 		FROM cart_items c
@@ -432,7 +478,8 @@ func (s *Service) cartLines(ctx context.Context, tx *sql.Tx, buyerID, seller str
 		var l line
 		var have int
 		var open bool
-		if err := rows.Scan(&l.listingID, &sellerID, &l.version, &l.title, &l.photo, &l.unit, &l.qty, &have, &open, &l.envelope, &l.graded, &l.preset); err != nil {
+		if err := rows.Scan(&l.listingID, &sellerID, &l.version, &l.title, &l.photo, &l.unit, &l.sale, &l.game, &l.qty, &have, &open,
+			&l.envelope, &l.graded, &l.preset); err != nil {
 			return "", nil, err
 		}
 		if !open || l.qty > have {
@@ -479,6 +526,7 @@ func (s *Service) holdLines(ctx context.Context, tx *sql.Tx, buyerID string, ids
 		if err := rows.Scan(&l.holdID, &seller, &l.listingID, &l.version, &l.title, &l.photo, &l.unit, &l.qty, &l.source, &l.envelope, &l.graded, &l.preset); err != nil {
 			return "", nil, err
 		}
+		l.sale = l.unit // auction wins and accepted offers are paid at the agreed price
 		if sellerID != "" && seller != sellerID {
 			return "", nil, errors.New("pay for one seller's cards at a time")
 		}

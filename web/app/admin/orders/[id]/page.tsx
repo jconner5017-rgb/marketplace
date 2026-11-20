@@ -10,7 +10,7 @@ import { CASE_KIND, CASE_STATUS, REFUND_KIND, type OrderDetail } from "@/lib/adm
 
 type LedgerRow = { kind: string; amount_cents: number; stripe_object: string; note: string; created_at: string };
 const LEDGER_KIND: Record<string, string> = {
-  charge: "Buyer paid", application_fee: "Marketplace fee", discount: "Multi-card discount", label_cost: "Shipping label",
+  charge: "Buyer paid", application_fee: "Marketplace fee", discount: "Discount", label_cost: "Shipping label",
   refund: "Refund", fee_refund: "Fee returned", chargeback_opened: "Chargeback opened", chargeback_won: "Chargeback won",
   chargeback_lost: "Chargeback lost", adjustment: "Adjustment",
 };
@@ -49,7 +49,7 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
             </ul>
             <dl className={`mt-3 ${dl}`}>
               <dt className="text-muted">Subtotal</dt><dd className="num">{money(o.subtotal_cents)}</dd>
-              {o.discount_cents > 0 && <><dt className="text-muted">Multi-card discount</dt><dd className="num">−{money(o.discount_cents)}</dd></>}
+              {o.discount_cents > 0 && <><dt className="text-muted">Discount{o.discount_label ? ` (${o.discount_label})` : ""}</dt><dd className="num">−{money(o.discount_cents)}</dd></>}
               <dt className="text-muted">Total paid</dt><dd className="num font-semibold">{money(o.total_cents)}</dd>
               <dt className="text-muted">Our fee</dt><dd className="num">{money(o.fee_cents)}</dd>
               {o.refunded_cents > 0 && <><dt className="text-muted">Refunded</dt><dd className="num text-slab">{money(o.refunded_cents)}</dd></>}

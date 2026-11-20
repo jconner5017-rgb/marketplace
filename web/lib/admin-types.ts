@@ -35,7 +35,7 @@ export type FeedbackRow = {
 };
 
 export type OrderDetail = import("@/components/admin/OrderBits").OrderRow & {
-  subtotal_cents: number; discount_cents: number; ship_to: Record<string, string>; stripe_account: string | null;
+  subtotal_cents: number; discount_cents: number; discount_label?: string; ship_to: Record<string, string>; stripe_account: string | null;
   stripe_checkout_id: string | null; stripe_payment_intent: string | null; stripe_charge: string | null; cancel_reason: string | null;
   delivered_at: string | null; cancelled_at: string | null;
   lines: { listing_id: string | null; listing_version: number | null; source: string; title: string; unit_cents: number; quantity: number }[];

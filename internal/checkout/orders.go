@@ -76,6 +76,8 @@ type Order struct {
 	Seller        string          `json:"seller"`
 	SubtotalCents int             `json:"subtotal_cents"`
 	DiscountCents int             `json:"discount_cents"`
+	DiscountKind  string          `json:"discount_kind,omitempty"`  // sale, coupon or order
+	DiscountLabel string          `json:"discount_label,omitempty"` // e.g. "25% off 20+ cards up to $5"
 	TotalCents    int             `json:"total_cents"`
 	FeeCents      *int            `json:"fee_cents,omitempty"` // seller only
 	RefundedCents int             `json:"refunded_cents"`
@@ -111,7 +113,7 @@ type Order struct {
 const orderCols = `o.id, o.number, o.status, bu.username, su.username, o.subtotal_cents, o.discount_cents,
 	o.total_cents, o.fee_cents, o.refunded_cents, o.ship_method, o.ship_to, o.ship_by, o.created_at, o.paid_at,
 	o.shipped_at, o.delivered_at, o.buyer_id = $1, coalesce(o.stripe_payment_intent, ''), o.tax_cents, o.test,
-	o.envelope_trusted, coalesce(o.envelope_offer, ''),
+	o.envelope_trusted, coalesce(o.envelope_offer, ''), coalesce(o.discount_kind, ''), coalesce(o.discount_label, ''),
 	(o.status = 'paid' AND o.ship_method = 'label' AND o.envelope_offer IS NULL AND NOT o.test AND o.total_cents <= 10000
 	 AND (SELECT coalesce(sum(oi.quantity), 0) FROM order_items oi WHERE oi.order_id = o.id) = 1
 	 AND NOT EXISTS (SELECT 1 FROM order_items oi JOIN listings l ON l.id = oi.listing_id
@@ -128,7 +130,7 @@ func scanOrder(row interface{ Scan(...any) error }) (Order, error) {
 	var pi string
 	if err := row.Scan(&o.ID, &o.Number, &o.Status, &o.Buyer, &o.Seller, &o.SubtotalCents, &o.DiscountCents,
 		&o.TotalCents, &fee, &o.RefundedCents, &o.ShipMethod, &o.ShipTo, &shipBy, &o.CreatedAt, &paid,
-		&shipped, &deliv, &buying, &pi, &o.TaxCents, &o.Test, &o.EnvelopeTrusted, &o.EnvelopeOffer, &o.CanOfferEnvelope); err != nil {
+		&shipped, &deliv, &buying, &pi, &o.TaxCents, &o.Test, &o.EnvelopeTrusted, &o.EnvelopeOffer, &o.DiscountKind, &o.DiscountLabel, &o.CanOfferEnvelope); err != nil {
 		return o, err
 	}
 	o.ShipBy, o.PaidAt, o.ShippedAt, o.DeliveredAt = nt(shipBy), nt(paid), nt(shipped), nt(deliv)

@@ -66,7 +66,7 @@ func TestAdvancedSearch(t *testing.T) {
 			t.Errorf("%s (%s): got %d, want %d", tc.name, tc.qs.Encode(), got, tc.want)
 		}
 	}
-	do(t, c, "PATCH", e.ts.URL+"/v1/seller/settings", map[string]any{"bundle_discount_type": "percent_3plus", "bundle_discount_val": 1000})
+	do(t, c, "POST", e.ts.URL+"/v1/seller/order-discounts", map[string]any{"min_cards": 3, "percent": 10})
 	if got := n(url.Values{"discount": {"1"}}); got != 4 {
 		t.Errorf("discount after setting: %d", got)
 	}

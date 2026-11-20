@@ -3,6 +3,8 @@
 package stores
 
 import (
+	"github.com/lib/pq"
+
 	"context"
 	"database/sql"
 	"errors"
@@ -72,14 +74,16 @@ type Category struct {
 }
 
 type Sale struct {
-	ID         int        `json:"id"`
-	Name       string     `json:"name"`
-	Percent    int        `json:"percent"`
-	CategoryID *int       `json:"category_id"`
-	Category   string     `json:"category,omitempty"`
-	StartsAt   time.Time  `json:"starts_at"`
-	EndsAt     time.Time  `json:"ends_at"`
-	Cancelled  *time.Time `json:"cancelled_at,omitempty"`
+	ID          int        `json:"id"`
+	Name        string     `json:"name"`
+	Percent     int        `json:"percent"`                // 0 for a $ off sale
+	AmountCents int        `json:"amount_cents,omitempty"` // $ off each card (2026-11-20)
+	Games       []string   `json:"games"`                  // sports & games it covers; empty = every card
+	CategoryID  *int       `json:"category_id"`
+	Category    string     `json:"category,omitempty"`
+	StartsAt    time.Time  `json:"starts_at"`
+	EndsAt      time.Time  `json:"ends_at"`
+	Cancelled   *time.Time `json:"cancelled_at,omitempty"`
 }
 
 type Service struct {
@@ -406,11 +410,13 @@ func (s *Service) Categorize(ctx context.Context, sellerID string, categoryID in
 
 // SaleInput schedules a store sale.
 type SaleInput struct {
-	Name       string     `json:"name"`
-	Percent    int        `json:"percent"`
-	CategoryID *int       `json:"category_id"`
-	StartsAt   *time.Time `json:"starts_at"` // nil = now
-	EndsAt     time.Time  `json:"ends_at"`
+	Name        string     `json:"name"`
+	Percent     int        `json:"percent"`      // % off, or
+	AmountCents int        `json:"amount_cents"` // $ off each card (never more than half its price)
+	Games       []string   `json:"games"`        // sports & games; empty = every card
+	CategoryID  *int       `json:"category_id"`
+	StartsAt    *time.Time `json:"starts_at"` // nil = now
+	EndsAt      time.Time  `json:"ends_at"`
 }
 
 // CreateSale schedules a sale. One sale at a time: it may not overlap
@@ -423,8 +429,19 @@ func (s *Service) CreateSale(ctx context.Context, sellerID string, in SaleInput)
 	if n := utf8.RuneCountInString(in.Name); n < 2 || n > 60 {
 		return Sale{}, &FieldError{"name", "name the sale (2 to 60 characters)"}
 	}
-	if in.Percent < 5 || in.Percent > 50 {
+	switch {
+	case in.AmountCents > 0 && in.Percent > 0:
+		return Sale{}, &FieldError{"percent", "choose % off or $ off, not both"}
+	case in.AmountCents > 0:
+		if in.AmountCents < 25 || in.AmountCents > 50000 {
+			return Sale{}, &FieldError{"amount_cents", "choose $0.25 to $500 off"}
+		}
+	case in.Percent < 5 || in.Percent > 50:
 		return Sale{}, &FieldError{"percent", "choose 5% to 50% off"}
+	}
+	games, gerr := CleanGames(in.Games)
+	if gerr != nil {
+		return Sale{}, gerr
 	}
 	now := s.now()
 	start := now
@@ -469,14 +486,16 @@ func (s *Service) CreateSale(ctx context.Context, sellerID string, in SaleInput)
 		return Sale{}, ErrSaleClash
 	}
 	var sale Sale
-	if err := tx.QueryRowContext(ctx, `INSERT INTO store_sales (seller_id, name, percent, category_id, starts_at, ends_at)
-		VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`, sellerID, in.Name, in.Percent, in.CategoryID, start, in.EndsAt).Scan(&sale.ID); err != nil {
+	if err := tx.QueryRowContext(ctx, `INSERT INTO store_sales (seller_id, name, percent, amount_cents, games, category_id, starts_at, ends_at)
+		VALUES ($1, $2, NULLIF($3, 0), NULLIF($4, 0), $5, $6, $7, $8) RETURNING id`, sellerID, in.Name, in.Percent, in.AmountCents,
+		nullGames(games), in.CategoryID, start, in.EndsAt).Scan(&sale.ID); err != nil {
 		return Sale{}, err
 	}
 	if err := tx.Commit(); err != nil {
 		return Sale{}, err
 	}
 	sale.Name, sale.Percent, sale.CategoryID, sale.StartsAt, sale.EndsAt = in.Name, in.Percent, in.CategoryID, start, in.EndsAt
+	sale.AmountCents, sale.Games = in.AmountCents, games
 	return sale, nil
 }
 
@@ -493,13 +512,17 @@ func (s *Service) EndSale(ctx context.Context, sellerID string, id int) error {
 	return nil
 }
 
-const saleCols = `ss.id, ss.name, ss.percent, ss.category_id, coalesce(c.name, ''), ss.starts_at, ss.ends_at, ss.cancelled_at`
+const saleCols = `ss.id, ss.name, coalesce(ss.percent, 0), coalesce(ss.amount_cents, 0), coalesce(ss.games, '{}'), ss.category_id,
+	coalesce(c.name, ''), ss.starts_at, ss.ends_at, ss.cancelled_at`
 
 func scanSale(row interface{ Scan(...any) error }) (Sale, error) {
 	var x Sale
 	var cat sql.NullInt64
 	var canc sql.NullTime
-	err := row.Scan(&x.ID, &x.Name, &x.Percent, &cat, &x.Category, &x.StartsAt, &x.EndsAt, &canc)
+	err := row.Scan(&x.ID, &x.Name, &x.Percent, &x.AmountCents, pq.Array(&x.Games), &cat, &x.Category, &x.StartsAt, &x.EndsAt, &canc)
+	if x.Games == nil {
+		x.Games = []string{}
+	}
 	if cat.Valid {
 		v := int(cat.Int64)
 		x.CategoryID = &v
@@ -514,7 +537,7 @@ func (s *Service) current(ctx context.Context, sellerID string) (*Sale, error) {
 	x, err := scanSale(s.DB.QueryRowContext(ctx, `SELECT `+saleCols+` FROM store_sales ss
 		LEFT JOIN store_categories c ON c.id = ss.category_id
 		WHERE ss.seller_id = $1 AND ss.cancelled_at IS NULL AND now() >= ss.starts_at AND now() < ss.ends_at
-		ORDER BY ss.percent DESC LIMIT 1`, sellerID))
+		ORDER BY ss.starts_at DESC LIMIT 1`, sellerID))
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -798,4 +821,35 @@ func textArray(v []string) string {
 		parts = append(parts, x)
 	}
 	return "{" + strings.Join(parts, ",") + "}"
+}
+
+// CleanGames checks a list of sports & games a sale or coupon covers
+// (2026-11-20): trimmed, no repeats, at most 30. Empty means every card.
+func CleanGames(in []string) ([]string, error) {
+	out := []string{}
+	seen := map[string]bool{}
+	for _, g := range in {
+		g = strings.TrimSpace(g)
+		if g == "" {
+			continue
+		}
+		if utf8.RuneCountInString(g) > 40 {
+			return nil, &FieldError{"games", "that category name is too long"}
+		}
+		if k := strings.ToLower(g); !seen[k] {
+			seen[k] = true
+			out = append(out, g)
+		}
+	}
+	if len(out) > 30 {
+		return nil, &FieldError{"games", "choose up to 30 categories, or all of them"}
+	}
+	return out, nil
+}
+
+func nullGames(g []string) any {
+	if len(g) == 0 {
+		return nil
+	}
+	return pq.Array(g)
 }

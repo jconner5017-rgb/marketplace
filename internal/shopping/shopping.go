@@ -6,7 +6,10 @@ import (
 	"database/sql"
 	"errors"
 	"sort"
+	"strings"
+	"time"
 
+	"github.com/jconner5017-rgb/marketplace/internal/deals"
 	"github.com/jconner5017-rgb/marketplace/internal/listings"
 	"github.com/jconner5017-rgb/marketplace/internal/sellers"
 )
@@ -156,8 +159,17 @@ type SellerGroup struct {
 	SubtotalCents  int        `json:"subtotal_cents"`
 	DiscountCents  int        `json:"discount_cents"`
 	DiscountLabel  string     `json:"discount_label,omitempty"`
-	TotalCents     int        `json:"total_cents"`
-	ShipMethod     string     `json:"ship_method"` // envelope or label
+	// The best deal (2026-11-20): "sale", "coupon", "order" or "". With a
+	// sale the savings are already in the line prices (SaleSavings).
+	DealKind    string `json:"deal_kind,omitempty"`
+	SaleSavings int    `json:"sale_savings_cents,omitempty"`
+	// A coupon the buyer typed for this seller, and why it isn't used if it isn't.
+	CouponCode string `json:"coupon_code,omitempty"`
+	CouponNote string `json:"coupon_note,omitempty"`
+	// The seller's order discounts, so the cart can say "add 3 more cards for 25% off".
+	Offers     []string `json:"offers,omitempty"`
+	TotalCents int      `json:"total_cents"`
+	ShipMethod string   `json:"ship_method"` // envelope or label
 	// EnvelopeChoice: the seller trusts this buyer and the order (one raw
 	// card up to $100) could ship in a stamped envelope if they choose.
 	EnvelopeChoice bool `json:"envelope_choice"`
@@ -222,7 +234,7 @@ func (s *Service) GetCart(ctx context.Context, userID string) (Cart, error) {
 			line.Available = false
 		}
 		if line.Available {
-			line.LineCents = l.BuyPrice() * line.Quantity
+			line.LineCents = l.PriceCents * line.Quantity // set to the deal's price below
 		}
 		g, ok := groups[l.SellerID]
 		if !ok {
@@ -239,10 +251,57 @@ func (s *Service) GetCart(ctx context.Context, userID string) (Cart, error) {
 		}
 	}
 
+	codes := map[string]string{}
+	if crows, err := s.DB.QueryContext(ctx, `SELECT seller_id, code FROM cart_coupons WHERE user_id = $1`, userID); err == nil {
+		for crows.Next() {
+			var sid, code string
+			if crows.Scan(&sid, &code) == nil {
+				codes[sid] = code
+			}
+		}
+		crows.Close()
+	}
 	for _, sellerID := range order {
 		g := groups[sellerID]
-		if p, err := s.Sellers.Get(ctx, sellerID); err == nil {
-			g.DiscountCents, g.DiscountLabel = BundleDiscount(p.BundleDiscountType, p.BundleDiscountVal, g.CardCount, g.SubtotalCents)
+		// The same best-deal pricing as checkout (internal/deals).
+		var items []deals.Item
+		var idx []int
+		for i, ln := range g.Lines {
+			if ln.Available {
+				items = append(items, deals.Item{ListingID: ln.Listing.ID, Game: ln.Listing.GameOrSport,
+					Full: ln.Listing.PriceCents, Sale: ln.Listing.BuyPrice(), Qty: ln.Quantity})
+				idx = append(idx, i)
+			}
+		}
+		rules, err := deals.ActiveRules(ctx, s.DB, sellerID)
+		if err != nil {
+			return Cart{}, err
+		}
+		for _, r := range rules {
+			g.Offers = append(g.Offers, r.Label)
+		}
+		var coupon *deals.Coupon
+		if code := codes[sellerID]; code != "" {
+			g.CouponCode = code
+			if coupon, err = deals.FindCoupon(ctx, s.DB, sellerID, userID, code, time.Now(), false); err != nil {
+				g.CouponNote = code + ": " + err.Error() + "."
+				coupon = nil
+			}
+		}
+		deal := deals.Best(items, coupon, rules)
+		units, sub, disc := deal.Prices(items)
+		for k, i := range idx {
+			g.Lines[i].LineCents = units[k] * g.Lines[i].Quantity
+		}
+		g.SubtotalCents, g.DiscountCents, g.DealKind = sub, disc, deal.Kind
+		if deal.Kind == "sale" {
+			g.SaleSavings = deal.Cents
+		}
+		if deal.Kind == "coupon" || deal.Kind == "order" {
+			g.DiscountLabel = deal.Label
+		}
+		if g.CouponNote == "" {
+			g.CouponNote = deal.CouponNote
 		}
 		g.TotalCents = g.SubtotalCents - g.DiscountCents
 		g.ShipMethod = ShipMethod(*g)
@@ -301,4 +360,29 @@ func (s *Service) idSet(ctx context.Context, q string, args ...any) (map[string]
 		out[id] = true
 	}
 	return out, err
+}
+
+// SetCoupon saves a coupon code the buyer typed for one seller in their cart
+// (2026-11-20). It's checked now so a mistyped code is caught right away; at
+// checkout the buyer gets the coupon only if it's the best deal.
+func (s *Service) SetCoupon(ctx context.Context, userID, sellerUsername, code string) error {
+	var sellerID string
+	err := s.DB.QueryRowContext(ctx, `SELECT id FROM users WHERE lower(username) = lower($1)`, strings.TrimSpace(sellerUsername)).Scan(&sellerID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return deals.ErrNoCoupon
+	}
+	if err != nil {
+		return err
+	}
+	code = deals.NormalizeCode(code)
+	if code == "" {
+		_, err := s.DB.ExecContext(ctx, `DELETE FROM cart_coupons WHERE user_id = $1 AND seller_id = $2`, userID, sellerID)
+		return err
+	}
+	if _, err := deals.FindCoupon(ctx, s.DB, sellerID, userID, code, time.Now(), false); err != nil {
+		return err
+	}
+	_, err = s.DB.ExecContext(ctx, `INSERT INTO cart_coupons (user_id, seller_id, code) VALUES ($1, $2, $3)
+		ON CONFLICT (user_id, seller_id) DO UPDATE SET code = EXCLUDED.code, created_at = now()`, userID, sellerID, code)
+	return err
 }

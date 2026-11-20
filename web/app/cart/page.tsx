@@ -6,6 +6,7 @@ import { GradeBadge, Photo } from "@/components/CardBits";
 import { money } from "@/lib/format";
 import CartLineActions from "@/components/CartLineActions";
 import PayButton from "@/components/orders/PayButton";
+import CartCoupon from "@/components/CartCoupon";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Cart" };
@@ -54,10 +55,24 @@ export default async function CartPage() {
                   </li>
                 ))}
               </ul>
+              {/* The single best deal (sale prices, a coupon or an order discount). */}
+              {g.deal_kind === "sale" && (g.sale_savings_cents ?? 0) > 0 && (
+                <p className="num flex justify-between border-t border-line px-4 py-2 text-[14px] text-ship">
+                  <span>Store sale prices</span><span>You save {money(g.sale_savings_cents ?? 0)}</span>
+                </p>
+              )}
               {g.discount_cents > 0 && (
                 <p className="num flex justify-between border-t border-line px-4 py-2 text-[14px] text-ship">
-                  <span>Multi-card discount · {g.discount_label}</span><span>−{money(g.discount_cents)}</span>
+                  <span>{g.deal_kind === "coupon" ? "Coupon" : "Order discount"} · {g.discount_label}</span><span>−{money(g.discount_cents)}</span>
                 </p>
+              )}
+              {g.card_count > 0 && (
+                <div className="space-y-1.5 border-t border-line px-4 py-2.5">
+                  {(g.offers ?? []).length > 0 && g.deal_kind !== "order" && (
+                    <p className="text-[13px] text-muted">{g.seller_username} offers: {(g.offers ?? []).join(" · ")}</p>
+                  )}
+                  <CartCoupon seller={g.seller_username} code={g.coupon_code} note={g.coupon_note} />
+                </div>
               )}
               {canPay && sellers > 1 && g.card_count > 0 && (
                 <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line px-4 py-3">
@@ -73,7 +88,7 @@ export default async function CartPage() {
           <dl className="num space-y-2 text-[15px]">
             <div className="flex justify-between"><dt>Cards ({cart.card_count})</dt><dd>{money(cart.groups.reduce((a, g) => a + g.subtotal_cents, 0))}</dd></div>
             {cart.groups.some((g) => g.discount_cents > 0) && (
-              <div className="flex justify-between text-ship"><dt>Multi-card discounts</dt><dd>−{money(cart.groups.reduce((a, g) => a + g.discount_cents, 0))}</dd></div>
+              <div className="flex justify-between text-ship"><dt>Discounts</dt><dd>−{money(cart.groups.reduce((a, g) => a + g.discount_cents, 0))}</dd></div>
             )}
             <div className="flex justify-between"><dt>Shipping</dt><dd className="text-ship">Free</dd></div>
             <div className="flex justify-between border-t border-line pt-3 text-[18px] font-bold"><dt>Total</dt><dd>{money(cart.total_cents)}</dd></div>

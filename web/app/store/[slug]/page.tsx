@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { apiGet, facets, getSummary, search } from "@/lib/api";
 import { SITE_URL } from "@/lib/seo";
+import { money } from "@/lib/format";
 import type { FeedbackSummary, Store } from "@/lib/types";
 import { ListingTile } from "@/components/CardBits";
 import { BadgeList, SellerLine } from "@/components/feedback/Bits";
@@ -94,7 +95,7 @@ export default async function StorePage({ params, searchParams }: Props) {
 
       {sale && (
         <Link href={href({ sale: "1", page: undefined })} className="mt-4 block rounded-xl bg-slab px-4 py-3 text-white hover:opacity-95">
-          <strong>{sale.name}: {sale.percent}% off</strong>{sale.category ? ` ${sale.category}` : " storewide"} · ends {ends}. Prices shown already include the sale.
+          <strong>{sale.name}: {sale.amount_cents ? `${money(sale.amount_cents)} off each card` : `${sale.percent}% off`}</strong>{sale.category ? ` ${sale.category}` : sale.games?.length ? ` ${sale.games.join(", ")}` : " storewide"} · ends {ends}. Prices shown already include the sale.
         </Link>
       )}
 

@@ -67,7 +67,8 @@ export default function OrderView({ o }: { o: Order }) {
         </ul>
         <dl className="num mt-3 space-y-1 px-1 text-[14px]">
           <div className="flex justify-between"><dt>Cards</dt><dd>{money(o.subtotal_cents)}</dd></div>
-          {o.discount_cents > 0 && <div className="flex justify-between text-ship"><dt>Multi-card discount</dt><dd>−{money(o.discount_cents)}</dd></div>}
+          {o.discount_cents > 0 && <div className="flex justify-between gap-3 text-ship"><dt>{o.discount_kind === "coupon" ? "Coupon" : o.discount_kind === "order" ? "Order discount" : "Multi-card discount"}{o.discount_label ? ` · ${o.discount_label}` : ""}</dt><dd>−{money(o.discount_cents)}</dd></div>}
+          {o.discount_kind === "sale" && <div className="text-[13px] text-ship">Store sale prices</div>}
           <div className="flex justify-between"><dt>Shipping</dt><dd className="text-ship">Free</dd></div>
           {o.tax_cents > 0 && <div className="flex justify-between"><dt>Sales tax</dt><dd>{money(o.tax_cents)}</dd></div>}
           <div className="flex justify-between border-t border-line pt-2 font-bold"><dt>{selling ? "Buyer paid" : "Total paid"}</dt><dd>{money(o.total_cents + o.tax_cents)}</dd></div>

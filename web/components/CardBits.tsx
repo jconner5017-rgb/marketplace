@@ -16,6 +16,16 @@ export function Price({ l, className = "" }: { l: Listing; className?: string })
   return <p className={className}>{money(l.price_cents)}</p>;
 }
 
+/** The SALE badge on a listing photo while the store's sale is on. */
+export function SaleBadge({ l, className = "" }: { l: Listing; className?: string }) {
+  if (!l.sale_percent || l.sale_price_cents == null) return null;
+  return (
+    <span className={`pointer-events-none rounded-[3px] bg-slab px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white shadow-sm ${className}`}>
+      Sale
+    </span>
+  );
+}
+
 /** "3 bids · 2d 4h left" for auctions; "Buy It Now" or "or Best Offer" otherwise. */
 export function SaleLine({ l, className = "" }: { l: Listing; className?: string }) {
   if (l.format === "auction" && l.auction) {
@@ -117,6 +127,7 @@ export function ListingTile({ l }: { l: Listing }) {
       <p className="text-[12px] text-ship">Free shipping</p>
     </Link>
     <HeartButton id={l.id} title={l.title} className="absolute right-2 top-2" />
+    <SaleBadge l={l} className="absolute left-2 top-2" />
     </div>
   );
 }
@@ -128,6 +139,7 @@ export function ListingRow({ l }: { l: Listing }) {
       <div className="relative shrink-0">
         <Link href={`/item/${l.id}`}>
           <Photo l={l} className="h-[168px] w-[120px] rounded-md sm:h-[196px] sm:w-[140px]" />
+          <SaleBadge l={l} className="absolute left-1.5 top-1.5" />
         </Link>
         <HeartButton id={l.id} title={l.title} className="absolute right-1.5 top-1.5" />
       </div>

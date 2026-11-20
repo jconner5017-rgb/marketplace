@@ -9,7 +9,7 @@ import ItemActions from "@/components/ItemActions";
 import AuctionPanel, { BidList } from "@/components/AuctionPanel";
 import ContactSeller from "@/components/ContactSeller";
 import ReportButton from "@/components/ReportButton";
-import { GradeBadge, ListingTile, Price } from "@/components/CardBits";
+import { GradeBadge, ListingTile, Price, SaleBadge } from "@/components/CardBits";
 import Gallery from "@/components/Gallery";
 import { CONDITIONS, categoryInfo, gradeLabel, landingHref, money } from "@/lib/format";
 import { getCatalog, labelFor } from "@/lib/catalog";
@@ -138,7 +138,8 @@ export default async function ItemPage({ params }: Props) {
             </>
           ) : (
             <>
-              <Price l={l} className="num mt-4 text-[32px] font-extrabold leading-none" />
+              {l.sale_percent ? <p className="mt-4"><SaleBadge l={l} className="inline-block" /> <span className="text-[13px] font-semibold text-slab">Store sale</span></p> : null}
+              <Price l={l} className={`num ${l.sale_percent ? "mt-2" : "mt-4"} text-[32px] font-extrabold leading-none`} />
               <p className="mt-1 text-[14px] text-muted">{l.offers_enabled ? "Buy It Now or Best Offer" : "Buy It Now"}</p>
               <p className="mt-1 text-[14px] text-ship">Free shipping · USPS · Usually arrives in 3–7 days</p>
               <ItemActions id={l.id} signedIn={!!me} quantity={l.quantity} price={l.price_cents} offers={l.offers_enabled} />

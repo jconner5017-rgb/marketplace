@@ -2,7 +2,8 @@ import Link from "next/link";
 import { apiGet } from "@/lib/api";
 import { requireUser } from "@/lib/auth";
 import type { Store, StoreSale } from "@/lib/types";
-import { StoreCategoriesForm, StoreSalesForm, StoreSettingsForm, StoreUpdateForm } from "@/components/sell/StoreForms";
+import { money } from "@/lib/format";
+import { StoreCategoriesForm, StoreSettingsForm, StoreUpdateForm } from "@/components/sell/StoreForms";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Your store", robots: { index: false } };
@@ -18,7 +19,6 @@ export default async function SellerStore() {
   const me = await requireUser("/sell/store");
   const r = await apiGet<{ store: Store | null; sales: StoreSale[] }>("/v1/seller/store");
   const st = r.data?.store ?? null;
-  const sales = r.data?.sales ?? [];
   const card = "rounded-xl border border-line p-4";
 
   if (!st) {
@@ -30,7 +30,7 @@ export default async function SellerStore() {
           <li>✓ Your own page at slabsnsingles.com/store/your-name</li>
           <li>✓ Logo, banner, About and store policies</li>
           <li>✓ Your own categories and in-store search</li>
-          <li>✓ Store-wide sales, up to 50% off</li>
+          <li>✓ Sale events with a SALE badge, % or $ off</li>
           <li>✓ Followers who hear about new cards</li>
           <li>✓ Weekly updates to your followers</li>
         </ul>
@@ -62,9 +62,10 @@ export default async function SellerStore() {
         {st.status === "active" && (
           <>
             <section className={card}>
-              <h2 className="text-[18px] font-bold">Store sale</h2>
-              {st.sale && <p className="mt-1 text-[14px] text-slab">Running now: {st.sale.name}, {st.sale.percent}% off.</p>}
-              <div className="mt-3"><StoreSalesForm sales={sales} categories={st.categories} /></div>
+              <h2 className="text-[18px] font-bold">Sale events</h2>
+              {st.sale && <p className="mt-1 text-[14px] text-slab">Running now: {st.sale.name}, {st.sale.amount_cents ? `${money(st.sale.amount_cents)} off` : `${st.sale.percent}% off`}.</p>}
+              <p className="mt-2 text-[14px] text-muted">Sales, coupons and order discounts are all on Marketing &gt; Discounts. Sales can be % or $ off, for every card or chosen sports and games, with a SALE badge on the cards.</p>
+              <Link href="/sell/marketing" className="mt-3 inline-block rounded-lg border border-ink px-4 py-2 text-[14px] font-semibold hover:bg-wash">Go to Discounts</Link>
             </section>
             <section className={card}>
               <h2 className="text-[18px] font-bold">Categories</h2>

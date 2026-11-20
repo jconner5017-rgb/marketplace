@@ -243,7 +243,7 @@ func buildFilter(p SearchParams, skip ...string) filter {
 		}
 	}
 	if p.Discount {
-		where = append(where, "sp.bundle_discount_type IS NOT NULL")
+		where = append(where, "EXISTS (SELECT 1 FROM order_discounts od WHERE od.seller_id = l.seller_id AND od.active)")
 	}
 	switch p.Lots {
 	case "only":
@@ -258,7 +258,7 @@ func buildFilter(p SearchParams, skip ...string) filter {
 		where = append(where, "l.store_category_id = "+arg(p.StoreCategory))
 	}
 	if p.OnSale {
-		where = append(where, "l.format = 'fixed' AND store_sale_percent(l.seller_id, l.store_category_id) > 0")
+		where = append(where, "l.format = 'fixed' AND store_sale_price(l.seller_id, l.store_category_id, l.game_or_sport, l.price_cents) < l.price_cents")
 	}
 	if p.MinCents > 0 {
 		where = append(where, "l.price_cents >= "+arg(p.MinCents))

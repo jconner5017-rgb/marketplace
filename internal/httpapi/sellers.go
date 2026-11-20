@@ -86,28 +86,10 @@ func (s *Server) handleGetSeller(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"seller": p})
 }
 
-type sellerSettingsRequest struct {
-	BundleDiscountType *string `json:"bundle_discount_type"`
-	BundleDiscountVal  *int    `json:"bundle_discount_val"`
-}
-
+// PATCH /v1/seller/settings: the old multi-card discount (2026-11-20: now an
+// order discount, set up on Marketing > Discounts).
 func (s *Server) handleSellerSettings(w http.ResponseWriter, r *http.Request) {
-	u, _ := currentUser(r)
-	var req sellerSettingsRequest
-	if !decodeJSON(w, r, &req) {
-		return
-	}
-	p, err := s.sellers.UpdateBundleDiscount(r.Context(), u.ID, req.BundleDiscountType, req.BundleDiscountVal)
-	var ve *sellers.ValidationError
-	if errors.As(err, &ve) {
-		writeError(w, http.StatusUnprocessableEntity, "invalid_input", "check the highlighted fields", ve.Fields)
-		return
-	}
-	if err != nil {
-		s.sellerError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"seller": p})
+	writeError(w, http.StatusGone, "moved", "Multi-card discounts are now order discounts: set them up on Marketing > Discounts.", nil)
 }
 
 // PATCH /v1/seller/tax {"collect_tax": true}

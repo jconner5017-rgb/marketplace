@@ -35,7 +35,8 @@ func TestCheckoutFromCart(t *testing.T) {
 	e := setupEnv(t)
 	sc, acct := newSeller(t, e, "pay_shop", true)
 	e.db.Exec(`UPDATE seller_profiles SET tier = 3, tier_locked = true`)
-	do(t, sc, "PATCH", e.ts.URL+"/v1/seller/settings", map[string]any{"bundle_discount_type": "per_extra_item", "bundle_discount_val": 50})
+	// The old "$0.50 off each extra card", now an order discount (migration 0044).
+	e.db.Exec(`INSERT INTO order_discounts (seller_id, min_cards, amount_cents, per_card) SELECT id, 2, 50, true FROM users WHERE username = 'pay_shop'`)
 	a := createListing(t, e, &httpClientT{sc}, rawCard("P1", 1200))["id"].(string)
 	card := rawCard("P2", 20000)
 	card["quantity"] = 3
@@ -68,9 +69,10 @@ func TestCheckoutFromCart(t *testing.T) {
 	orderID := body["order_id"].(string)
 	cs := sessionOf(t, e, orderID)
 	p := e.pay.Params(cs)
-	// $12 + 2 x $200 = $412, less $0.50 bundle discount for 2 extra cards = $411.
-	// Fee: $1.50 + 2 x 3% of $200 ($6) = $13.50.
-	if p.FeeCents != 1350 || len(p.Lines) != 1 || p.Lines[0].UnitCents != 41100 ||
+	// $12 + 2 x $200 = $412, less $0.50 off each of the 2 extra cards = $411.
+	// Fee on what the buyer pays (2026-11-20): the $1 discount is spread over
+	// the cards, so $13.46 instead of $13.50 on the list prices.
+	if p.FeeCents != 1346 || len(p.Lines) != 1 || p.Lines[0].UnitCents != 41100 ||
 		!strings.Contains(p.SuccessURL, "https://shop.test/checkout/done?order="+orderID) {
 		t.Fatalf("stripe params: %+v", p)
 	}
@@ -122,7 +124,7 @@ func TestCheckoutFromCart(t *testing.T) {
 	// Seller sees it to ship, with the fee; buyer sees it without.
 	_, body = do(t, sc, "GET", e.ts.URL+"/v1/orders?side=selling&status=to_ship", nil)
 	os := body["orders"].([]any)
-	if len(os) != 1 || os[0].(map[string]any)["fee_cents"].(float64) != 1350 || len(os[0].(map[string]any)["lines"].([]any)) != 2 {
+	if len(os) != 1 || os[0].(map[string]any)["fee_cents"].(float64) != 1346 || len(os[0].(map[string]any)["lines"].([]any)) != 2 {
 		t.Fatalf("seller orders: %v", body)
 	}
 	_, body = do(t, pat.c, "GET", e.ts.URL+"/v1/orders", nil)

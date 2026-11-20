@@ -162,6 +162,7 @@ type OrderDetail struct {
 	OrderRow
 	SubtotalCents int             `json:"subtotal_cents"`
 	DiscountCents int             `json:"discount_cents"`
+	DiscountLabel string          `json:"discount_label,omitempty"` // which deal (2026-11-20)
 	ShipTo        json.RawMessage `json:"ship_to"`
 	StripeAccount *string         `json:"stripe_account"`
 	CheckoutID    *string         `json:"stripe_checkout_id"`
@@ -227,9 +228,9 @@ func (r *Records) Order(ctx context.Context, id string) (OrderDetail, error) {
 	d := OrderDetail{OrderRow: row, Lines: []OrderLine{}, Shipments: []Shipment{}, ThreadIDs: []string{}}
 	var acct, cs, pi, ch, reason sql.NullString
 	var deliv, canc sql.NullTime
-	if err := r.DB.QueryRowContext(ctx, `SELECT subtotal_cents, discount_cents, ship_to, stripe_account, stripe_checkout_id,
+	if err := r.DB.QueryRowContext(ctx, `SELECT subtotal_cents, discount_cents, coalesce(discount_label, ''), ship_to, stripe_account, stripe_checkout_id,
 		stripe_payment_intent, stripe_charge, cancel_reason, delivered_at, cancelled_at FROM orders WHERE id = $1`, row.ID).Scan(
-		&d.SubtotalCents, &d.DiscountCents, &d.ShipTo, &acct, &cs, &pi, &ch, &reason, &deliv, &canc); err != nil {
+		&d.SubtotalCents, &d.DiscountCents, &d.DiscountLabel, &d.ShipTo, &acct, &cs, &pi, &ch, &reason, &deliv, &canc); err != nil {
 		return d, err
 	}
 	d.StripeAccount, d.CheckoutID, d.PaymentIntent, d.Charge, d.CancelReason = nstr(acct), nstr(cs), nstr(pi), nstr(ch), nstr(reason)

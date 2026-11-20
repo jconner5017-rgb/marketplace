@@ -192,7 +192,7 @@ export default async function AdvancedSearch({ searchParams }: { searchParams: P
             </div>
           </fieldset>
           <label className="flex items-center gap-2 text-[15px]">
-            <input type="checkbox" name="discount" value="1" defaultChecked={one("discount") === "1"} /> Seller offers a multi-card discount
+            <input type="checkbox" name="discount" value="1" defaultChecked={one("discount") === "1"} /> Seller offers an order discount
           </label>
         </section>
 
