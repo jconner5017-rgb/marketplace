@@ -47,6 +47,14 @@ func (s *Service) MovePublicURL(ctx context.Context) (moved int, err error) {
 		}
 		moved += n
 	}
+	// A small copy made on the old address while the move ran (by the
+	// instance being replaced) is moved too.
+	if _, err := s.DB.ExecContext(ctx, `
+		UPDATE photos p SET thumb_url = a.new_prefix || substr(p.thumb_url, length(a.old_prefix) + 1)
+		FROM photo_url_aliases a
+		WHERE p.thumb_url LIKE a.old_prefix || '/%'`); err != nil {
+		return moved, err
+	}
 	return moved, s.loadAliases(ctx)
 }
 

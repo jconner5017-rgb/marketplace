@@ -163,8 +163,15 @@ func TestThumbsAndMove(t *testing.T) {
 	if got := s.Canonical("https://elsewhere.example/x.jpg"); got != "https://elsewhere.example/x.jpg" {
 		t.Fatalf("canonical other %s", got)
 	}
+	// A small copy made on the old address afterwards (the old instance
+	// still running) is moved at the next start.
+	d.Exec(`UPDATE photos SET thumb_url = replace(thumb_url, 'https://photos.example.test', 'https://pub-old.r2.dev') WHERE id = $1`, old.ID)
 	if n, _ := s.MovePublicURL(ctx); n != 0 {
 		t.Fatalf("second move: %d", n)
+	}
+	d.QueryRow(`SELECT thumb_url FROM photos WHERE id = $1`, old.ID).Scan(&thumb)
+	if !strings.HasPrefix(thumb.String, "https://photos.example.test/t/") {
+		t.Fatalf("late thumb %v", thumb)
 	}
 	// The sweep still sees the photos as used (no deletion of in-use files).
 	d.Exec(`UPDATE photos SET created_at = now() - interval '2 days' WHERE owner_id = $1`, uid)
