@@ -416,12 +416,13 @@ const listingCols = `l.id, l.seller_id, u.username, l.external_id, l.category, l
 const storeCols = `, l.store_category_id,
 	CASE WHEN l.format = 'fixed' THEN store_sale_price(l.seller_id, l.store_category_id, l.game_or_sport, l.price_cents) ELSE l.price_cents END`
 
-// SalePrice is a price with a store sale's percent off (rounded in the buyer's favor by at most a cent).
+// SalePrice is a price with a store sale's percent off, the discount rounded
+// to the nearest cent (as store_sale_price does).
 func SalePrice(cents, percent int) int {
 	if percent <= 0 {
 		return cents
 	}
-	return cents - cents*percent/100
+	return cents - (cents*percent*2+100)/200
 }
 
 // BuyPrice is what a buyer pays for one of this listing at checkout.
@@ -465,7 +466,9 @@ func scanListing(row interface{ Scan(...any) error }) (Listing, error) {
 	if salePrice > 0 && salePrice < l.PriceCents {
 		// On sale: the price, and how much off it is (the SALE badge).
 		l.SalePriceCents = salePrice
-		l.SalePercent = max(1, (l.PriceCents-salePrice)*100/l.PriceCents)
+		// Rounded to the nearest percent: a 15% sale on $1.88 is 28¢ off,
+		// 14.9% exactly, and shows as the 15% the seller chose.
+		l.SalePercent = max(1, ((l.PriceCents-salePrice)*200/l.PriceCents+1)/2)
 	}
 	str := func(n sql.NullString) *string {
 		if !n.Valid {
