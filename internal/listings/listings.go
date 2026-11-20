@@ -147,7 +147,10 @@ type Listing struct {
 	CertNumber    *string  `json:"cert_number"`
 	Attributes    []string `json:"attributes"`
 	PhotoURLs     []string `json:"photo_urls"`
-	PriceCents    int      `json:"price_cents"`
+	// ThumbURL is a small copy of the first photo for tiles and rows, when
+	// one has been made.
+	ThumbURL   string `json:"thumb_url,omitempty"`
+	PriceCents int    `json:"price_cents"`
 	// Store sale: percent off right now and the price buyers pay (fixed price only).
 	SalePercent     int       `json:"sale_percent,omitempty"`
 	SalePriceCents  int       `json:"sale_price_cents,omitempty"`
@@ -179,6 +182,10 @@ func TidyTitle(t string) string {
 	t = strings.TrimSpace(t)
 	return leadingYears.ReplaceAllString(t, "$1")
 }
+
+// CanonicalPhoto maps a photo address on an old storage address to the
+// current one (photos.Service.Canonical); main sets it.
+var CanonicalPhoto = func(u string) string { return u }
 
 func (in *Input) normalize() {
 	trim := func(p **string) {
@@ -234,7 +241,7 @@ func (in *Input) normalize() {
 	photos := []string{}
 	for _, p := range in.PhotoURLs {
 		if p = strings.TrimSpace(p); p != "" {
-			photos = append(photos, p)
+			photos = append(photos, CanonicalPhoto(p))
 		}
 	}
 	in.PhotoURLs = photos
@@ -393,12 +400,16 @@ func (in *Input) validate(capCents int) error {
 type Service struct {
 	DB      *sql.DB
 	Sellers *sellers.Service
+
+	pools      randomPools // random home-page shelves (search.go)
+	facetCache facetCache  // browse-page filter counts (search.go)
 }
 
 const listingCols = `l.id, l.seller_id, u.username, l.external_id, l.category, l.game_or_sport, l.set_name,
 	l.year, l.card_number, l.title, l.description, l.condition, l.grader, l.grade, l.cert_number,
 	l.attributes, l.photo_urls, l.price_cents, l.quantity, l.package_preset, l.weight_oz,
-	l.status, l.version, l.created_at, l.updated_at` + saleCols + storeCols + `, l.lot_count, l.description_html, l.returns_policy`
+	l.status, l.version, l.created_at, l.updated_at` + saleCols + storeCols + `, l.lot_count, l.description_html, l.returns_policy,
+	(SELECT coalesce(p.thumb_url, '') FROM photos p WHERE p.url = l.photo_urls[1])`
 
 // storeCols: the listing's store category and its price in the store's sale
 // right now (its own price when there's no sale; % or $ off, migration 0044).
@@ -428,16 +439,17 @@ func scanListing(row interface{ Scan(...any) error }) (Listing, error) {
 	var grade sql.NullFloat64
 	var sc saleScan
 	var storeCat, lot sql.NullInt64
-	var rp sql.NullString
+	var rp, thumb sql.NullString
 	dest := []any{&l.ID, &l.SellerID, &l.SellerUsername, &ext, &l.Category, &l.GameOrSport, &l.SetName,
 		&year, &cardNo, &l.Title, &l.Description, &cond, &grader, &grade, &cert,
 		pq.Array(&l.Attributes), pq.Array(&l.PhotoURLs), &l.PriceCents, &l.Quantity, &l.PackagePreset,
 		&l.WeightOz, &l.Status, &l.Version, &l.CreatedAt, &l.UpdatedAt}
 	var salePrice int
-	if err := row.Scan(append(append(dest, sc.dest()...), &storeCat, &salePrice, &lot, &l.DescriptionHTML, &rp)...); err != nil {
+	if err := row.Scan(append(append(dest, sc.dest()...), &storeCat, &salePrice, &lot, &l.DescriptionHTML, &rp, &thumb)...); err != nil {
 		return l, err
 	}
 	sc.apply(&l)
+	l.ThumbURL = thumb.String
 	if storeCat.Valid {
 		c := int(storeCat.Int64)
 		l.StoreCategoryID = &c

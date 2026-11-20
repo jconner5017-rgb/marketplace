@@ -6,6 +6,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -46,6 +47,21 @@ func (s *S3) Put(ctx context.Context, key, contentType string, data []byte) (str
 	return strings.TrimRight(s.PublicURL, "/") + "/" + key, nil
 }
 
+// Get downloads an object.
+func (s *S3) Get(ctx context.Context, key string) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, s.objectURL(key), nil)
+	if err != nil {
+		return nil, err
+	}
+	var out []byte
+	err = s.doRead(req, nil, func(r io.Reader) error {
+		b, err := io.ReadAll(io.LimitReader(r, MaxUploadBytes))
+		out = b
+		return err
+	})
+	return out, err
+}
+
 // Delete removes an object. A missing object is not an error.
 func (s *S3) Delete(ctx context.Context, key string) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, s.objectURL(key), nil)
@@ -56,6 +72,13 @@ func (s *S3) Delete(ctx context.Context, key string) error {
 }
 
 func (s *S3) do(req *http.Request, body []byte) error {
+	return s.doRead(req, body, nil)
+}
+
+// ErrMissing is a 404 from storage.
+var ErrMissing = errors.New("photo storage: object not found")
+
+func (s *S3) doRead(req *http.Request, body []byte, read func(io.Reader) error) error {
 	t := time.Now
 	if s.now != nil {
 		t = s.now
@@ -70,9 +93,15 @@ func (s *S3) do(req *http.Request, body []byte) error {
 		return err
 	}
 	defer res.Body.Close()
+	if res.StatusCode == http.StatusNotFound && req.Method == http.MethodGet {
+		return ErrMissing
+	}
 	if res.StatusCode >= 300 && !(req.Method == http.MethodDelete && res.StatusCode == http.StatusNotFound) {
 		msg, _ := io.ReadAll(io.LimitReader(res.Body, 500))
 		return fmt.Errorf("photo storage %s: %d %s", req.Method, res.StatusCode, strings.TrimSpace(string(msg)))
+	}
+	if read != nil {
+		return read(res.Body)
 	}
 	return nil
 }

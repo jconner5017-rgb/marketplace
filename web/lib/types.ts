@@ -19,6 +19,8 @@ export type Listing = {
   cert_number: string | null;
   attributes: string[];
   photo_urls: string[];
+  /** Small copy of the first photo for tiles and rows, when one exists. */
+  thumb_url?: string;
   price_cents: number;
   sale_percent?: number;
   sale_price_cents?: number;
@@ -113,6 +115,8 @@ export type Hold = {
 export type SearchResult = {
   listings: Listing[];
   total: number;
+  /** More matches than `total` (counting stops at 10,000). */
+  total_capped?: boolean;
   limit: number;
   offset: number;
   /** Set when the API couldn't be reached, so pages don't claim "no cards". */

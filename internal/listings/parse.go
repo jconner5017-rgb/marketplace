@@ -38,6 +38,7 @@ func ParseSearch(q url.Values) (p SearchParams, bad map[string]string) {
 		Attributes: list("attribute"),
 		Seller:     q.Get("seller"),
 		OnSale:     q.Get("on_sale") == "1",
+		ExactTotal: q.Get("exact") == "1",
 		Discount:   q.Get("discount") == "1" || q.Get("discount") == "true",
 		Lots:       lotsParam(q.Get("lots")),
 		Sort:       q.Get("sort"),

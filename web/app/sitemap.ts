@@ -16,7 +16,7 @@ async function listingUrls(): Promise<MetadataRoute.Sitemap> {
   const out: MetadataRoute.Sitemap = [];
   for (let offset = 0; offset < 10000; offset += 100) {
     try {
-      const res = await fetch(`${API_URL}/v1/listings?sort=newest&limit=100&offset=${offset}`, { next: { revalidate: 3600 } });
+      const res = await fetch(`${API_URL}/v1/listings?sort=newest&exact=1&limit=100&offset=${offset}`, { next: { revalidate: 3600 } });
       if (!res.ok) break;
       const d = (await res.json()) as { listings: { id: string; updated_at: string }[]; total: number };
       for (const l of d.listings) out.push({ url: `${SITE_URL}/item/${l.id}`, lastModified: l.updated_at, changeFrequency: "daily", priority: 0.6 });

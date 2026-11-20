@@ -1,3 +1,4 @@
+import { cache } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
@@ -19,8 +20,12 @@ export const dynamic = "force-dynamic";
 
 type Props = { params: Promise<{ id: string }> };
 
+// One API call per page view, shared by the page title and the page (and
+// counted as one view).
+const loadListing = cache((id: string) => getListing(id, true));
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const [l, cat] = await Promise.all([getListing((await params).id), getCatalog()]);
+  const [l, cat] = await Promise.all([loadListing((await params).id), getCatalog()]);
   if (!l) return { title: "Listing not found", robots: { index: false } };
   const sold = l.status === "sold_out";
   const title = sold ? `${l.title} — sold` : l.format === "auction" ? `${l.title} — auction, ${money(l.price_cents)}` : `${l.title} — ${money(l.price_cents)}`;
@@ -39,7 +44,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 export default async function ItemPage({ params }: Props) {
-  const l = await getListing((await params).id, true);
+  const l = await loadListing((await params).id);
   if (!l) notFound();
 
   const isAuction = l.format === "auction" && !!l.auction;

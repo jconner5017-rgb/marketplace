@@ -117,7 +117,7 @@ export async function SearchView({ raw, heading: headingOverride, intro, onLandi
 
         <div className="mt-3 flex flex-wrap items-center gap-3 border-b border-line pb-3 text-[13px]">
           <span className="num">
-            {res.total === 0 ? "No results" : `${first}–${last} of ${res.total.toLocaleString()} results`}
+            {res.total === 0 ? "No results" : `${first}–${last} of ${res.total.toLocaleString()}${res.total_capped ? "+" : ""} results`}
           </span>
           <Link href={`/search/advanced?${params.toString()}`} className="text-link hover:underline">Advanced search</Link>
           {Array.from(new URLSearchParams(facetQs).keys()).some((k) => k !== "sort") && <SaveSearchButton query={facetQs} savedId={savedId} />}

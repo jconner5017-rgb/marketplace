@@ -233,6 +233,35 @@ func run(log *slog.Logger) error {
 			AccessKey: cfg.S3AccessKey, SecretKey: cfg.S3SecretKey, PublicURL: cfg.PhotoPublicURL}
 	}
 	log.Info("photo storage", "store", photoSvc.Store())
+	// After PHOTO_PUBLIC_URL changes, move stored photo addresses to it.
+	if n, err := photoSvc.MovePublicURL(ctx); err != nil {
+		log.Error("move photo addresses", "err", err)
+	} else if n > 0 {
+		log.Info("photo addresses moved", "count", n, "to", cfg.PhotoPublicURL)
+	}
+	listings.CanonicalPhoto = photoSvc.Canonical
+	// Small copies for tiles: make any that are missing, a batch at a time.
+	go func() {
+		pause := 2 * time.Second
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(pause):
+			}
+			n, err := photoSvc.BackfillThumbs(ctx, 25)
+			switch {
+			case err != nil:
+				log.Error("photo thumbnails", "err", err)
+				pause = 10 * time.Minute
+			case n > 0:
+				log.Info("photo thumbnails made", "count", n)
+				pause = 2 * time.Second
+			default:
+				pause = time.Hour
+			}
+		}
+	}()
 	storeSvc := httpapi.NewStores(database, mailSvc)
 	signupKey := sha256.Sum256([]byte("signup-form:" + cfg.MFAKey + cfg.DatabaseURL))
 	perIP, _ := strconv.Atoi(os.Getenv("SIGNUPS_PER_IP_DAY"))

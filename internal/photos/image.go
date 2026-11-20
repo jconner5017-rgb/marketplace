@@ -37,6 +37,27 @@ func process(data []byte) (out []byte, w, h int, err error) {
 	return processWith(data, MinSide, MinSide, MaxSide, ErrTooSmall)
 }
 
+// Thumbnails: tiles show photos about 140-220 px wide, so a copy whose
+// longest side is 560 px (about 400 x 560 for a card) stays sharp on phones
+// and high-resolution screens at a fraction of the full photo's size.
+const (
+	ThumbSide    = 560
+	thumbQuality = 80
+)
+
+// thumbnail makes the small copy of an already-processed photo.
+func thumbnail(data []byte) ([]byte, error) {
+	src, _, err := image.Decode(bytes.NewReader(data))
+	if err != nil {
+		return nil, ErrNotImage
+	}
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, fit(src, ThumbSide), &jpeg.Options{Quality: thumbQuality}); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
 // Banner limits: wide images for site banners, kept up to 1940 pixels across.
 const (
 	BannerMinWidth  = 970

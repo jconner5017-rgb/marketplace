@@ -9,6 +9,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"errors"
+	"strings"
 	"time"
 )
 
@@ -23,6 +24,8 @@ type Service struct {
 	DB      *sql.DB
 	S3      *S3
 	BaseURL string // the API's public URL (IMAGE_BASE_URL)
+
+	aliases aliases
 }
 
 type Photo struct {
@@ -54,7 +57,7 @@ func (s *Service) UploadUnlimited(ctx context.Context, ownerID string, data []by
 // UploadBanner stores a site banner image for a staff member: wide sizes
 // allowed, no daily limit.
 func (s *Service) UploadBanner(ctx context.Context, ownerID string, data []byte) (Photo, error) {
-	return s.store(ctx, ownerID, data, processBanner)
+	return s.store(ctx, ownerID, data, processBanner, false)
 }
 
 func (s *Service) upload(ctx context.Context, ownerID string, data []byte, limited bool) (Photo, error) {
@@ -68,10 +71,10 @@ func (s *Service) upload(ctx context.Context, ownerID string, data []byte, limit
 			return Photo{}, ErrTooMany
 		}
 	}
-	return s.store(ctx, ownerID, data, process)
+	return s.store(ctx, ownerID, data, process, true)
 }
 
-func (s *Service) store(ctx context.Context, ownerID string, data []byte, proc func([]byte) ([]byte, int, int, error)) (Photo, error) {
+func (s *Service) store(ctx context.Context, ownerID string, data []byte, proc func([]byte) ([]byte, int, int, error), withThumb bool) (Photo, error) {
 	out, w, h, err := proc(data)
 	if err != nil {
 		return Photo{}, err
@@ -92,9 +95,19 @@ func (s *Service) store(ctx context.Context, ownerID string, data []byte, proc f
 			return Photo{}, err
 		}
 		p.URL = u
+		// Card photos get a small copy for tiles; if that fails the backfill
+		// tries again later and tiles use the full photo meanwhile.
+		var thumb sql.NullString
+		if withThumb {
+			if tu, err := s.putThumb(ctx, key, out); err == nil {
+				thumb = sql.NullString{String: tu, Valid: true}
+			}
+		} else {
+			thumb = sql.NullString{Valid: true} // banners and logos: none needed
+		}
 		_, err = s.DB.ExecContext(ctx, `
-			INSERT INTO photos (id, owner_id, store, object_key, url, content_type, width, height, size_bytes)
-			VALUES ($1, $2, 's3', $3, $4, 'image/jpeg', $5, $6, $7)`, id, ownerID, key, u, w, h, len(out))
+			INSERT INTO photos (id, owner_id, store, object_key, url, content_type, width, height, size_bytes, thumb_url)
+			VALUES ($1, $2, 's3', $3, $4, 'image/jpeg', $5, $6, $7, $8)`, id, ownerID, key, u, w, h, len(out), thumb)
 		return p, err
 	}
 	p.URL = s.BaseURL + "/photos/" + id + ".jpg"
@@ -102,6 +115,71 @@ func (s *Service) store(ctx context.Context, ownerID string, data []byte, proc f
 		INSERT INTO photos (id, owner_id, store, url, content_type, width, height, size_bytes, data)
 		VALUES ($1, $2, 'db', $3, 'image/jpeg', $4, $5, $6, $7)`, id, ownerID, p.URL, w, h, len(out), out)
 	return p, err
+}
+
+// thumbKey is where a photo's small copy is stored: p/2026/11/x.jpg -> t/2026/11/x.jpg.
+func thumbKey(key string) string {
+	return "t/" + strings.TrimPrefix(key, "p/")
+}
+
+func (s *Service) putThumb(ctx context.Context, key string, full []byte) (string, error) {
+	small, err := thumbnail(full)
+	if err != nil {
+		return "", err
+	}
+	return s.S3.Put(ctx, thumbKey(key), "image/jpeg", small)
+}
+
+// BackfillThumbs makes small copies for up to n stored photos that don't
+// have one yet, newest first. It returns how many it handled; 0 means done.
+// main runs it in the background until every photo has one.
+func (s *Service) BackfillThumbs(ctx context.Context, n int) (int, error) {
+	if s.S3 == nil {
+		return 0, nil
+	}
+	rows, err := s.DB.QueryContext(ctx, `
+		SELECT id, object_key FROM photos
+		WHERE store = 's3' AND thumb_url IS NULL AND object_key IS NOT NULL
+		ORDER BY created_at DESC LIMIT $1`, n)
+	if err != nil {
+		return 0, err
+	}
+	type todo struct{ id, key string }
+	var list []todo
+	for rows.Next() {
+		var t todo
+		if err := rows.Scan(&t.id, &t.key); err != nil {
+			rows.Close()
+			return 0, err
+		}
+		list = append(list, t)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+	done := 0
+	for _, t := range list {
+		full, err := s.S3.Get(ctx, t.key)
+		thumb := ""
+		switch {
+		case errors.Is(err, ErrMissing):
+			// Nothing to copy; '' keeps it from being retried.
+		case err != nil:
+			return done, err // storage trouble: try again next round
+		default:
+			if tu, err := s.putThumb(ctx, t.key, full); err == nil {
+				thumb = tu
+			} else if !errors.Is(err, ErrNotImage) {
+				return done, err
+			}
+		}
+		if _, err := s.DB.ExecContext(ctx, `UPDATE photos SET thumb_url = $2 WHERE id = $1`, t.id, thumb); err != nil {
+			return done, err
+		}
+		done++
+	}
+	return done, nil
 }
 
 // Get returns a database-stored photo's bytes.
@@ -146,6 +224,9 @@ func (s *Service) Sweep(ctx context.Context) (int, error) {
 				continue // storage not configured right now; try again later
 			}
 			if err := s.S3.Delete(ctx, g.key); err != nil {
+				return n, err
+			}
+			if err := s.S3.Delete(ctx, thumbKey(g.key)); err != nil {
 				return n, err
 			}
 		}

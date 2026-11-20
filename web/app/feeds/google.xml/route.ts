@@ -22,7 +22,7 @@ async function activeListings(): Promise<Listing[]> {
   const out: Listing[] = [];
   for (let offset = 0; offset < MAX_ITEMS; offset += 100) {
     try {
-      const res = await fetch(`${API_URL}/v1/listings?sort=newest&limit=100&offset=${offset}`, { next: { revalidate: 3600 } });
+      const res = await fetch(`${API_URL}/v1/listings?sort=newest&exact=1&limit=100&offset=${offset}`, { next: { revalidate: 3600 } });
       if (!res.ok) break;
       const d = (await res.json()) as { listings: Listing[]; total: number };
       out.push(...d.listings);

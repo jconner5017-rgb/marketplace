@@ -93,8 +93,9 @@ function GradeOnly({ l, size = "sm" }: { l: Listing; size?: "sm" | "lg" }) {
   );
 }
 
+/** A listing's first photo for tiles and rows: the small copy when there is one. */
 export function Photo({ l, className = "" }: { l: Listing; className?: string }) {
-  const src = l.photo_urls[0];
+  const src = l.thumb_url || l.photo_urls[0];
   return (
     <div className={`flex items-center justify-center overflow-hidden bg-wash ${className}`}>
       {src ? (
