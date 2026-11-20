@@ -131,6 +131,12 @@ func TestCheckoutFromCart(t *testing.T) {
 	if o := body["orders"].([]any)[0].(map[string]any); o["fee_cents"] != nil || o["side"] != "buying" {
 		t.Fatalf("buyer orders: %v", o)
 	}
+	// The seller hub's selling costs (2026-11-20): $411 in, $13.46 fee, $397.54 net.
+	_, body = do(t, sc, "GET", e.ts.URL+"/v1/seller/overview", nil)
+	if c := body["costs_31d"].(map[string]any); c["total_sales_cents"] != float64(41100) || c["fee_cents"] != float64(1346) ||
+		c["discount_cents"] != float64(100) || c["net_cents"] != float64(41100-1346) {
+		t.Fatalf("selling costs: %v", c)
+	}
 
 	// Feedback waits for shipping; label orders need tracking.
 	if code, _ := do(t, pat.c, "POST", e.ts.URL+"/v1/orders/"+orderID+"/feedback", map[string]any{"rating": 1, "comment": "great"}); code != 409 {

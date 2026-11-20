@@ -95,7 +95,8 @@ export async function getSeller(): Promise<{ status: number; seller: Seller | nu
 }
 
 export async function search(qs: string): Promise<SearchResult> {
-  const r = await apiGet<SearchResult>("/v1/listings?" + qs);
+  // impr=1: these results are shown to a visitor, so they count as impressions in the seller hub.
+  const r = await apiGet<SearchResult>("/v1/listings?" + qs + (qs ? "&" : "") + "impr=1");
   return r.data ?? { listings: [], total: 0, limit: 48, offset: 0, failed: true };
 }
 

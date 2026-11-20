@@ -87,3 +87,17 @@ export function stripeNeed(key: string): string {
   };
   return map[key] ?? map[k] ?? key.replace(/[._]/g, " ");
 }
+
+/** Change against the previous period: ▲ 12.0% (green) or ▼ 3.0% (red); "pts" for rates. */
+export function Delta({ now, prev, points = false }: { now: number; prev: number; points?: boolean }) {
+  if (!points && prev <= 0) return <span className="text-[12px] text-muted">{now > 0 ? "new" : "—"}</span>;
+  const d = points ? now - prev : ((now - prev) / prev) * 100;
+  if (Math.abs(d) < 0.05) return <span className="text-[12px] text-muted">0.0{points ? " pts" : "%"}</span>;
+  const up = d > 0;
+  return (
+    <span className={`text-[12px] font-semibold ${up ? "text-ship" : "text-slab"}`}>
+      <span aria-hidden>{up ? "▲" : "▼"}</span> {Math.abs(d).toFixed(1)}{points ? " pts" : "%"}
+      <span className="sr-only"> {up ? "up" : "down"} from the 31 days before</span>
+    </span>
+  );
+}

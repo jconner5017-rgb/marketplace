@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { apiGet, getSeller } from "@/lib/api";
 import { requireUser } from "@/lib/auth";
 import { money } from "@/lib/format";
@@ -7,7 +8,7 @@ import OnboardButton from "@/components/OnboardButton";
 import PromoBox from "@/components/PromoBox";
 import type { Redemption } from "@/lib/promos";
 import { getFees } from "@/lib/catalog";
-import { CountRow, HubCard, SellingCosts, TIERS, stripeNeed } from "@/components/sell/HubBits";
+import { CountRow, Delta, HubCard, SellingCosts, TIERS, stripeNeed } from "@/components/sell/HubBits";
 import SalesChart from "@/components/sell/SalesChart";
 import { SellerBadge } from "@/components/feedback/Bits";
 
@@ -20,7 +21,13 @@ type Overview = {
   unread_messages: number;
   offers_to_answer: number;
   sales: { days: { day: string; cents: number; orders: number }[]; periods: { key: string; cents: number; orders: number }[] };
-  traffic: { views_90d: number; views_31d: number; orders_90d: number; conversion_90d: number };
+  traffic: {
+    views_90d: number; views_31d: number; orders_90d: number; conversion_90d: number;
+    impressions_31d: number; impressions_prev_31d: number; views_prev_31d: number; ctr_31d: number; ctr_prev_31d: number;
+    orders_31d: number; orders_prev_31d: number; conversion_31d: number; conversion_prev_31d: number; impressions_since?: string;
+  };
+  costs_31d: { total_sales_cents: number; tax_cents: number; fee_cents: number; label_cents: number; refund_cents: number; discount_cents: number; net_cents: number };
+  level: { tier: number; tier_today: number; held: boolean; defects_12m: number; defect_percent: number };
   performance: { orders_12m: number; late_12m: number; late_percent: number; tracked_percent: number; chargebacks_12m: number; open_problems: number };
   feedback_30d: { positive: number; neutral: number; negative: number };
 };
@@ -180,7 +187,7 @@ export default async function SellPage({ searchParams }: { searchParams: Promise
         <HubCard title="Sales" href="/sell/reports">
           <SalesChart days={ov?.sales.days ?? []} />
           <dl className="mt-2 text-[14px]">
-            {[["today", "Today"], ["7d", "Last 7 days"], ["31d", "Last 31 days"], ["90d", "Last 90 days"]].map(([k, label]) => (
+            {[["today", "Today"], ["7d", "Last 7 days"], ["31d", "Last 31 days"], ["90d", "Last 90 days"], ["year", "This year"]].map(([k, label]) => (
               <div key={k} className="flex justify-between border-b border-wash py-1 last:border-0">
                 <dt>{label}</dt><dd className="num font-semibold">{money(period(k).cents)} <span className="font-normal text-muted">· {period(k).orders}</span></dd>
               </div>
@@ -189,24 +196,83 @@ export default async function SellPage({ searchParams }: { searchParams: Promise
           <p className="mt-1 text-[12px] text-muted">Paid orders, less refunds, US Eastern time.</p>
         </HubCard>
 
+        <HubCard title="Selling costs" href="/sell/payments">
+          {(() => {
+            const c = ov?.costs_31d;
+            const row = (label: string, cents: number, color: string, note?: string) => (
+              <div className="flex justify-between gap-3 border-b border-wash py-1.5">
+                <dt className="flex flex-wrap items-center gap-x-2"><span aria-hidden className={`inline-block h-2.5 w-2.5 rounded-sm ${color}`} />{label}{note && <span className="text-[12px] text-muted">{note}</span>}</dt>
+                <dd className="num font-semibold">{cents > 0 ? "−" : ""}{money(cents)}</dd>
+              </div>
+            );
+            return (
+              <dl className="text-[14px]">
+                <div className="flex justify-between border-b border-line py-1.5"><dt>Total sales</dt><dd className="num font-bold">{money(c?.total_sales_cents ?? 0)}</dd></div>
+                {row("Sales tax", c?.tax_cents ?? 0, "bg-[#0ea5a4]", "collected and paid by Stripe")}
+                {row("Slabs & Singles fees", c?.fee_cents ?? 0, "bg-ink")}
+                {row("Shipping labels and postage", c?.label_cents ?? 0, "bg-link")}
+                {row("Refunds", c?.refund_cents ?? 0, "bg-slab")}
+                <div className="flex justify-between py-1.5"><dt className="font-bold">Net sales</dt><dd className="num font-bold">{money(c?.net_cents ?? 0)}</dd></div>
+              </dl>
+            );
+          })()}
+          <p className="mt-1 text-[12px] text-muted">
+            Last 31 days, paid orders.{(ov?.costs_31d.discount_cents ?? 0) > 0 ? ` You gave ${money(ov?.costs_31d.discount_cents ?? 0)} in coupons and order discounts (already off the total).` : ""} Net is before Stripe&apos;s card processing fee, shown in your payouts.
+          </p>
+        </HubCard>
+
         <HubCard title="Traffic">
-          <dl className="text-[14px]">
-            <div className="flex justify-between border-b border-wash py-1.5"><dt>Listing views, last 31 days</dt><dd className="num font-semibold">{(ov?.traffic.views_31d ?? 0).toLocaleString()}</dd></div>
-            <div className="flex justify-between border-b border-wash py-1.5"><dt>Listing views, last 90 days</dt><dd className="num font-semibold">{(ov?.traffic.views_90d ?? 0).toLocaleString()}</dd></div>
-            <div className="flex justify-between py-1.5"><dt>Views that became orders (90d)</dt><dd className="num font-semibold">{(ov?.traffic.conversion_90d ?? 0).toFixed(1)}%</dd></div>
-          </dl>
-          <p className="mt-1 text-[12px] text-muted">Good photos of the front and back and a fair price turn more views into sales.</p>
+          {(() => {
+            const tr = ov?.traffic;
+            const line = (label: string, value: string, delta: ReactNode, hint: string) => (
+              <div className="border-b border-wash py-1.5 last:border-0">
+                <dt title={hint}>{label}</dt>
+                <dd className="flex items-baseline justify-between"><span className="num text-[18px] font-bold">{value}</span>{delta}</dd>
+              </div>
+            );
+            return (
+              <dl className="text-[14px]">
+                {line("Listing impressions", (tr?.impressions_31d ?? 0).toLocaleString(),
+                  <Delta now={tr?.impressions_31d ?? 0} prev={tr?.impressions_prev_31d ?? 0} />, "How often your cards were shown in search results, browse rows and stores")}
+                {line("Click-through rate", `${(tr?.ctr_31d ?? 0).toFixed(1)}%`,
+                  <Delta now={tr?.ctr_31d ?? 0} prev={tr?.ctr_prev_31d ?? 0} points />, "Listing views divided by impressions")}
+                {line("Listing page views", (tr?.views_31d ?? 0).toLocaleString(),
+                  <Delta now={tr?.views_31d ?? 0} prev={tr?.views_prev_31d ?? 0} />, "Times someone opened one of your listings")}
+                {line("Sales conversion rate", `${(tr?.conversion_31d ?? 0).toFixed(1)}%`,
+                  <Delta now={tr?.conversion_31d ?? 0} prev={tr?.conversion_prev_31d ?? 0} points />, "Orders divided by listing views")}
+              </dl>
+            );
+          })()}
+          <p className="mt-1 text-[12px] text-muted">
+            Last 31 days, compared with the 31 before. Search engines and other crawlers aren&apos;t counted.
+            {ov?.traffic.impressions_since ? ` Impressions counted since ${new Date(ov.traffic.impressions_since + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}.` : ""}
+          </p>
         </HubCard>
 
         <HubCard title="Seller level" href="/sell/performance">
-          <dl className="text-[14px]">
-            <div className="flex justify-between border-b border-wash py-1.5"><dt>Price limit</dt><dd className="num font-semibold">{money(current.cap)} per card</dd></div>
-            <div className="flex justify-between border-b border-wash py-1.5"><dt>Late shipment rate (12 months)</dt><dd className="num font-semibold">{(ov?.performance.late_percent ?? 0).toFixed(1)}%</dd></div>
-            <div className="flex justify-between border-b border-wash py-1.5"><dt>Label orders with tracking</dt><dd className="num font-semibold">{(ov?.performance.tracked_percent ?? 100).toFixed(0)}%</dd></div>
-            <div className="flex justify-between border-b border-wash py-1.5"><dt>Chargebacks lost (12 months)</dt><dd className="num font-semibold">{ov?.performance.chargebacks_12m ?? 0}</dd></div>
-            <div className="flex justify-between py-1.5"><dt>Open problems</dt><dd className="num font-semibold">{ov?.performance.open_problems ?? 0}</dd></div>
-          </dl>
-          <p className="mt-1 text-[12px] text-muted">{nextTier ? `Next: up to ${money(nextTier.cap)} after ${nextTier.need}.` : "You're at the top level."} Checked daily.</p>
+          {(() => {
+            const lv = ov?.level;
+            const today = TIERS.find((x) => x.tier === (lv?.tier_today ?? seller.tier)) ?? current;
+            const name = (cap: number) => `Up to ${money(cap)} per card`;
+            return (
+              <dl className="text-[14px]">
+                <div className="flex justify-between border-b border-wash py-1.5"><dt>Current seller level</dt><dd className="font-semibold">{name(current.cap)}</dd></div>
+                <div className="flex justify-between border-b border-wash py-1.5">
+                  <dt>If we checked you today</dt>
+                  <dd className={`font-semibold ${today.tier > current.tier ? "text-ship" : today.tier < current.tier ? "text-slab" : ""}`}>{lv?.held ? "Set by our team" : name(today.cap)}</dd>
+                </div>
+                <div className="flex justify-between border-b border-wash py-1.5 pl-3"><dt>Transaction defect rate</dt><dd className="num font-semibold">{(lv?.defect_percent ?? 0).toFixed(2)}%</dd></div>
+                <div className="flex justify-between border-b border-wash py-1.5 pl-3"><dt>Late shipment rate</dt><dd className="num font-semibold">{(ov?.performance.late_percent ?? 0).toFixed(2)}%</dd></div>
+                <div className="flex justify-between border-b border-wash py-1.5 pl-3"><dt>Label orders with tracking</dt><dd className="num font-semibold">{(ov?.performance.tracked_percent ?? 100).toFixed(0)}%</dd></div>
+                <div className="flex justify-between border-b border-wash py-1.5 pl-3"><dt>Chargebacks lost</dt><dd className="num font-semibold">{ov?.performance.chargebacks_12m ?? 0}</dd></div>
+                <div className="flex justify-between py-1.5 pl-3"><dt>Open problems</dt><dd className="num font-semibold">{ov?.performance.open_problems ?? 0}</dd></div>
+              </dl>
+            );
+          })()}
+          <p className="mt-1 text-[12px] text-muted">
+            Rates are for the last 12 months. A defect is an order the buyer reported a problem with, refunded because the card sold elsewhere, or charged back.
+            {nextTier ? ` Next: up to ${money(nextTier.cap)} after ${nextTier.need}.` : " You're at the top level."} Checked daily.
+          </p>
         </HubCard>
 
         <HubCard title="Badges" href="/help/seller-badges">

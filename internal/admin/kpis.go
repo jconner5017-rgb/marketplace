@@ -32,7 +32,10 @@ type KPIDay struct {
 }
 
 // Metrics computes KPIs from the database.
-type Metrics struct{ DB *sql.DB }
+type Metrics struct {
+	DB          *sql.DB
+	impressions impressionBuffer // listings shown in results, written every 30 s
+}
 
 func (m *Metrics) KPIs(ctx context.Context, days int) (KPIs, error) {
 	if days <= 0 || days > 365 {

@@ -246,6 +246,15 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, r, err)
 		return
 	}
+	// Impressions for the seller hub: the website asks for them on pages
+	// people see (impr=1), and crawlers don't count.
+	if r.URL.Query().Get("impr") == "1" && !isCrawler(r.UserAgent()) && s.metrics != nil {
+		ids := make([]string, 0, len(res.Listings))
+		for _, l := range res.Listings {
+			ids = append(ids, l.ID)
+		}
+		s.metrics.AddImpressions(ids)
+	}
 	writeJSON(w, http.StatusOK, res)
 }
 
